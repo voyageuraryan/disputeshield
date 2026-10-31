@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy.exc import IntegrityError
@@ -70,6 +70,7 @@ def upsert_dispute(session: Session, pp: PayPalDispute) -> Dispute:
         row.currency = pp.dispute_amount.currency_code
     row.seller_response_due = pp.seller_response_due_date
     row.raw = pp.raw  # PayPal's original JSON
+    row.refreshed_at = datetime.now(timezone.utc)
     matched = match_order(session, pp)
     if matched is not None:
         row.order_id = matched

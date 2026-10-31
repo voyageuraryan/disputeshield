@@ -8,6 +8,7 @@ from pydantic import SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SANDBOX_BASE_URL = "https://api-m.sandbox.paypal.com"
+SANDBOX_WEB_URL = "https://www.sandbox.paypal.com"  # browser-facing pages (Log in with PayPal)
 ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
@@ -32,6 +33,14 @@ class Settings(BaseSettings):
     settle_threshold: Decimal = Decimal("25")
     # Generated documents (evidence summary PDFs). On Render: /var/data/artifacts.
     artifacts_dir: str = "./artifacts"
+    # Merchant login (Log in with PayPal). auth_mode "off" is for local development only and is refused
+    # when running on Render (RENDER env var set).
+    auth_mode: str = "paypal"
+    auth_secret: SecretStr = SecretStr("")          # HMAC key for session tokens + OAuth state
+    auth_redirect_uri: str = "http://localhost:8000/api/auth/paypal/callback"  # must match the PayPal app setting
+    frontend_url: str = "http://localhost:5173"
+    merchant_login_emails: str = ""                 # comma-separated PayPal emails allowed to log in
+    session_hours: int = 12
     # Shared secret for /admin/sandbox/* demo helpers (X-Admin-Token header). Empty = helpers disabled.
     admin_token: SecretStr = SecretStr("")
 

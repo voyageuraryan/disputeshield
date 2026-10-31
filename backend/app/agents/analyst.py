@@ -158,18 +158,19 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
         else:
             problems = validate(rec, case, baseline)
             if not problems:
-                return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt)
+                return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold)
         log_step(session, dispute.id, AGENT, f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS})",
                  {"problems": problems})
     return _needs_human(session, dispute, checklist, baseline, problems)
 
 
 def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
-             rec: Recommendation, run_key: str | None, attempt: int) -> AnalysisResult:
+             rec: Recommendation, run_key: str | None, attempt: int, threshold: Decimal) -> AnalysisResult:
     superseded = _supersede_proposals(session, dispute.id)
     decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
                         reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
                         economic_note=rec.economic_note, missing_items=rec.missing_items,
+                        analysed_threshold=threshold,
                         status=DecisionStatus.PROPOSED, run_key=run_key)
     dispute.agent_status = PROPOSED
     session.add_all([decision, dispute])

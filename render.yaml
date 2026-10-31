@@ -37,6 +37,17 @@ services:
         sync: false
       - key: ADMIN_TOKEN
         sync: false
+      # Log in with PayPal (merchant login). AUTH_MODE=off is ignored on Render.
+      - key: AUTH_MODE
+        value: paypal
+      - key: AUTH_SECRET
+        generateValue: true
+      - key: MERCHANT_LOGIN_EMAILS  # e.g. your sandbox business account email
+        sync: false
+      - key: AUTH_REDIRECT_URI      # https://<api-host>/api/auth/paypal/callback (also add it in the PayPal app)
+        sync: false
+      - key: FRONTEND_URL           # https://<static-site-host>
+        sync: false
       - key: ARTIFACTS_DIR
         value: /var/data/artifacts
       - key: CORS_ORIGINS  # the static site's URL, e.g. https://disputeshield-web.onrender.com

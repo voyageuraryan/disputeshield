@@ -77,6 +77,7 @@ class Dispute(SQLModel, table=True):
     raw: Optional[dict] = _json_col()
     # Our pipeline's state for this case: PROPOSED / NEEDS_HUMAN / ... (PayPal's is `status`).
     agent_status: Optional[str] = None
+    refreshed_at: Optional[datetime] = None  # when `raw` was last fetched from PayPal
 
 
 class EvidenceSource(str, Enum):
@@ -141,6 +142,7 @@ class Decision(SQLModel, table=True):
     retry_of: Optional[int] = Field(default=None, foreign_key="decisions.id")  # FAILED decision this one retries
     economic_note: Optional[str] = None             # analyst: amount vs effort vs win odds
     missing_items: Optional[list[str]] = _json_col()  # analyst: evidence still needed
+    analysed_threshold: Optional[Decimal] = Field(default=None, max_digits=10, decimal_places=2)  # settle threshold used
 
 
 class ProcessedEvent(SQLModel, table=True):
@@ -171,4 +173,6 @@ class MerchantSettings(SQLModel, table=True):
     id: Optional[int] = Field(default=1, primary_key=True)
     # Under this amount a weak case (rule_score < 0.7) is recommended for SETTLE. Never sent without approval.
     settle_threshold: Decimal = Field(default=Decimal("25"), max_digits=10, decimal_places=2)
+    # The store's refund / return policy as shown to buyers; becomes refund_policy evidence when set.
+    refund_policy: Optional[str] = None
     updated_at: datetime = Field(default_factory=utcnow)

@@ -113,7 +113,7 @@ def test_dispute_created_full_flow(client, engine, paid_order):
     sent = verify.calls[0].request.content
     assert sent.endswith(b',"webhook_event":' + RAW + b"}")  # byte-for-byte
     assert json.loads(sent)["webhook_id"] == "0NH55953DH663215D"
-    assert get.call_count == 2  # ingest + investigator refresh
+    assert get.call_count == 1  # ingest only: the investigator reuses the copy fetched moments ago
 
     with Session(engine) as s:
         d = s.exec(select(Dispute)).one()
@@ -133,7 +133,7 @@ def test_redelivered_event_is_a_noop(client, engine, paid_order):
     get = client.mock.get(GET_DISPUTE).respond(200, json=DISPUTE)
     assert post(client).json()["status"] == "processed"
     assert post(client).json()["status"] == "duplicate"
-    assert get.call_count == 2  # first delivery only (ingest + investigate); duplicate fetches nothing
+    assert get.call_count == 1  # first delivery only; the duplicate fetches nothing
     assert steps(engine).count(("orchestrator", "run_started")) == 1
 
 

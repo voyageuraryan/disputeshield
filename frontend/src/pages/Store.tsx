@@ -72,6 +72,10 @@ export default function Store() {
       <div>
         <h1 className="text-xl font-semibold">Demo store</h1>
         <p className="text-sm text-slate-500">PayPal sandbox checkout. Buy with a sandbox personal account, then open a dispute from that account.</p>
+        <p className="mt-2 rounded-md bg-slate-100 p-2 text-xs text-slate-600">
+          Use a <span className="font-medium">United States</span> sandbox buyer account: this store's sandbox seller is
+          registered in India, and PayPal blocks India-to-India payments (checkout then shows a generic error).
+        </p>
       </div>
       {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

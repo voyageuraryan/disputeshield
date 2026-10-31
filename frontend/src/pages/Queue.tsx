@@ -1,12 +1,35 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from "ag-grid-community";
+import {
+  CellStyleModule,
+  ClientSideRowModelModule,
+  ModuleRegistry,
+  NumberFilterModule,
+  QuickFilterModule,
+  RowStyleModule,
+  TextFilterModule,
+  TooltipModule,
+  ValidationModule,
+  themeQuartz,
+  type ColDef,
+} from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { disputesApi, type DisputeRow } from "../api";
 import { ActionChip, caseStatus, Chip, Due, dueIn, label, money, useNow } from "../format";
-import { useToast } from "../Toast";
+import { NEW_DISPUTE_EVENT } from "../NewDisputeAlerts";
 
-ModuleRegistry.registerModules([AllCommunityModule]);
+// Only the grid features the queue uses (much smaller than AllCommunityModule).
+// ValidationModule only in development: it explains misconfigurations in the console.
+ModuleRegistry.registerModules([
+  ClientSideRowModelModule,
+  CellStyleModule, // right-aligned Amount (column type uses cellClass)
+  TextFilterModule,
+  NumberFilterModule,
+  QuickFilterModule,
+  RowStyleModule,
+  TooltipModule,
+  ...(import.meta.env.DEV ? [ValidationModule] : []),
+]);
 
 const REFRESH_MS = 10_000;
 const theme = themeQuartz.withParams({ accentColor: "#4f46e5", fontSize: 13, headerFontWeight: 600 });
@@ -27,38 +50,24 @@ function useDisputes() {
   const [rows, setRows] = useState<DisputeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
-  const known = useRef<Set<string> | null>(null); // ids seen so far; null until the first successful load
-  const toast = useToast();
 
   useEffect(() => {
     let alive = true;
     const load = () =>
       disputesApi
         .list()
-        .then((r) => {
-          if (!alive) return;
-          if (known.current) {
-            // Toast only disputes that appeared since the page loaded, not the ones already there.
-            for (const d of r.filter((x) => !known.current!.has(x.paypal_dispute_id))) {
-              toast({
-                title: "New dispute",
-                body: `${label(d.reason)} · ${money(d.amount, d.currency)}${d.buyer_email ? ` · ${d.buyer_email}` : ""}`,
-                href: `/cases/${d.paypal_dispute_id}`,
-              });
-            }
-          }
-          known.current = new Set(r.map((x) => x.paypal_dispute_id));
-          setRows(r);
-          setError(null);
-        })
+        .then((r) => alive && (setRows(r), setError(null)))
         .catch((e) => alive && setError(e.message));
     load();
     const t = setInterval(load, REFRESH_MS);
+    // New disputes are announced app-wide (NewDisputeAlerts shows the toast); refresh right away.
+    window.addEventListener(NEW_DISPUTE_EVENT, load);
     return () => {
       alive = false;
       clearInterval(t);
+      window.removeEventListener(NEW_DISPUTE_EVENT, load);
     };
-  }, [nonce, toast]);
+  }, [nonce]);
   return { rows, error, retry: () => setNonce((n) => n + 1) };
 }
 
@@ -137,7 +146,7 @@ export default function Queue() {
         flex: 1,
         filter: "agTextColumnFilter",
         valueFormatter: (p) => p.value ?? "-",
-        tooltipField: "buyer_email",
+        tooltip: true, // shows the full (possibly truncated) email
       },
       {
         headerName: "Due in",

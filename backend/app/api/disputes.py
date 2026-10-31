@@ -2,18 +2,20 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
+from sqlalchemy.engine import Engine
 from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.agents.investigator import build_case_file
 from app.api.decisions import DecisionOut, _out
-from app.db import get_session
-from app.models import AgentStep, Decision, Dispute, EvidenceItemRow, Message, Order, Shipment
+from app.agents.runner import run_agents
+from app.db import get_engine, get_session
+from app.models import AgentStep, Decision, DecisionStatus, Dispute, EvidenceItemRow, Message, Order, Shipment
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
@@ -98,6 +100,7 @@ class Checklist(BaseModel):
 
 
 class DisputeDetail(BaseModel):
+    settle_threshold: Decimal  # current merchant setting (decisions record the one they used)
     dispute: DisputeRow
     order: OrderOut | None
     case: CaseFile
@@ -159,6 +162,30 @@ def _checklist(case: CaseFile, threshold) -> Checklist:
                      baseline=base.action if base else None, baseline_why=base.why if base else None)
 
 
+class ReanalyzeOut(BaseModel):
+    queued: bool
+    run_key: str
+
+
+@router.post("/api/disputes/{dispute_id}/reanalyze", response_model=ReanalyzeOut, status_code=202)
+def reanalyze(dispute_id: str, background: BackgroundTasks, session: Session = Depends(get_session),
+              engine: Engine = Depends(get_engine)) -> ReanalyzeOut:
+    """Run the agents again on the current evidence and settings (e.g. after changing the settle threshold).
+    The new proposal supersedes the old PROPOSED one; nothing is sent to PayPal without approval."""
+    d = _find(session, dispute_id)
+    if d.status == "RESOLVED":
+        raise HTTPException(409, "the dispute is resolved; there is nothing to analyse")
+    pending = session.exec(select(Decision).where(Decision.dispute_id == d.id,
+                                                  Decision.status == DecisionStatus.APPROVED)).first()
+    if pending:
+        raise HTTPException(409, f"decision #{pending.id} is being sent to PayPal; wait for it to finish")
+    key = f"run:{d.paypal_dispute_id}:manual:{datetime.now(timezone.utc).isoformat()}"
+    session.add(AgentStep(dispute_id=d.id, agent="merchant", action="Asked the agents to re-analyse the case"))
+    session.commit()
+    background.add_task(run_agents, d.id, key, engine)
+    return ReanalyzeOut(queued=True, run_key=key)
+
+
 @router.get("/api/disputes", response_model=list[DisputeRow])
 def list_disputes(session: Session = Depends(get_session)) -> list[DisputeRow]:
     """The merchant's queue: open disputes first, then by response deadline."""
@@ -174,7 +201,8 @@ def get_dispute_detail(dispute_id: str, session: Session = Depends(get_session))
     case = build_case_file(session, d)
     decisions = session.exec(select(Decision).where(Decision.dispute_id == d.id).order_by(Decision.id.desc())).all()
     steps = session.exec(select(AgentStep).where(AgentStep.dispute_id == d.id).order_by(AgentStep.id)).all()
-    return DisputeDetail(dispute=_row(session, d), order=_order(session, d.order_id), case=case,
+    return DisputeDetail(settle_threshold=settle_threshold(session),
+                         dispute=_row(session, d), order=_order(session, d.order_id), case=case,
                          checklist=_checklist(case, settle_threshold(session)), decisions=[_out(x, session) for x in decisions],
                          timeline=[StepOut(**s.model_dump(include=set(StepOut.model_fields))) for s in steps])
 
@@ -226,6 +254,10 @@ async def evidence_source(evidence_id: int, session: Session = Depends(get_sessi
                 return out(f"Shipment #{parts[1]}", "Store database", _dump(session.get(Shipment, int(parts[1]))))
             if parts[0] == "message":
                 return out(f"Message #{parts[1]}", "Store database", _dump(session.get(Message, int(parts[1]))))
+            if parts[0] == "settings" and parts[-1] == "refund_policy":
+                from app.merchant import get_merchant_settings
+                return out("Store refund policy", "Store settings",
+                           {"refund_policy": get_merchant_settings(session).refund_policy})
             if parts[0] == "buyer":
                 email = path.split("/", 1)[1]
                 orders = session.exec(select(Order).where(Order.buyer_email == email).order_by(Order.created_at)).all()

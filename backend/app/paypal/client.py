@@ -176,6 +176,13 @@ class PayPalClient:
             return resp.json() if resp.content else None
         raise AssertionError("unreachable")
 
+    async def call_without_app_token(self, method: str, path: str, *, idempotent: bool, **kwargs: Any) -> Any:
+        """A PayPal call that authenticates itself (e.g. Basic client credentials for an authorization-code
+        exchange, or a user's own access token for userinfo) instead of the app's client-credentials token.
+        Same retry / error / debug-id handling as every other call."""
+        resp = await self._send_with_retries(method, path, idempotent=idempotent, **kwargs)
+        return resp.json() if resp.content else None
+
     async def get(self, path: str, params: dict[str, Any] | None = None, **kwargs: Any) -> Any:
         if params:
             params = {k: v for k, v in params.items() if v is not None}

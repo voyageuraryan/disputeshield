@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Literal
 
 from pathlib import Path
@@ -76,6 +77,7 @@ class DecisionOut(BaseModel):
     retry_of: int | None
     economic_note: str | None
     missing_items: list[str] | None
+    analysed_threshold: Decimal | None
     can_retry: bool
 
 
@@ -254,6 +256,7 @@ async def retry(decision_id: int, body: ApproveIn | None = None, session: Sessio
     new = Decision(dispute_id=old.dispute_id, recommendation=old.recommendation, confidence=old.confidence,
                    reasoning=old.reasoning, cited_evidence_ids=old.cited_evidence_ids, draft_note=old.draft_note,
                    economic_note=old.economic_note, missing_items=old.missing_items,
+                   analysed_threshold=old.analysed_threshold,
                    status=DecisionStatus.PROPOSED, retry_of=old.id)
     session.add(new)
     session.commit()

@@ -1,0 +1,83 @@
+"""Log in with PayPal endpoints.
+
+GET /api/auth/config            -> {"mode": "paypal"|"off"} (public; the UI decides whether to show login)
+GET /api/auth/paypal/start      -> 302 to PayPal's consent page (signed single-use state carries `next`)
+GET /api/auth/paypal/callback   -> exchanges the code, checks the merchant allowlist, then 302 to
+                                   FRONTEND_URL/auth/callback#token=... (fragment: never sent to servers/logs)
+GET /api/auth/me                -> the logged-in merchant
+"""
+
+from __future__ import annotations
+
+import logging
+from urllib.parse import quote, urlencode
+
+from fastapi import APIRouter, Depends, Query
+from fastapi.responses import RedirectResponse
+
+from app.auth import allowed_emails, auth_disabled, consume_state, new_session, new_state, require_merchant
+from app.config import get_settings
+from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
+from app.paypal.identity import authorize_url, exchange_code, userinfo
+
+log = logging.getLogger(__name__)
+router = APIRouter(prefix="/api/auth", tags=["auth"])
+
+
+def _safe_next(path: str | None) -> str:
+    # Only same-app relative paths: no "//evil.com", no "https://..." (open redirect).
+    if not path or not path.startswith("/") or path.startswith("//") or "\\\\" in path:
+        return "/queue"
+    return path
+
+
+def _to_frontend(fragment: dict[str, str]) -> RedirectResponse:
+    base = get_settings().frontend_url.rstrip("/")
+    return RedirectResponse(f"{base}/auth/callback#{urlencode(fragment, quote_via=quote)}", status_code=302)
+
+
+@router.get("/config")
+def auth_config() -> dict:
+    return {"mode": "off" if auth_disabled() else "paypal"}
+
+
+@router.get("/paypal/start")
+def start(next: str | None = Query(default=None)) -> RedirectResponse:
+    return RedirectResponse(authorize_url(new_state(_safe_next(next))), status_code=302)
+
+
+@router.get("/paypal/callback")
+async def callback(code: str | None = None, state: str | None = None, error: str | None = None,
+                   error_description: str | None = None,
+                   paypal: PayPalClient = Depends(get_paypal_client)) -> RedirectResponse:
+    if error:  # e.g. the merchant pressed Cancel on PayPal's page
+        return _to_frontend({"error": error_description or error})
+    if not code or not state:
+        return _to_frontend({"error": "PayPal did not return a login code"})
+    try:
+        st = consume_state(state)
+    except ValueError as exc:
+        return _to_frontend({"error": f"login link {exc}; please start again"})
+    try:
+        tokens = await exchange_code(code, client=paypal)
+        user = await userinfo(tokens["access_token"], client=paypal)
+    except (PayPalError, KeyError) as exc:
+        log.warning("Log in with PayPal failed: %s", exc)
+        return _to_frontend({"error": "PayPal login failed; please try again", "next": st["next"]})
+    email = (user.get("email") or "").lower()
+    allow = allowed_emails()
+    if not allow:
+        return _to_frontend({"error": "no merchant is configured: set MERCHANT_LOGIN_EMAILS on the server"})
+    if email not in allow:
+        log.warning("login refused for %s (not in MERCHANT_LOGIN_EMAILS)", email or "<no email>")
+        return _to_frontend({"error": f"{email or 'this PayPal account'} is not allowed to manage this store"})
+    sub = user.get("user_id") or user.get("sub") or email
+    session = new_session({"sub": sub, "email": email, "name": user.get("name")})
+    log.info("merchant %s logged in", email)
+    return _to_frontend({"token": session, "next": st["next"]})
+
+
+@router.get("/me")
+def me(merchant: dict = Depends(require_merchant)) -> dict:
+    return {"email": merchant.get("email"), "name": merchant.get("name"), "sub": merchant.get("sub"),
+            "expires_at": merchant.get("exp")}

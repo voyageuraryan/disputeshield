@@ -97,7 +97,7 @@ async def test_poll_ingests_new_and_changed_only(pp, engine):
     assert lst.calls[0].request.url.params["page_size"] == "50"
 
     assert await poll_once(engine, pp) == []  # nothing changed: no detail fetches
-    assert g2.call_count == 2  # ingest + investigator refresh; second poll fetches nothing
+    assert g2.call_count == 1  # ingest only (investigator reuses the fresh copy); second poll fetches nothing
 
     d1["update_time"] = "2026-11-01T10:00:00Z"  # PP-D-1 changes at PayPal
     third = await poll_once(engine, pp)

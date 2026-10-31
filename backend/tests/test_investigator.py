@@ -306,3 +306,19 @@ async def test_case_endpoint(pp, engine, demo):
             assert c.get("/disputes/NOPE/case").status_code == 404
     finally:
         app.dependency_overrides.clear()
+
+
+@respx.mock
+async def test_investigator_refetches_when_copy_is_stale(pp, engine, order31):
+    from datetime import timedelta
+    oid, _ = order31
+    mock_real_paypal(respx)
+    did = make_dispute(engine, oid, "PP-R-ZWL-10195422", transaction_id="4S541016HD390220V")
+    with Session(engine) as s:
+        d = s.get(Dispute, did); d.refreshed_at = datetime.now(timezone.utc) - timedelta(minutes=5); s.add(d); s.commit()
+    _, steps = await run_investigation(engine, did, pp)
+    assert steps[0].startswith("Fetched dispute")  # stale copy -> fetched again
+    with Session(engine) as s:
+        d = s.get(Dispute, did); d.refreshed_at = datetime.now(timezone.utc); s.add(d); s.commit()
+    _, steps = await run_investigation(engine, did, pp)
+    assert any(x.startswith("Using the dispute as fetched from PayPal") for x in steps)

@@ -60,7 +60,7 @@ def test_real_out_of_order_delivery_links_order_and_runs_once(client, engine, or
     assert r1.json()["order_id"] == order31
     assert r2.json()["agent_run_queued"] is False  # same dispute version
     assert r3.json()["status"] == "duplicate"
-    assert get.call_count == 3  # 2 ingests + 1 investigation (one run); redelivery fetches nothing
+    assert get.call_count == 2  # 2 ingests (investigation reuses the fresh copy); redelivery fetches nothing
 
     with Session(engine) as s:
         d = s.exec(select(Dispute)).one()

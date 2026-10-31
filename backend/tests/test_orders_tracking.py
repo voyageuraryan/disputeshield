@@ -38,8 +38,13 @@ def test_order_request_carries_internal_id_and_totals():
                             "breakdown": {"item_total": {"currency_code": "USD", "value": "107.00"}}}
     assert pu["items"][1] == {"name": "Ebook", "sku": "EBOOK-01", "quantity": "2",
                               "unit_amount": {"currency_code": "USD", "value": "9.00"}, "category": "DIGITAL_GOODS"}
-    # JS SDK v6 flow: no payment_source, so PayPal creates the order as CREATED (see orders.py).
+    # Physical goods in the order: no payment_source (PayPal collects the shipping address).
     assert set(body) == {"intent", "purchase_units"}
+
+
+def test_digital_only_order_skips_shipping():
+    body = build_order_request(internal_order_id=1, invoice_id="x", currency="USD", items=[EBOOK])
+    assert body["payment_source"] == {"paypal": {"experience_context": {"shipping_preference": "NO_SHIPPING"}}}
 
 
 def test_order_request_needs_items():

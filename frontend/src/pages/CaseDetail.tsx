@@ -249,7 +249,17 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
   };
 
   return (
-    <Card title="Recommendation" right={<span className="text-xs text-slate-400">Decision #{d.id}</span>}>
+    <Card
+      title="Recommendation"
+      right={
+        <span className="flex items-center gap-3 text-xs text-slate-400">
+          {(d.status === "PROPOSED" || d.status === "FAILED" || d.status === "REJECTED") && detail.dispute.status !== "RESOLVED" && (
+            <ReanalyzeButton disputeId={detail.dispute.paypal_dispute_id} onDone={onDone} />
+          )}
+          Decision #{d.id}
+        </span>
+      }
+    >
       <div className="flex flex-wrap items-center gap-2">
         <ActionChip action={d.recommendation} />
         <Chip text={`${d.confidence} confidence`} />
@@ -264,6 +274,15 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
       )}
       {d.missing_items && d.missing_items.length > 0 && (
         <p className="mt-2 text-xs text-slate-500">Still missing: {d.missing_items.map(label).join(", ")}</p>
+      )}
+      {actionable && d.analysed_threshold && Number(d.analysed_threshold) !== Number(detail.settle_threshold) && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md bg-indigo-50 p-2 text-xs text-indigo-900">
+          <span>
+            Analysed with a {money(d.analysed_threshold, detail.dispute.currency)} settle threshold; your setting is now{" "}
+            {money(detail.settle_threshold, detail.dispute.currency)}.
+          </span>
+          <ReanalyzeButton disputeId={detail.dispute.paypal_dispute_id} onDone={onDone} primary />
+        </div>
       )}
 
       {err && (
@@ -361,6 +380,37 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
       )}
       {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">{error}</p>}
     </Card>
+  );
+}
+
+function ReanalyzeButton({ disputeId, onDone, primary }: { disputeId: string; onDone: () => void; primary?: boolean }) {
+  const [state, setState] = useState<"idle" | "busy" | "queued" | "error">("idle");
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <span className="inline-flex items-center gap-2">
+      <button
+        disabled={state === "busy" || state === "queued"}
+        onClick={async () => {
+          setState("busy");
+          try {
+            await disputesApi.reanalyze(disputeId);
+            setState("queued");
+            setTimeout(onDone, 1500);
+          } catch (e) {
+            setState("error");
+            setMsg((e as Error).message);
+          }
+        }}
+        className={
+          primary
+            ? "rounded-md bg-indigo-600 px-2.5 py-1 font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+            : "text-xs font-medium text-indigo-700 hover:underline disabled:opacity-50"
+        }
+      >
+        {state === "busy" ? "Starting…" : state === "queued" ? "Re-analysing…" : "Re-analyse"}
+      </button>
+      {state === "error" && <span className="text-xs text-red-700">{msg}</span>}
+    </span>
   );
 }
 

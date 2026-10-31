@@ -12,6 +12,10 @@ os.environ.update(
     GROQ_API_KEY="test-groq-key",
     GEMINI_API_KEY="test-gemini-key",
     LLM_PROVIDERS="groq,gemini",
+    AUTH_MODE="paypal",
+    AUTH_SECRET="test-secret-test-secret-test-secret-123",
+    MERCHANT_LOGIN_EMAILS="merchant@business.example.com",
+    FRONTEND_URL="http://localhost:5173",
     WEBHOOK_RECORD_DIR="",
     CHECKPOINT_DB=os.path.join(tempfile.mkdtemp(prefix="ds-ckpt-"), "checkpoints.db"),
 )
@@ -76,3 +80,18 @@ def fake_llm(monkeypatch):
     llm = ObedientLLM()
     monkeypatch.setattr("app.agents.llm.structured_call", llm)
     return llm
+
+
+@pytest.fixture(autouse=True)
+def logged_in_merchant(request):
+    """Most tests are about disputes, not login: act as a logged-in merchant unless marked real_auth."""
+    from app.auth import require_merchant
+    from app.main import app
+
+    if request.node.get_closest_marker("real_auth"):
+        app.dependency_overrides.pop(require_merchant, None)
+        yield
+        return
+    app.dependency_overrides[require_merchant] = lambda: {"sub": "test", "email": "merchant@business.example.com"}
+    yield
+    app.dependency_overrides.pop(require_merchant, None)

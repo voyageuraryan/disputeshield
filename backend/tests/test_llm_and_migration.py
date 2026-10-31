@@ -123,7 +123,8 @@ async def test_gemini_request_shape_and_thought_parts_skipped(env):
     (httpx.Response(429, json={"error": {"status": "RESOURCE_EXHAUSTED"}}), "HTTP 429"),
 ])
 @respx.mock
-async def test_both_fail_raises_with_both_reasons(gemini_response, match):
+async def test_both_fail_raises_with_both_reasons(gemini_response, match, monkeypatch):
+    monkeypatch.setattr(llm_mod, "OVERLOAD_WAIT_S", 0)
     respx.post(GROQ_URL).mock(return_value=httpx.Response(429, json={"error": {}}))
     gem = respx.post(url__regex=r"https://generativelanguage\.googleapis\.com/v1beta/models/.+:generateContent")
     gem.mock(return_value=gemini_response)
@@ -185,12 +186,25 @@ def test_migration_adds_new_nullable_columns(tmp_path):
 
 
 @respx.mock
-async def test_second_gemini_model_when_first_overloaded():
+async def test_second_gemini_model_when_first_overloaded(monkeypatch):
+    monkeypatch.setattr(llm_mod, "OVERLOAD_WAIT_S", 0)
     respx.post(GROQ_URL).mock(return_value=httpx.Response(429, json={"error": {}}))
     busy = respx.post(GEMINI).mock(return_value=httpx.Response(
         503, json={"error": {"code": 503, "message": "This model is currently experiencing high demand.",
                              "status": "UNAVAILABLE"}}))
     ok = respx.post(GEMINI_URL.format(model="gemini-2.5-flash")).mock(return_value=gemini_ok())
     assert (await call()).action == "FIGHT"
-    assert busy.call_count == 1 and ok.call_count == 1
+    assert busy.call_count == 2 and ok.call_count == 1  # one quick retry, then the next model
     assert llm_mod.last_provider.get() == "gemini:gemini-2.5-flash"
+
+
+@respx.mock
+async def test_gemini_overload_retried_once_on_same_model(monkeypatch):
+    monkeypatch.setattr(llm_mod, "OVERLOAD_WAIT_S", 0)
+    respx.post(GROQ_URL).mock(return_value=httpx.Response(429, json={"error": {}}))
+    busy = httpx.Response(503, json={"error": {"code": 503, "status": "UNAVAILABLE"}})
+    first = respx.post(GEMINI).mock(side_effect=[busy, gemini_ok()])
+    second = respx.post(GEMINI_URL.format(model="gemini-2.5-flash"))
+    assert (await call()).action == "FIGHT"
+    assert first.call_count == 2 and second.call_count == 0
+    assert llm_mod.last_provider.get() == "gemini:gemini-3.8-flash"

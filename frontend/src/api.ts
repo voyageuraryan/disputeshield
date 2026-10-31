@@ -1,3 +1,4 @@
+import { getToken, goToLogin } from "./auth";
 export type Product = {
   sku: string;
   name: string;
@@ -18,13 +19,21 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   try {
     res = await fetch(`${API_BASE}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+      headers: {
+        "Content-Type": "application/json",
+        ...(getToken() ? { Authorization: `Bearer ${getToken()}` } : {}),
+        ...(init?.headers ?? {}),
+      },
     });
   } catch {
     // fetch only throws on network failure ("Failed to fetch"): say it in plain words
     throw new Error("Can't reach the DisputeShield server. Check your connection and try again.");
   }
   const body = await res.json().catch(() => null);
+  if (res.status === 401 && !path.startsWith("/api/store") && !path.startsWith("/api/auth/config")) {
+    goToLogin("Your session ended. Please log in again.");
+    throw new Error("401: login required");
+  }
   if (!res.ok) {
     const detail = body?.detail;
     const debug = detail?.debug_id ? ` (PayPal debug id ${detail.debug_id})` : "";
@@ -102,6 +111,7 @@ export type Decision = {
   retry_of: number | null;
   economic_note: string | null;
   missing_items: string[] | null;
+  analysed_threshold: string | null;
   can_retry: boolean;
 };
 
@@ -144,6 +154,7 @@ export type Checklist = {
 export type EvidenceSource = { evidence_id: number; source: string; source_ref: string; title: string; origin: string; record: unknown };
 
 export type DisputeDetail = {
+  settle_threshold: string;
   dispute: DisputeRow;
   order: Order | null;
   case: CaseFile;
@@ -163,18 +174,30 @@ export const disputesApi = {
     req<Decision>(`/api/decisions/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   retry: (id: number, body: ApproveBody) =>
     req<Decision>(`/api/decisions/${id}/retry`, { method: "POST", body: JSON.stringify(body) }),
-  pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf`,
+  pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf?token=${encodeURIComponent(getToken() ?? "")}`,
   source: (evidenceId: number) => req<EvidenceSource>(`/api/evidence/${evidenceId}/source`),
+  reanalyze: (id: string) =>
+    req<{ queued: boolean; run_key: string }>(`/api/disputes/${encodeURIComponent(id)}/reanalyze`, { method: "POST" }),
 };
 
 // ---- settings & live events --------------------------------------------------------------
 
-export type MerchantSettings = { settle_threshold: string; currency: string; updated_at: string };
+export type MerchantSettings = { settle_threshold: string; refund_policy: string | null; currency: string; updated_at: string };
 
 export const settingsApi = {
   get: () => req<MerchantSettings>("/api/settings"),
-  save: (settle_threshold: string) =>
-    req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify({ settle_threshold }) }),
+  save: (patch: { settle_threshold?: string; refund_policy?: string }) =>
+    req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(patch) }),
 };
 
-export const eventsUrl = (disputeId: string) => `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/events`;
+// EventSource can't send headers, so the session token goes in the query string.
+export const eventsUrl = (disputeId: string) =>
+  `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/events?token=${encodeURIComponent(getToken() ?? "")}`;
+
+export const newDisputesUrl = () => `${API_BASE}/api/events/disputes?token=${encodeURIComponent(getToken() ?? "")}`;
+
+export const authApi = {
+  config: () => req<{ mode: "paypal" | "off" }>("/api/auth/config"),
+  me: () => req<{ email: string | null; name: string | null; expires_at: number | null }>("/api/auth/me"),
+  startUrl: (next: string) => `${API_BASE}/api/auth/paypal/start?next=${encodeURIComponent(next)}`,
+};

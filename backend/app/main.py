@@ -3,10 +3,12 @@ import contextlib
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.admin import router as admin_router
+from app.api.auth import router as auth_router
+from app.auth import require_merchant
 from app.api.decisions import router as decisions_router
 from app.api.disputes import router as disputes_router
 from app.api.events import router as events_router
@@ -14,6 +16,7 @@ from app.api.settings import router as settings_router
 from app.api.store import router as store_router
 from app.api.webhooks import router as webhooks_router
 from app.config import get_settings
+from app import events_bus  # noqa: F401  (registers commit hooks that wake SSE streams)
 from app.db import create_db_and_tables, engine
 from app.paypal.client import close_paypal_client
 
@@ -46,14 +49,18 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+# Public: storefront (buyers), PayPal webhooks (signature-verified), login, admin (own token), /health.
 app.include_router(store_router)
-app.include_router(disputes_router)
-app.include_router(decisions_router)
-app.include_router(decisions_router, prefix="/api", include_in_schema=False)  # for the Vite proxy
-app.include_router(admin_router)
-app.include_router(events_router)
-app.include_router(settings_router)
 app.include_router(webhooks_router)
+app.include_router(auth_router)
+app.include_router(admin_router)
+# Merchant-only: everything that shows cases or acts on them.
+merchant = [Depends(require_merchant)]
+app.include_router(disputes_router, dependencies=merchant)
+app.include_router(decisions_router, dependencies=merchant)
+app.include_router(decisions_router, prefix="/api", include_in_schema=False, dependencies=merchant)  # Vite proxy
+app.include_router(events_router, dependencies=merchant)
+app.include_router(settings_router, dependencies=merchant)
 
 
 @app.get("/health")

@@ -14,7 +14,7 @@ worth is the rules' and analyst's job.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from sqlmodel import Session, select
@@ -30,6 +30,7 @@ from app.schemas import CaseFile, EvidenceItem
 
 log = logging.getLogger(__name__)
 AGENT = "investigator"
+FRESH_S = 60  # reuse a dispute fetched this recently instead of fetching it again
 
 
 # ---- formatting helpers -------------------------------------------------------
@@ -129,6 +130,7 @@ class Investigator:
             self._messages(order)
             self._listing(order)
             self._buyer_history(order)
+        self._refund_policy()
         self._paypal_dispute_messages(pp)
         case = build_case_file(self.s, d)
         self.step(f"Case file ready: {len(case.evidence)} evidence items",
@@ -139,10 +141,20 @@ class Investigator:
 
     async def _paypal_dispute(self) -> dict:
         d = self.d
+        fetched = d.refreshed_at.replace(tzinfo=d.refreshed_at.tzinfo or timezone.utc) if d.refreshed_at else None
+        if fetched and d.raw and (datetime.now(timezone.utc) - fetched).total_seconds() < FRESH_S:
+            raw = d.raw  # ingest fetched it moments ago; skip a second identical GET
+            self.step(f"Using the dispute as fetched from PayPal {int((datetime.now(timezone.utc) - fetched).total_seconds())}s "
+                      f"ago: {raw.get('reason')}, {raw.get('dispute_life_cycle_stage')}, {raw.get('status')}, "
+                      f"{_money(raw.get('dispute_amount'))}", {"source_ref": f"paypal:dispute/{d.paypal_dispute_id}"})
+            acts = allowed_actions(raw)
+            self.step("PayPal currently allows: " + (", ".join(acts) if acts else "no merchant actions"),
+                      {"allowed_actions": acts, "dispute_state": raw.get("dispute_state")})
+            return raw
         try:
             fresh = await get_dispute(d.paypal_dispute_id, client=self.client)
             raw = fresh.raw
-            d.raw, d.status = raw, fresh.status or d.status
+            d.raw, d.status, d.refreshed_at = raw, fresh.status or d.status, datetime.now(timezone.utc)
             d.stage = fresh.dispute_life_cycle_stage or d.stage
             self.s.add(d)
             self.s.commit()
@@ -280,6 +292,17 @@ class Investigator:
         row = self.evidence(type="listing", source="store", source_ref=f"store:order/{order.id}/listing",
                             summary=f"Listing at time of sale: \"{order.product_listing}\"")
         self.step("Found the product listing shown at time of sale", {"evidence_id": row.id})
+
+    def _refund_policy(self) -> None:
+        from app.merchant import get_merchant_settings
+
+        policy = get_merchant_settings(self.s).refund_policy
+        if not policy:
+            self.step("No refund policy on file (add it in Settings)")
+            return
+        row = self.evidence(type="refund_policy", source="store", source_ref="store:settings/refund_policy",
+                            summary=f"Store refund policy: \"{policy[:600]}\"")
+        self.step("Found the store's refund policy", {"evidence_id": row.id})
 
     def _buyer_history(self, order: Order) -> None:
         if not order.buyer_email:

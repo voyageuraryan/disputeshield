@@ -9,11 +9,11 @@ items[].quantity is a string; amount.value is a string; amount.breakdown.item_to
 must equal sum(unit_amount * quantity) when items are sent.
 `Prefer: return=representation` returns the full order (with captures) on capture.
 
-No `payment_source` on create: PayPal's JS SDK v6 example sends only intent +
-purchase_units. Adding payment_source.paypal.experience_context makes PayPal create
-the order as PAYER_ACTION_REQUIRED (redirect flow), and sandbox checkout in the v6
-popup then fails with "Things don't appear to be working at the moment" (seen
-2026-10-31). Without it the order is CREATED with approve/capture links.
+Physical goods: only intent + purchase_units (PayPal's JS SDK v6 example); PayPal asks the buyer for a
+shipping address. Digital-only orders (e.g. the ebook) add
+payment_source.paypal.experience_context.shipping_preference = NO_SHIPPING, the documented replacement for
+the deprecated application_context.shipping_preference. (Correction: the sandbox checkout error seen on
+2026-10-31 came from India->India sandbox accounts, not from payment_source.)
 """
 
 from __future__ import annotations
@@ -47,7 +47,7 @@ def build_order_request(
     if not items:
         raise ValueError("order needs at least one item")
     total = sum((i.unit_amount * i.quantity for i in items), Decimal("0"))
-    return {
+    body = {
         "intent": "CAPTURE",
         "purchase_units": [
             {
@@ -71,6 +71,9 @@ def build_order_request(
             }
         ],
     }
+    if all(i.category == "DIGITAL_GOODS" for i in items):
+        body["payment_source"] = {"paypal": {"experience_context": {"shipping_preference": "NO_SHIPPING"}}}
+    return body
 
 
 async def create_order(

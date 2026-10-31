@@ -2,7 +2,7 @@ import json
 from decimal import Decimal
 
 import pytest
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app.models import AgentStep, Dispute
 from tests.test_resolution import (  # noqa: F401  (fixtures)
@@ -10,9 +10,22 @@ from tests.test_resolution import (  # noqa: F401  (fixtures)
     api,
     artifacts,
     demo,
-    engine,
     start_case,
 )
+
+
+@pytest.fixture
+def engine(tmp_path):
+    """A real SQLite file, like production: each thread gets its own connection. (The in-memory StaticPool
+    used elsewhere shares ONE connection between the test thread and the streaming server thread, which
+    races when a test writes while a stream reads.)"""
+    from sqlmodel import create_engine
+
+    from app.db import create_db_and_tables
+
+    eng = create_engine(f"sqlite:///{tmp_path / 'events.db'}", connect_args={"check_same_thread": False})
+    create_db_and_tables(eng)
+    return eng
 
 
 @pytest.fixture
@@ -128,3 +141,92 @@ async def test_threshold_changes_the_recommendation(api, engine, demo):
     assert api.get("/api/disputes/PP-D-C").json()["checklist"]["baseline"] == "SETTLE"
     _, dec_c2, _ = await start_case(api, engine, demo["C"], SELLER_TURN, pid="PP-D-C2", amount="45.00")
     assert api.get(f"/api/decisions/{dec_c2}").json()["recommendation"] == "SETTLE"
+
+
+async def test_decision_records_threshold_and_reanalyze_supersedes(api, engine, demo):
+    _, dec_c, did = await start_case(api, engine, demo["C"], SELLER_TURN, pid="PP-D-C", amount="45.00")
+    d1 = api.get(f"/api/decisions/{dec_c}").json()
+    assert Decimal(d1["analysed_threshold"]) == Decimal("25") and d1["recommendation"] == "GATHER_MORE"
+    api.put("/api/settings", json={"settle_threshold": "50"})
+    r = api.post("/api/disputes/PP-D-C/reanalyze")
+    assert r.status_code == 202 and r.json()["queued"] is True
+    decs = api.get("/api/disputes/PP-D-C").json()["decisions"]
+    assert decs[0]["recommendation"] == "SETTLE" and Decimal(decs[0]["analysed_threshold"]) == Decimal("50")
+    assert decs[1]["id"] == dec_c and decs[1]["status"] == "SUPERSEDED"
+    steps = [s["action"] for s in api.get("/api/disputes/PP-D-C").json()["timeline"]]
+    assert "Asked the agents to re-analyse the case" in steps
+
+
+async def test_reanalyze_refused_when_resolved_or_unknown(api, engine, demo):
+    await start_case(api, engine, demo["A"], SELLER_TURN)
+    with Session(engine) as s:
+        d = s.exec(select(Dispute)).one(); d.status = "RESOLVED"; s.add(d); s.commit()
+    assert api.post("/api/disputes/PP-D-A/reanalyze").status_code == 409
+    assert api.post("/api/disputes/NOPE/reanalyze").status_code == 404
+
+
+def test_new_dispute_stream(api, engine, fast_sse):
+    make_dispute(engine, "PP-OLD")
+    with api.stream("GET", "/api/events/disputes?max_seconds=5") as r:
+        lines = r.iter_lines()
+        first, _ = read_events(lines, until=lambda ev: any(e.get("event") == "ready" for e in ev))
+        assert not any(e.get("event") == "dispute" for e in first)  # no backlog of old disputes
+        with Session(engine) as s:
+            s.add(Dispute(paypal_dispute_id="PP-NEW", reason="MERCHANDISE_OR_SERVICE_NOT_RECEIVED", status="OPEN",
+                          amount=Decimal("61.50"), currency="USD")); s.commit()
+        more, _ = read_events(lines, until=lambda ev: any(e.get("event") == "dispute" for e in ev))
+    ev = next(e for e in more if e.get("event") == "dispute")
+    assert ev["data"]["paypal_dispute_id"] == "PP-NEW" and ev["data"]["amount"] == "61.50"
+
+
+def test_new_dispute_stream_replays_after_reconnect(api, engine, fast_sse):
+    old = make_dispute(engine, "PP-A")
+    make_dispute(engine, "PP-B")
+    with api.stream("GET", "/api/events/disputes?max_seconds=0.2", headers={"Last-Event-ID": str(old)}) as r:
+        ids = [e["data"]["paypal_dispute_id"] for e in read_events(r)[0] if e.get("event") == "dispute"]
+    assert ids == ["PP-B"]
+
+
+def test_refund_policy_setting(api):
+    r = api.put("/api/settings", json={"refund_policy": "  Returns accepted within 30 days, unused, in original packaging.  "})
+    assert r.json()["refund_policy"] == "Returns accepted within 30 days, unused, in original packaging."
+    assert Decimal(r.json()["settle_threshold"]) == Decimal("25")  # untouched when not sent
+    assert api.put("/api/settings", json={"refund_policy": ""}).json()["refund_policy"] is None
+    assert api.put("/api/settings", json={"refund_policy": "x" * 4001}).status_code == 422
+
+
+async def test_refund_policy_becomes_evidence_and_completes_snad_checklist(api, engine, demo):
+    api.put("/api/settings", json={"refund_policy": "Returns within 30 days for a full refund."})
+    _, _, _ = await start_case(api, engine, demo["B"], SELLER_TURN, pid="PP-D-B", amount="12.00")
+    with Session(engine) as s:
+        d = s.exec(select(Dispute).where(Dispute.paypal_dispute_id == "PP-D-B")).one()
+        d.reason = "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED"; s.add(d); s.commit()
+    detail = api.get("/api/disputes/PP-D-B").json()
+    rp = [e for e in detail["case"]["evidence"] if e["type"] == "refund_policy"]
+    assert rp and "Returns within 30 days" in rp[0]["summary"] and rp[0]["source_ref"] == "store:settings/refund_policy"
+    assert "refund_policy" not in [i["type"] for i in detail["checklist"]["items"] if not i["present"]]
+    src = api.get(f"/api/evidence/{rp[0]['id']}/source").json()
+    assert src["origin"] == "Store settings" and "30 days" in src["record"]["refund_policy"]
+
+
+async def test_no_refund_policy_logged(api, engine, demo):
+    _, _, did = await start_case(api, engine, demo["A"], SELLER_TURN)
+    steps = [s["action"] for s in api.get("/api/disputes/PP-D-A").json()["timeline"]]
+    assert "No refund policy on file (add it in Settings)" in steps
+
+
+def test_commit_wakes_stream_without_waiting_for_poll(api, engine, monkeypatch):
+    """With a 10 s safety-net poll, a committed step must still arrive almost at once."""
+    import time as _t
+    monkeypatch.setattr("app.api.events.POLL_S", 10.0)
+    monkeypatch.setattr("app.api.events.HEARTBEAT_S", 10.0)
+    did = make_dispute(engine)
+    with api.stream("GET", "/api/disputes/PP-D-EV/events?max_seconds=8") as r:
+        lines = r.iter_lines()
+        read_events(lines, until=lambda ev: any(e.get("event") == "ready" for e in ev))
+        t0 = _t.monotonic()
+        add_step(engine, did, "woken")
+        more, _ = read_events(lines, until=lambda ev: any(e.get("event") == "step" for e in ev))
+        elapsed = _t.monotonic() - t0
+    assert next(e for e in more if e.get("event") == "step")["data"]["action"] == "woken"
+    assert elapsed < 2.0, elapsed

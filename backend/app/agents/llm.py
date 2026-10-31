@@ -23,6 +23,7 @@ finally marks the case NEEDS_HUMAN (rule 7).
 
 from __future__ import annotations
 
+import asyncio
 import copy
 import logging
 from contextvars import ContextVar
@@ -40,6 +41,8 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 TIMEOUT_S = 60.0
 MAX_OUTPUT_TOKENS = 4096  # keeps a request inside Groq's free 8K tokens-per-minute budget
+OVERLOAD_RETRIES = 1      # Gemini 503 "high demand": one quick retry of the same model
+OVERLOAD_WAIT_S = 1.5
 
 # Which provider/model answered the most recent structured_call in this task (for the timeline).
 last_provider: ContextVar[str | None] = ContextVar("last_provider", default=None)
@@ -129,7 +132,15 @@ async def gemini_call(*, system: str, user: str, output_model: type[T], api_key:
     }
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as http:
-            r = await http.post(GEMINI_URL.format(model=model), json=body, headers={"x-goog-api-key": api_key})
+            for attempt in range(OVERLOAD_RETRIES + 1):
+                r = await http.post(GEMINI_URL.format(model=model), json=body, headers={"x-goog-api-key": api_key})
+                # 503 "This model is currently experiencing high demand" is usually momentary (seen live on
+                # gemini-3.8-flash): wait briefly and retry the same model once before moving on.
+                if r.status_code == 503 and attempt < OVERLOAD_RETRIES:
+                    log.info("gemini %s overloaded (503); retrying in %.1fs", model, OVERLOAD_WAIT_S)
+                    await asyncio.sleep(OVERLOAD_WAIT_S)
+                    continue
+                break
             r.raise_for_status()
     except httpx.HTTPError as exc:
         raise _http_error("gemini", exc) from exc

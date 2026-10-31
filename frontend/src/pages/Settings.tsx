@@ -34,7 +34,7 @@ export default function Settings() {
     if (invalid) return;
     setStatus({ kind: "saving" });
     try {
-      const s = await settingsApi.save(n.toFixed(2));
+      const s = await settingsApi.save({ settle_threshold: n.toFixed(2) });
       setSaved(s);
       setValue(Number(s.settle_threshold).toFixed(2));
       setStatus({ kind: "ok", text: "Saved. New analyses use this threshold." });
@@ -111,6 +111,70 @@ export default function Settings() {
           </form>
         )}
       </section>
+      {saved && <RefundPolicy initial={saved.refund_policy ?? ""} onSaved={setSaved} />}
     </div>
+  );
+}
+
+const POLICY_MAX = 4000;
+
+function RefundPolicy({ initial, onSaved }: { initial: string; onSaved: (s: MerchantSettings) => void }) {
+  const [text, setText] = useState(initial);
+  const [base, setBase] = useState(initial);
+  const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "error"; text?: string }>({ kind: "idle" });
+  const dirty = text.trim() !== base.trim();
+  const save = async () => {
+    setStatus({ kind: "saving" });
+    try {
+      const s = await settingsApi.save({ refund_policy: text });
+      setBase(s.refund_policy ?? "");
+      setText(s.refund_policy ?? "");
+      onSaved(s);
+      setStatus({ kind: "ok", text: s.refund_policy ? "Saved. New investigations include it as evidence." : "Removed." });
+    } catch (e) {
+      setStatus({ kind: "error", text: (e as Error).message });
+    }
+  };
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="font-semibold">Refund policy</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Paste the refund and return policy your buyers see. PayPal expects it as evidence for "not as described"
+        disputes, so it's attached to new cases automatically.
+      </p>
+      <label htmlFor="policy" className="sr-only">Refund policy</label>
+      <textarea
+        id="policy"
+        value={text}
+        maxLength={POLICY_MAX}
+        onChange={(e) => {
+          setText(e.target.value);
+          setStatus({ kind: "idle" });
+        }}
+        placeholder="e.g. Returns accepted within 30 days of delivery for unused items in original packaging. Refunds are issued to the original payment method within 5 business days of receiving the return."
+        className="mt-3 h-36 w-full rounded-md border border-slate-300 p-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+      />
+      <div className="mt-1 flex flex-wrap items-center justify-between gap-2">
+        <span className="text-xs text-slate-400">
+          {text.length}/{POLICY_MAX}
+        </span>
+        <div className="flex items-center gap-2">
+          {dirty && (
+            <button onClick={() => setText(base)} className="text-sm text-slate-500 hover:underline">
+              Undo
+            </button>
+          )}
+          <button
+            onClick={save}
+            disabled={!dirty || status.kind === "saving"}
+            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-40"
+          >
+            {status.kind === "saving" ? "Saving…" : "Save policy"}
+          </button>
+        </div>
+      </div>
+      {status.kind === "ok" && <p className="mt-2 text-sm text-indigo-700" role="status">{status.text}</p>}
+      {status.kind === "error" && <p className="mt-2 text-sm text-red-700" role="alert">Couldn't save: {status.text}</p>}
+    </section>
   );
 }

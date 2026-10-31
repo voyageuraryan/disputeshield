@@ -187,53 +187,56 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-10-31, session 12
-Legend: [ ] open · [~] partly done · [x] done (kept for history). P1 = blocks a credible demo/deploy.
+## Open items (tracked) — updated 2026-10-31, session 13
+Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
+User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
+SQLite on Render disk.
 
-### P1 — must fix before demo / deploy
-G1  [ ] No authentication on merchant APIs/UI: anyone who can reach the API can approve/reject decisions and
-        change settings (only /admin/sandbox/* is token-protected). Fine on localhost, unsafe once deployed.
-G2  [ ] Not deployed: render.yaml untested; webhook 95P52181NY896745H points at a cloudflared quick tunnel that
-        dies (re-point with app.scripts.register_webhook). Needs the user's Render account.
-G3  [ ] No successful PayPal response proven live yet. PP-R-ZWL-10195422 refuses PROOF_OF_FULFILLMENT with and
-        without tracking (EVIDENCE_TYPE_IS_NOT_ALLOWED; debug ids f233018eb2716, ca534153a1eca, ca534153d2b67),
-        probably because require-evidence forced the state. accept-claim, provide-supporting-info and adjudicate
-        are only tested against mocks. Next: user retries decision #4 as SETTLE (UI "Try again" -> Settle), and
-        demos FIGHT on a fresh dispute that reaches "needs response" naturally.
-G4  [ ] Frontend runs on a scratchpad Node; user must install Node (sudo pacman -S nodejs npm).
+### P1
+G1  [~] Merchant login built (Log in with PayPal, allowlist MERCHANT_LOGIN_EMAILS, signed 12 h sessions, every
+        merchant API/SSE/PDF protected, store/webhooks/health public). WAITING ON USER: enable "Log in with PayPal"
+        on the sandbox app + Return URL http://localhost:8000/api/auth/paypal/callback (PayPal currently answers
+        "invalid client_id or redirect_uri"). Until then the local dashboard needs AUTH_MODE=off to be usable.
+G2  [~] Deploy prepared (render.yaml with all settings, AUTH_SECRET generated, DEPLOY.md). WAITING ON USER:
+        push to GitHub + Render account. Webhook still on a cloudflared quick tunnel locally.
+G3  [~] No successful PayPal response proven live. WAITING ON USER: (a) on PP-R-ZWL-10195422 decision #4 ->
+        "Try again" -> Settle (refund) to prove accept-claim; (b) a fresh dispute that reaches "needs response"
+        naturally to prove provide-evidence. Debug ids for PayPal support: f233018eb2716, ca534153a1eca, ca534153d2b67.
+G4  [~] WAITING ON USER: install Node (sudo pacman -S nodejs npm).
 
-### P2 — product gaps
-G5  [ ] "Auto-settle" is advisory by design (rule 5): the threshold makes the agent RECOMMEND settling small weak
-        cases; the merchant still approves. UI says so. Decide if true auto-settle is ever wanted (would need an
-        explicit standing approval and a rule-5 exception).
-G6  [ ] Changing the threshold affects NEW analyses only; existing PROPOSED decisions are not re-analysed, so the
-        case page's "Rules suggest" line (recomputed live) can disagree with an older decision. Option: re-run the
-        analyst for PROPOSED decisions on change, or show "analysed with $X threshold" on the decision.
-G7  [ ] New-dispute toast relies on the queue's 10 s polling (plus ingest latency) and only shows while the queue
-        page is open; no browser/email notifications.
-G8  [ ] No refund_policy evidence source: every not-as-described case is missing it by design.
-G9  [ ] Ebook checkout may ask for a shipping address (payment_source removed from create-order).
-G10 [ ] Seller sandbox account is India: test buyers must be US accounts (IN->IN payments fail generically).
+### P2
+G5  [x] Decided: advisory (rule 5). Settings page says nothing is refunded automatically.
+G6  [x] Decisions store analysed_threshold; case page offers Re-analyse when the setting changed;
+        POST /api/disputes/{id}/reanalyze (new proposal supersedes the old one).
+G7  [x] App-wide new-dispute alerts: GET /api/events/disputes (SSE) -> toast on every page, queue refreshes at once.
+        (No browser/OS notifications: not requested.)
+G8  [x] Refund policy in Settings -> refund_policy evidence (store:settings/refund_policy) for new investigations.
+        WAITING ON USER for the actual policy text.
+G9  [~] Digital-only orders send payment_source.paypal.experience_context.shipping_preference=NO_SHIPPING (live: order
+        created, checkout opens). WAITING ON USER: buy the ebook once with the US buyer to confirm no address asked.
+G10 [x] Decided: keep India seller; Store page tells buyers to use a US sandbox account.
 
-### P3 — technical debt / scale
-G11 [ ] SSE: each open case tab polls SQLite once per second; streams end after 5 min and the browser reconnects
-        (Last-Event-ID, no gaps). Fine for one merchant; a multi-merchant deploy wants pub/sub. Not yet verified
-        behind Render's proxy.
-G12 [ ] SQLite + single process (poller, SSE, agents in one uvicorn worker). Needs Postgres + a job queue to scale.
-G13 [ ] Investigator re-fetches the dispute right after ingest (one extra GET per run).
-G14 [ ] PayPal list endpoint lags for new disputes in sandbox (webhook + poll_disputes --id cover it).
-G15 [ ] gemini-3.8-flash often 503s on the free tier (GEMINI_MODEL lists a second model).
-G16 [ ] Unpaid test orders #16-30 clutter the dev DB.
-G17 [ ] Old timeline rows contain raw codes (run_started...); UI maps them to words.
-G18 [ ] Frontend has no automated tests in the repo (verified with headless Playwright scripts in the scratchpad);
-        consider adding Playwright/Vitest to the repo.
-G19 [ ] AG Grid bundle is large (~1 MB JS); fine for a demo, consider code-splitting.
+### P3
+G11 [x] SSE wakes on commit (app/events_bus.py) with a 3 s safety-net poll; still to verify behind Render's proxy (G2).
+G12 [x] Decided: SQLite + one process for the hackathon (DEPLOY.md). Postgres = future.
+G13 [x] Investigator reuses a dispute fetched < 60 s ago (one GET per run instead of two).
+G14 [x] Mitigated, can't fix (PayPal sandbox list lag): webhook + `poll_disputes --id`.
+G15 [x] Gemini 503: one quick retry of the same model, then the next model.
+G16 [x] app/scripts/cleanup_orders.py (dry run default); 17 abandoned test checkouts removed from the dev DB.
+G17 [x] Legacy step codes shown in words.
+G18 [x] Frontend tests in repo: Vitest unit tests (npm test, 19) + Playwright e2e suite (e2e/, 14 scenarios incl.
+        the login gate) that starts its own throwaway API + Vite.
+G19 [x] Pages lazy-loaded; AG Grid trimmed to the modules used. First load 178 kB; queue chunk 897 kB (was 1.2 MB in
+        the main bundle).
 
-### Done (history)
-[x] git repo + commits · [x] retry for definite PayPal rejections · [x] atomic approve (no double submit)
-[x] approval re-checks PayPal · [x] resolved disputes close pending decisions · [x] lost checkpoint -> direct execute
-[x] PII redaction for LLM prompts · [x] merchant UI (queue, case) · [x] live timeline (SSE) · [x] settings panel
-[x] SETTLE_THRESHOLD used (now DB-backed merchant setting)
+### New, found this session (fixed)
+- AuthCallback lost the login result in development (StrictMode double effect) and ignored a new #fragment in the
+  same tab -> derived from the router location.
+- AG Grid trim dropped CellStyleModule (Amount alignment) and used deprecated tooltipField -> fixed; e2e test now
+  fails on any AG Grid console error.
+- e2e harness left orphaned servers after a failed start and then tested a stale server -> port check, cleanup on
+  failure, process-group kill.
+- SSE tests raced on a shared in-memory SQLite connection -> file DB for those tests.
 
 ## 2026-10-31 — Session 8: LLM switched to Groq -> Gemini
 - `app/agents/llm.py` rewritten over httpx (Anthropic SDK removed): Groq chat completions with strict
@@ -336,4 +339,8 @@ G19 [ ] AG Grid bundle is large (~1 MB JS); fine for a demo, consider code-split
 - Verified: 30 headless scenario checks (live fill 0.9 s, blocked stream -> polling, toast, empty/error/not-found,
   settings validation/persist/failure, phone layouts) on a scratch copy; real app on PP-R-ZWL-10195422 shows all
   121 steps live. Tests: 230 passing.
+
+## 2026-10-31 — Session 13: closing the gaps (G1-G19)
+See the open-items list above for each item. Tests: backend 275, frontend unit 19, e2e 14 (all passing; e2e
+and SSE suites run repeatedly to check for flakiness).
 
