@@ -168,6 +168,7 @@ def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: Chec
     superseded = _supersede_proposals(session, dispute.id)
     decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
                         reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
+                        economic_note=rec.economic_note, missing_items=rec.missing_items,
                         status=DecisionStatus.PROPOSED, run_key=run_key)
     dispute.agent_status = PROPOSED
     session.add_all([decision, dispute])

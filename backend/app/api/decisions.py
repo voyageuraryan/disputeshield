@@ -74,6 +74,8 @@ class DecisionOut(BaseModel):
     action_request: dict | None
     paypal_response: dict | None
     retry_of: int | None
+    economic_note: str | None
+    missing_items: list[str] | None
     can_retry: bool
 
 
@@ -251,6 +253,7 @@ async def retry(decision_id: int, body: ApproveIn | None = None, session: Sessio
         raise HTTPException(422, "retry needs action FIGHT or SETTLE and a note")
     new = Decision(dispute_id=old.dispute_id, recommendation=old.recommendation, confidence=old.confidence,
                    reasoning=old.reasoning, cited_evidence_ids=old.cited_evidence_ids, draft_note=old.draft_note,
+                   economic_note=old.economic_note, missing_items=old.missing_items,
                    status=DecisionStatus.PROPOSED, retry_of=old.id)
     session.add(new)
     session.commit()

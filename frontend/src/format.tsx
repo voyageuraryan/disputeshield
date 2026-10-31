@@ -1,3 +1,6 @@
+import { useEffect, useState } from "react";
+import type { DisputeRow } from "./api";
+
 export const LABELS: Record<string, string> = {
   MERCHANDISE_OR_SERVICE_NOT_RECEIVED: "Item not received",
   MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED: "Not as described",
@@ -7,6 +10,27 @@ export const LABELS: Record<string, string> = {
   UNDER_REVIEW: "PayPal reviewing",
   RESOLVED: "Resolved",
   OPEN: "Open",
+  INQUIRY: "Inquiry",
+  CHARGEBACK: "Chargeback",
+  PRE_ARBITRATION: "Pre-arbitration",
+  ARBITRATION: "Arbitration",
+  GATHER_MORE: "Gather more",
+  FIGHT: "Fight",
+  SETTLE: "Settle",
+  provide_evidence: "send evidence",
+  provide_supporting_info: "send supporting info",
+  accept_claim: "refund the buyer",
+  make_offer: "make an offer",
+  appeal: "appeal",
+  acknowledge_return_item: "acknowledge a return",
+  delivery_confirmation: "Delivery confirmation",
+  tracking: "Tracking",
+  invoice: "PayPal payment record",
+  order: "Store order",
+  listing: "Product listing",
+  buyer_message: "Buyer message",
+  buyer_history: "Buyer history",
+  refund_policy: "Refund policy",
 };
 
 export const label = (v: string | null | undefined) => (v ? LABELS[v] ?? v.replaceAll("_", " ").toLowerCase() : "-");
@@ -16,35 +40,83 @@ export function money(amount: string, currency: string) {
   return Number.isFinite(n) ? n.toLocaleString(undefined, { style: "currency", currency }) : `${amount} ${currency}`;
 }
 
-export function when(iso: string | null) {
+export function when(iso: string | null | undefined) {
   if (!iso) return "-";
-  const d = new Date(iso);
-  return d.toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  return new Date(iso).toLocaleString(undefined, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
 }
 
-export function dueIn(iso: string | null) {
+export function day(iso: string | null | undefined) {
+  if (!iso) return "-";
+  return new Date(iso).toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+}
+
+/** Countdown to a deadline; urgent under 48 h (shown in red). */
+export function dueIn(iso: string | null | undefined, now = Date.now()): { text: string; urgent: boolean; ms: number } | null {
   if (!iso) return null;
-  const ms = new Date(iso).getTime() - Date.now();
-  if (ms <= 0) return "overdue";
-  const h = Math.floor(ms / 3_600_000);
-  return h >= 48 ? `${Math.floor(h / 24)} days left` : `${h} h left`;
+  const ms = new Date(iso).getTime() - now;
+  if (ms <= 0) return { text: "overdue", urgent: true, ms };
+  const mins = Math.floor(ms / 60_000);
+  const d = Math.floor(mins / 1440), h = Math.floor((mins % 1440) / 60), m = mins % 60;
+  const text = d > 0 ? `${d}d ${h}h` : h > 0 ? `${h}h ${m}m` : `${m}m`;
+  return { text, urgent: ms < 48 * 3_600_000, ms };
 }
 
-export const ACTION_STYLE: Record<string, string> = {
-  FIGHT: "bg-emerald-100 text-emerald-800",
-  SETTLE: "bg-amber-100 text-amber-800",
-  GATHER_MORE: "bg-sky-100 text-sky-800",
+/** Re-render every `ms` so countdowns tick. */
+export function useNow(ms = 30_000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return now;
+}
+
+/** What the merchant needs to know about a case, in one phrase. */
+export function caseStatus(r: Pick<DisputeRow, "status" | "agent_status" | "latest_decision">): { text: string; tone: Tone } {
+  const d = r.latest_decision;
+  if (r.status === "RESOLVED" || r.agent_status === "RESOLVED") return { text: "Resolved", tone: "muted" };
+  if (d?.status === "EXECUTED") return { text: "Response sent", tone: "muted" };
+  if (d?.status === "FAILED" || r.agent_status === "FAILED") return { text: "Response failed", tone: "danger" };
+  if (r.agent_status === "NEEDS_HUMAN") return { text: "Needs your review", tone: "accent" };
+  if (d?.status === "PROPOSED") return { text: "Awaiting your approval", tone: "accent" };
+  if (d?.status === "REJECTED") return { text: "You rejected it", tone: "muted" };
+  if (!d) return { text: "Agents working…", tone: "muted" };
+  return { text: label(r.status), tone: "muted" };
+}
+
+export type Tone = "accent" | "muted" | "danger" | "solid";
+
+const TONES: Record<Tone, string> = {
+  accent: "bg-indigo-50 text-indigo-700 ring-1 ring-inset ring-indigo-200",
+  solid: "bg-indigo-600 text-white",
+  muted: "bg-slate-100 text-slate-600",
+  danger: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200",
 };
 
-export const STATUS_STYLE: Record<string, string> = {
-  PROPOSED: "bg-indigo-100 text-indigo-800",
-  APPROVED: "bg-indigo-100 text-indigo-800",
-  EXECUTED: "bg-emerald-100 text-emerald-800",
-  FAILED: "bg-red-100 text-red-800",
-  REJECTED: "bg-slate-200 text-slate-700",
-  SUPERSEDED: "bg-slate-100 text-slate-500",
-};
-
-export const Badge = ({ text, style }: { text: string; style?: string }) => (
-  <span className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${style ?? "bg-slate-100 text-slate-700"}`}>{text}</span>
+export const Chip = ({ text, tone = "muted", title }: { text: string; tone?: Tone; title?: string }) => (
+  <span title={title} className={`inline-flex items-center whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium ${TONES[tone]}`}>
+    {text}
+  </span>
 );
+
+/** Recommendation chip: the recommended action is the one accent element. */
+export const ActionChip = ({ action }: { action: string }) => (
+  <Chip text={label(action)} tone={action === "GATHER_MORE" ? "accent" : "solid"} />
+);
+
+export const Due = ({ iso, now }: { iso: string | null | undefined; now?: number }) => {
+  const d = dueIn(iso, now);
+  if (!d) return <span className="text-slate-400">-</span>;
+  return (
+    <span className={d.urgent ? "font-semibold text-red-600" : "text-slate-700"} title={iso ? new Date(iso).toLocaleString() : ""}>
+      {d.text}
+    </span>
+  );
+};
+
+export function addressLines(a: Record<string, string> | null | undefined) {
+  if (!a) return [];
+  return [a.address_line_1, a.address_line_2, [a.admin_area_2, a.admin_area_1, a.postal_code].filter(Boolean).join(", "), a.country_code].filter(
+    Boolean,
+  ) as string[];
+}

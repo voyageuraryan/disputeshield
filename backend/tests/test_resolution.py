@@ -223,7 +223,7 @@ def api(engine):
     app.dependency_overrides[get_paypal_client] = lambda: pp
     with respx.mock(assert_all_called=False) as mock:
         mock.post(f"{BASE}/v1/oauth2/token").respond(200, json=token_response())
-        mock.get(url__regex=rf"{BASE}/v2/.+").respond(404, json={})
+        mock.get(url__regex=rf"{BASE}/v2/.+", name="v2_default").respond(404, json={})
         with TestClient(app) as c:
             c.mock, c.pp = mock, pp
             yield c

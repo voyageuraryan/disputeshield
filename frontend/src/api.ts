@@ -55,6 +55,7 @@ export type DisputeRow = {
   seller_response_due: string | null;
   agent_status: string | null;
   order_id: number | null;
+  buyer_email: string | null;
   updated_at: string | null;
   latest_decision: DecisionBrief | null;
 };
@@ -93,12 +94,57 @@ export type Decision = {
   action_request: { endpoint: string; [k: string]: unknown } | null;
   paypal_response: { error?: boolean; status_code?: number; debug_id?: string; issues?: string[]; message?: string } | null;
   retry_of: number | null;
+  economic_note: string | null;
+  missing_items: string[] | null;
   can_retry: boolean;
 };
 
 export type Step = { id: number; agent: string; action: string; detail: Record<string, unknown> | null; created_at: string };
 
-export type DisputeDetail = { dispute: DisputeRow; case: CaseFile; decisions: Decision[]; timeline: Step[] };
+export type Shipment = {
+  id: number;
+  carrier: string | null;
+  tracking_number: string | null;
+  status: string | null;
+  delivered_at: string | null;
+  delivered_address: Record<string, string> | null;
+};
+
+export type Order = {
+  id: number;
+  created_at: string;
+  buyer_email: string | null;
+  amount: string;
+  currency: string;
+  items: { sku?: string; name?: string; quantity?: number; unit_amount?: string }[] | null;
+  shipping_address: Record<string, string> | null;
+  product_listing: string | null;
+  paypal_order_id: string | null;
+  capture_id: string | null;
+  invoice_id: string | null;
+  shipments: Shipment[];
+};
+
+export type Checklist = {
+  reason_label: string | null;
+  supported: boolean;
+  rule_score: number;
+  items: { type: string; required: boolean; present: boolean; evidence_ids: number[] }[];
+  red_flags: { code: string; description: string }[];
+  baseline: string | null;
+  baseline_why: string | null;
+};
+
+export type EvidenceSource = { evidence_id: number; source: string; source_ref: string; title: string; origin: string; record: unknown };
+
+export type DisputeDetail = {
+  dispute: DisputeRow;
+  order: Order | null;
+  case: CaseFile;
+  checklist: Checklist;
+  decisions: Decision[];
+  timeline: Step[];
+};
 
 export type ApproveBody = { action?: "FIGHT" | "SETTLE"; note?: string; approved_by?: string };
 
@@ -112,4 +158,5 @@ export const disputesApi = {
   retry: (id: number, body: ApproveBody) =>
     req<Decision>(`/api/decisions/${id}/retry`, { method: "POST", body: JSON.stringify(body) }),
   pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf`,
+  source: (evidenceId: number) => req<EvidenceSource>(`/api/evidence/${evidenceId}/source`),
 };

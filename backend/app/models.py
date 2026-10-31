@@ -139,6 +139,8 @@ class Decision(SQLModel, table=True):
     approved_action: Optional[str] = None          # FIGHT / SETTLE actually approved (merchant may override)
     final_note: Optional[str] = None               # note actually sent (merchant may edit draft_note)
     retry_of: Optional[int] = Field(default=None, foreign_key="decisions.id")  # FAILED decision this one retries
+    economic_note: Optional[str] = None             # analyst: amount vs effort vs win odds
+    missing_items: Optional[list[str]] = _json_col()  # analyst: evidence still needed
 
 
 class ProcessedEvent(SQLModel, table=True):

@@ -1,26 +1,235 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { disputesApi, type Decision, type DisputeDetail } from "../api";
-import { ACTION_STYLE, Badge, dueIn, label, money, STATUS_STYLE, when } from "../format";
+import { disputesApi, type Decision, type DisputeDetail, type Evidence, type EvidenceSource } from "../api";
+import { ActionChip, addressLines, caseStatus, Chip, day, Due, label, money, useNow, when } from "../format";
 
 const NOTE_MAX = 1000;
+type Action = "FIGHT" | "SETTLE";
 
-function DecisionCard({ d, detail, onDone }: { d: Decision; detail: DisputeDetail; onDone: () => void }) {
+const Card = ({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) => (
+  <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+    <div className="mb-3 flex items-center justify-between gap-2">
+      <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
+      {right}
+    </div>
+    {children}
+  </section>
+);
+
+const Field = ({ k, children }: { k: string; children: React.ReactNode }) => (
+  <div className="grid grid-cols-[7.5rem_1fr] gap-2 py-1 text-sm">
+    <dt className="text-slate-500">{k}</dt>
+    <dd className="min-w-0 break-words text-slate-900">{children}</dd>
+  </div>
+);
+
+// ---- left: facts + order -----------------------------------------------------------------
+
+function Facts({ detail, now }: { detail: DisputeDetail; now: number }) {
+  const { dispute: d, case: c, order: o } = detail;
+  return (
+    <div className="space-y-4">
+      <Card title="Dispute">
+        <dl>
+          <Field k="Case">{d.paypal_dispute_id}</Field>
+          <Field k="Reason">{label(d.reason)}</Field>
+          <Field k="Amount">{money(d.amount, d.currency)}</Field>
+          <Field k="Stage">{label(d.stage)}</Field>
+          <Field k="PayPal status">{label(d.status)}</Field>
+          <Field k="Respond by">
+            {d.seller_response_due ? (
+              <>
+                <Due iso={d.seller_response_due} now={now} /> <span className="text-slate-500">({when(d.seller_response_due)})</span>
+              </>
+            ) : (
+              "-"
+            )}
+          </Field>
+          <Field k="You can now">{c.allowed_actions.length ? c.allowed_actions.map(label).join(", ") : "nothing (PayPal is handling it)"}</Field>
+          <Field k="Last update">{when(d.updated_at)}</Field>
+        </dl>
+      </Card>
+      <Card title="Order">
+        {!o ? (
+          <p className="text-sm text-slate-500">No store order matched this dispute.</p>
+        ) : (
+          <dl>
+            <Field k="Order">#{o.id} · {day(o.created_at)}</Field>
+            <Field k="Items">
+              {(o.items ?? []).map((i, n) => (
+                <div key={n}>
+                  {i.quantity ?? 1}× {i.name}
+                </div>
+              ))}
+            </Field>
+            <Field k="Total">{money(o.amount, o.currency)}</Field>
+            <Field k="Buyer">{o.buyer_email ?? "-"}</Field>
+            <Field k="Ship to">
+              {addressLines(o.shipping_address).map((l) => (
+                <div key={l}>{l}</div>
+              )) || "-"}
+            </Field>
+            <Field k="Invoice">{o.invoice_id ?? "-"}</Field>
+            <Field k="PayPal order">{o.paypal_order_id ?? "-"}</Field>
+            <Field k="Capture">{o.capture_id ?? "-"}</Field>
+            {o.shipments.map((s) => (
+              <Field key={s.id} k="Shipment">
+                <div>
+                  {s.carrier ?? "Carrier?"} {s.tracking_number ?? "(untracked)"}
+                </div>
+                <div className="text-slate-500">
+                  {label(s.status)}
+                  {s.delivered_at ? ` · delivered ${day(s.delivered_at)}` : ""}
+                </div>
+                {s.delivered_address && <div className="text-slate-500">to {addressLines(s.delivered_address).join(", ")}</div>}
+              </Field>
+            ))}
+          </dl>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// ---- middle: checklist + evidence ------------------------------------------------------------
+
+function SourceDialog({ ev, onClose }: { ev: Evidence; onClose: () => void }) {
+  const [src, setSrc] = useState<EvidenceSource | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  useEffect(() => {
+    disputesApi.source(ev.id).then(setSrc).catch((e) => setError(e.message));
+    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    window.addEventListener("keydown", esc);
+    return () => window.removeEventListener("keydown", esc);
+  }, [ev.id, onClose]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-6" onClick={onClose}>
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Source of evidence #${ev.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="max-h-[85vh] w-full overflow-hidden rounded-t-xl bg-white shadow-xl sm:max-w-2xl sm:rounded-xl"
+      >
+        <div className="flex items-start justify-between gap-3 border-b p-4">
+          <div>
+            <h3 className="font-semibold">{src?.title ?? `Evidence #${ev.id}`}</h3>
+            <p className="text-xs text-slate-500">
+              {src ? `${src.origin} · ${src.source_ref}` : ev.source_ref}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-100" aria-label="Close">
+            ✕
+          </button>
+        </div>
+        <div className="max-h-[65vh] overflow-auto p-4">
+          {error && <p className="text-sm text-red-700">{error}</p>}
+          {!src && !error && <p className="text-sm text-slate-500">Loading the record…</p>}
+          {src && <pre className="whitespace-pre-wrap break-words text-xs text-slate-800">{JSON.stringify(src.record, null, 2)}</pre>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<number> }) {
+  const { checklist: cl, case: c } = detail;
+  const [open, setOpen] = useState<Evidence | null>(null);
+  const close = useCallback(() => setOpen(null), []);
+  return (
+    <div className="space-y-4">
+      <Card title="Evidence checklist" right={cl.supported ? <span className="text-sm font-semibold">{Math.round(cl.rule_score * 100)}/100</span> : null}>
+        {!cl.supported ? (
+          <p className="text-sm text-slate-600">There is no rule for this dispute reason yet, so a person should review it.</p>
+        ) : (
+          <>
+            <div className="mb-3 h-2 overflow-hidden rounded bg-slate-100" aria-hidden>
+              <div className="h-full bg-indigo-600" style={{ width: `${cl.rule_score * 100}%` }} />
+            </div>
+            <ul className="space-y-1.5 text-sm">
+              {cl.items.map((i) => (
+                <li key={i.type} className="flex items-center gap-2">
+                  <span className={i.present ? "text-indigo-600" : i.required ? "text-red-600" : "text-slate-400"} aria-hidden>
+                    {i.present ? "✓" : "✗"}
+                  </span>
+                  <span className={i.present ? "" : "text-slate-500"}>{label(i.type)}</span>
+                  <span className="text-xs text-slate-400">{i.required ? "required" : "supporting"}</span>
+                  {i.evidence_ids.length > 0 && <span className="ml-auto text-xs text-slate-400">#{i.evidence_ids.join(", #")}</span>}
+                  {!i.present && i.required && <span className="ml-auto text-xs font-medium text-red-600">missing</span>}
+                </li>
+              ))}
+            </ul>
+            {cl.red_flags.map((f) => (
+              <p key={f.code} className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">
+                Red flag: {f.description}
+              </p>
+            ))}
+            {cl.baseline && (
+              <p className="mt-3 text-xs text-slate-500">
+                Rules suggest <span className="font-medium text-slate-700">{label(cl.baseline)}</span>: {cl.baseline_why}.
+              </p>
+            )}
+          </>
+        )}
+      </Card>
+      <Card title={`Evidence (${c.evidence.length})`}>
+        {c.evidence.length === 0 && <p className="text-sm text-slate-500">No evidence gathered yet.</p>}
+        <ul className="space-y-2">
+          {c.evidence.map((e) => (
+            <li key={e.id} className={`rounded-md border p-3 text-sm ${cited.has(e.id) ? "border-indigo-300 bg-indigo-50/40" : "border-slate-200"}`}>
+              <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                <span className="font-semibold">#{e.id}</span>
+                <span className="font-medium">{label(e.type)}</span>
+                <Chip text={e.source === "paypal" ? "PayPal" : "Store"} />
+                {cited.has(e.id) && <Chip text="cited" tone="accent" />}
+                {e.flags
+                  .filter((f) => f === "address_mismatch" || f === "tracker_cancelled")
+                  .map((f) => (
+                    <Chip key={f} text={f.replace("_", " ")} tone="danger" />
+                  ))}
+              </div>
+              <p className="text-slate-700">{e.summary}</p>
+              <button onClick={() => setOpen(e)} className="mt-1 text-xs font-medium text-indigo-700 hover:underline">
+                View source ({e.source === "paypal" ? "PayPal record" : "store record"}) →
+              </button>
+            </li>
+          ))}
+        </ul>
+      </Card>
+      {open && <SourceDialog ev={open} onClose={close} />}
+    </div>
+  );
+}
+
+// ---- right: recommendation ---------------------------------------------------------------------
+
+function current(decisions: Decision[]) {
+  return decisions.find((d) => d.status === "PROPOSED") ?? decisions.find((d) => d.can_retry) ?? decisions[0] ?? null;
+}
+
+function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDetail; onDone: () => void }) {
   const c = detail.case;
-  const sendable = d.recommendation === "FIGHT" || d.recommendation === "SETTLE";
-  const start = (d.approved_action ?? d.recommendation) === "SETTLE" ? "SETTLE" : "FIGHT";
-  const [action, setAction] = useState<"FIGHT" | "SETTLE">(start);
-  // retry starts from what was actually sent; a new decision from the agent's draft
+  const actionable = d.status === "PROPOSED" || d.can_retry;
+  const initial: Action | null =
+    (d.approved_action as Action | null) ?? (d.recommendation === "GATHER_MORE" ? null : (d.recommendation as Action));
+  const [action, setAction] = useState<Action | null>(initial);
   const [note, setNote] = useState(d.final_note ?? d.draft_note ?? "");
+  const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const live = d.status === "PROPOSED";
+
+  const changed = action !== null && action !== d.recommendation;
+  const allowed = action === "FIGHT" ? c.can_fight : action === "SETTLE" ? c.can_settle : false;
+  const needsNote = action === "FIGHT" && !note.trim();
+  const err = d.paypal_response?.error ? d.paypal_response : null;
+  const retriedBy = detail.decisions.find((x) => x.retry_of === d.id);
 
   const run = async (fn: () => Promise<unknown>) => {
     setBusy(true);
     setError(null);
     try {
       await fn();
+      setConfirming(false);
       onDone();
     } catch (e) {
       setError((e as Error).message);
@@ -28,116 +237,166 @@ function DecisionCard({ d, detail, onDone }: { d: Decision; detail: DisputeDetai
       setBusy(false);
     }
   };
-  const body = () => ({ action, note: note.trim() || undefined, approved_by: "merchant" });
-  const allowed = action === "FIGHT" ? c.can_fight : c.can_settle;
-  const err = d.paypal_response?.error ? d.paypal_response : null;
+  const send = () => {
+    const body = { action: action ?? undefined, note: note.trim() || undefined, approved_by: "merchant" };
+    return run(() => (d.status === "PROPOSED" ? disputesApi.approve(d.id, body) : disputesApi.retry(d.id, body)));
+  };
+  const toggle = () => {
+    setConfirming(false);
+    setAction((a) => (a === "FIGHT" ? "SETTLE" : "FIGHT"));
+  };
 
   return (
-    <div className={`space-y-3 rounded-lg border bg-white p-4 ${live ? "border-indigo-300" : "opacity-90"}`}>
+    <Card title="Recommendation" right={<span className="text-xs text-slate-400">Decision #{d.id}</span>}>
       <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm font-semibold">Decision #{d.id}</span>
-        <Badge text={d.recommendation.replace("_", " ")} style={ACTION_STYLE[d.recommendation]} />
-        <Badge text={`${d.confidence} confidence`} />
-        <Badge text={d.status} style={STATUS_STYLE[d.status]} />
-        {d.retry_of && <span className="text-xs text-slate-500">retry of #{d.retry_of}</span>}
-        {d.approved_action && d.approved_action !== d.recommendation && (
-          <span className="text-xs text-slate-500">approved as {d.approved_action}</span>
-        )}
+        <ActionChip action={d.recommendation} />
+        <Chip text={`${d.confidence} confidence`} />
+        {!actionable && <Chip text={d.status.toLowerCase()} tone={d.status === "FAILED" ? "danger" : "muted"} />}
       </div>
-      <p className="text-sm text-slate-700">{d.reasoning}</p>
-      <p className="text-xs text-slate-500">Cites evidence {d.cited_evidence_ids.map((i) => `#${i}`).join(", ") || "-"}</p>
-
-      {d.final_note && !live && (
-        <div className="rounded bg-slate-50 p-2 text-xs text-slate-700">
-          <span className="font-medium">Note sent: </span>
-          {d.final_note}
-        </div>
-      )}
-      {d.action_request && (
-        <p className="text-xs text-slate-500">
-          PayPal call: <code>{d.action_request.endpoint}</code>
-          {d.action_request.endpoint !== "accept-claim" && (
-            <>
-              {" · "}
-              <a className="text-indigo-700 underline" href={disputesApi.pdfUrl(d.id)} target="_blank" rel="noreferrer">
-                evidence PDF
-              </a>
-            </>
-          )}
+      <p className="mt-3 text-sm leading-relaxed text-slate-800">{d.reasoning}</p>
+      {d.economic_note && (
+        <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">
+          <span className="font-medium">Is it worth it? </span>
+          {d.economic_note}
         </p>
       )}
+      {d.missing_items && d.missing_items.length > 0 && (
+        <p className="mt-2 text-xs text-slate-500">Still missing: {d.missing_items.map(label).join(", ")}</p>
+      )}
+
       {err && (
-        <p className="rounded bg-red-50 p-2 text-xs text-red-700">
-          PayPal refused (HTTP {err.status_code}
+        <p className="mt-3 rounded-md bg-red-50 p-3 text-xs text-red-700">
+          PayPal refused the last attempt (HTTP {err.status_code}
           {err.issues?.length ? `, ${err.issues.join(", ")}` : ""}
-          {err.debug_id ? `, debug id ${err.debug_id}` : ""}){err.message ? `: ${err.message}` : ""}.{" "}
-          {d.can_retry
-            ? "Nothing was processed, so it can be retried."
-            : detail.decisions.some((x) => x.retry_of === d.id)
-              ? `Retried as decision #${detail.decisions.find((x) => x.retry_of === d.id)?.id}.`
-              : "PayPal may have processed it: check the case in PayPal before trying again."}
+          {err.debug_id ? `, debug id ${err.debug_id}` : ""}).{" "}
+          {d.can_retry ? "Nothing was processed; you can try again." : retriedBy ? `Retried as decision #${retriedBy.id}.` : "Check the case in PayPal before trying again."}
         </p>
       )}
-      {d.status === "EXECUTED" && <p className="rounded bg-emerald-50 p-2 text-xs text-emerald-800">PayPal accepted this response.</p>}
+      {d.status === "EXECUTED" && (
+        <p className="mt-3 rounded-md bg-indigo-50 p-3 text-sm text-indigo-800">
+          Sent to PayPal ({d.action_request?.endpoint}) on {when(d.executed_at)}. PayPal will now review it.
+        </p>
+      )}
+      {d.status === "REJECTED" && <p className="mt-3 text-sm text-slate-600">You rejected this recommendation.</p>}
+      {d.status === "SUPERSEDED" && <p className="mt-3 text-sm text-slate-600">Replaced by a newer analysis or closed because the case was resolved.</p>}
 
-      {(live || d.can_retry) && (
-        <div className="space-y-2 border-t pt-3">
-          {!sendable && live && (
-            <p className="text-xs text-slate-600">
-              The agent suggests gathering more evidence. You can still respond now by choosing an action and writing the note.
-            </p>
-          )}
-          <div className="flex flex-wrap items-center gap-3 text-sm">
-            <span className="text-slate-600">Respond with</span>
-            {(["FIGHT", "SETTLE"] as const).map((a) => (
-              <label key={a} className="flex items-center gap-1">
-                <input type="radio" checked={action === a} onChange={() => setAction(a)} />
-                {a === "FIGHT" ? "Fight (send evidence)" : "Settle (refund buyer)"}
-              </label>
-            ))}
+      {actionable && (
+        <div className="mt-4 space-y-3 border-t pt-4">
+          <div className="text-sm">
+            {action ? (
+              <>
+                You are about to <span className="font-semibold">{action === "FIGHT" ? "fight (send evidence)" : "settle (refund the buyer)"}</span>
+                {changed && <span className="text-slate-500"> — changed from {label(d.recommendation)}</span>}.
+              </>
+            ) : (
+              <span className="text-slate-600">The agent suggests gathering more evidence first. Choose an action to respond now.</span>
+            )}
           </div>
-          {!allowed && <p className="text-xs text-amber-700">PayPal does not allow this action right now ({c.allowed_actions.join(", ") || "none"}).</p>}
-          <textarea
-            className="h-32 w-full rounded border p-2 text-sm"
-            maxLength={NOTE_MAX}
-            placeholder={action === "FIGHT" ? "Note to PayPal (facts only)" : "Optional note (a default refund note is used if empty)"}
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-          />
-          <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>
-              {note.length}/{NOTE_MAX} characters
+          {action && !allowed && (
+            <p className="text-xs text-red-700">PayPal doesn't allow this right now (allowed: {c.allowed_actions.map(label).join(", ") || "nothing"}).</p>
+          )}
+          <label className="block">
+            <span className="text-xs font-medium text-slate-600">{action === "SETTLE" ? "Note to PayPal (optional)" : "Seller note to PayPal (facts only)"}</span>
+            <textarea
+              className="mt-1 h-36 w-full rounded-md border border-slate-300 p-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+              maxLength={NOTE_MAX}
+              value={note}
+              onChange={(e) => {
+                setNote(e.target.value);
+                setConfirming(false);
+              }}
+            />
+            <span className={`text-xs ${note.length > NOTE_MAX * 0.9 ? "text-red-600" : "text-slate-400"}`}>
+              {note.length}/{NOTE_MAX}
             </span>
-            <div className="flex gap-2">
-              {live && (
-                <button disabled={busy} onClick={() => run(() => disputesApi.reject(d.id))}
-                  className="rounded border px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100 disabled:opacity-50">
+          </label>
+          {action === "FIGHT" && d.action_request?.endpoint !== "accept-claim" && d.status === "PROPOSED" && d.action_request && (
+            <a href={disputesApi.pdfUrl(d.id)} target="_blank" rel="noreferrer" className="block text-xs font-medium text-indigo-700 hover:underline">
+              Preview the evidence PDF →
+            </a>
+          )}
+
+          {confirming ? (
+            <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm">
+              <p className="text-indigo-900">
+                Send this {action === "FIGHT" ? "evidence" : "refund"} to PayPal now? This can't be undone.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <button disabled={busy} onClick={send} className="rounded-md bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50">
+                  {busy ? "Sending…" : "Yes, send it"}
+                </button>
+                <button disabled={busy} onClick={() => setConfirming(false)} className="rounded-md px-3 py-1.5 text-slate-700 hover:bg-white">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              <button
+                disabled={busy || !action || !allowed || needsNote}
+                onClick={() => setConfirming(true)}
+                className="flex-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {d.status === "PROPOSED" ? "Approve" : "Try again"}
+                {action ? ` · ${label(action)}` : ""}
+              </button>
+              <button disabled={busy} onClick={toggle} className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                Change action
+              </button>
+              {d.status === "PROPOSED" && (
+                <button
+                  disabled={busy}
+                  onClick={() => run(() => disputesApi.reject(d.id))}
+                  className="rounded-md border border-slate-300 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50"
+                >
                   Reject
                 </button>
               )}
-              <button
-                disabled={busy || !allowed || (action === "FIGHT" && !note.trim())}
-                onClick={() => run(() => (live ? disputesApi.approve(d.id, body()) : disputesApi.retry(d.id, body())))}
-                className="rounded bg-slate-900 px-3 py-1.5 text-sm text-white hover:bg-slate-700 disabled:opacity-40"
-              >
-                {busy ? "Sending to PayPal…" : live ? `Approve & send ${action}` : `Retry as ${action}`}
-              </button>
             </div>
-          </div>
+          )}
+          {needsNote && action === "FIGHT" && <p className="text-xs text-slate-500">Write the seller note to approve a fight.</p>}
         </div>
       )}
-      {error && <p className="rounded bg-red-50 p-2 text-xs text-red-700">{error}</p>}
-    </div>
+      {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">{error}</p>}
+    </Card>
   );
 }
+
+function History({ decisions, currentId }: { decisions: Decision[]; currentId: number | undefined }) {
+  const others = decisions.filter((d) => d.id !== currentId);
+  if (!others.length) return null;
+  return (
+    <details className="rounded-lg border border-slate-200 bg-white p-4 text-sm shadow-sm">
+      <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-slate-500">Earlier decisions ({others.length})</summary>
+      <ul className="mt-3 space-y-2">
+        {others.map((d) => (
+          <li key={d.id} className="flex flex-wrap items-center gap-2 border-t pt-2">
+            <span className="text-slate-500">#{d.id}</span>
+            <ActionChip action={d.recommendation} />
+            <Chip text={d.status.toLowerCase()} tone={d.status === "FAILED" ? "danger" : "muted"} />
+            {d.approved_action && <span className="text-xs text-slate-500">approved as {label(d.approved_action)}</span>}
+            {d.paypal_response?.issues?.length ? <span className="text-xs text-red-700">{d.paypal_response.issues.join(", ")}</span> : null}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+// ---- page -------------------------------------------------------------------------------------
 
 export default function CaseDetail() {
   const { disputeId = "" } = useParams();
   const [detail, setDetail] = useState<DisputeDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const now = useNow(30_000);
 
   const load = useCallback(
-    () => disputesApi.detail(disputeId).then((d) => (setDetail(d), setError(null))).catch((e) => setError(e.message)),
+    () =>
+      disputesApi
+        .detail(disputeId)
+        .then((d) => (setDetail(d), setError(null)))
+        .catch((e) => setError(e.message)),
     [disputeId],
   );
   useEffect(() => {
@@ -148,68 +407,61 @@ export default function CaseDetail() {
 
   if (error && !detail) return <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>;
   if (!detail) return <p className="text-sm text-slate-500">Loading…</p>;
-  const { dispute: dp, case: c } = detail;
-  const cited = new Set(detail.decisions[0]?.cited_evidence_ids ?? []);
+  const d = current(detail.decisions);
+  const cited = new Set(d?.cited_evidence_ids ?? []);
+  const st = caseStatus(detail.dispute);
 
   return (
-    <div className="space-y-5">
-      <Link to="/queue" className="text-sm text-indigo-700">← Queue</Link>
-      <div className="flex flex-wrap items-baseline gap-3">
-        <h1 className="text-xl font-semibold">{dp.paypal_dispute_id}</h1>
-        <span className="text-lg">{money(dp.amount, dp.currency)}</span>
-        <Badge text={label(dp.reason)} />
-        <Badge text={`${label(dp.stage)} · ${label(dp.status)}`} />
-        {dp.seller_response_due && (
-          <span className="text-sm text-slate-600">
-            Respond by {when(dp.seller_response_due)} ({dueIn(dp.seller_response_due)})
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <Link to="/queue" className="text-sm text-indigo-700 hover:underline">
+          ← Disputes
+        </Link>
+        <h1 className="text-lg font-semibold sm:text-xl">
+          {label(detail.dispute.reason)} · {money(detail.dispute.amount, detail.dispute.currency)}
+        </h1>
+        <Chip text={st.text} tone={st.tone} />
+        {detail.dispute.seller_response_due && detail.dispute.status !== "RESOLVED" && (
+          <span className="text-sm text-slate-500">
+            Due <Due iso={detail.dispute.seller_response_due} now={now} />
           </span>
         )}
       </div>
-      <p className="text-xs text-slate-500">
-        PayPal allows now: {c.allowed_actions.join(", ") || "nothing (PayPal is handling it)"} · Order{" "}
-        {dp.order_id ? `#${dp.order_id}` : "not matched"}
-      </p>
 
-      <div className="grid gap-5 lg:grid-cols-5">
-        <div className="space-y-3 lg:col-span-3">
-          <h2 className="font-medium">Decisions</h2>
-          {detail.decisions.length === 0 && <p className="text-sm text-slate-500">The agents are still working…</p>}
-          {detail.decisions.map((d) => (
-            <DecisionCard key={`${d.id}-${d.status}`} d={d} detail={detail} onDone={load} />
-          ))}
+      <div className="grid gap-4 lg:grid-cols-12">
+        <div className="lg:col-span-3">
+          <Facts detail={detail} now={now} />
         </div>
-        <div className="space-y-3 lg:col-span-2">
-          <h2 className="font-medium">Evidence ({c.evidence.length})</h2>
-          <ul className="space-y-2">
-            {c.evidence.map((e) => (
-              <li key={e.id} className={`rounded border bg-white p-2 text-xs ${cited.has(e.id) ? "border-emerald-400" : ""}`}>
-                <div className="mb-1 flex flex-wrap gap-1">
-                  <span className="font-semibold">#{e.id}</span>
-                  <Badge text={e.type.replaceAll("_", " ")} />
-                  <Badge text={e.source} />
-                  {e.flags.map((f) => (
-                    <Badge key={f} text={f} style={f.includes("mismatch") || f.includes("cancel") ? "bg-red-100 text-red-700" : undefined} />
-                  ))}
-                </div>
-                <p className="text-slate-700">{e.summary}</p>
-              </li>
-            ))}
-          </ul>
+        <div className="lg:col-span-5">
+          <EvidencePanel detail={detail} cited={cited} />
+        </div>
+        {/* On phones the recommendation comes first: it's what the merchant acts on. */}
+        <div className="order-first space-y-4 lg:order-none lg:col-span-4">
+          {d ? (
+            <Recommendation key={`${d.id}-${d.status}`} d={d} detail={detail} onDone={load} />
+          ) : (
+            <Card title="Recommendation">
+              <p className="text-sm text-slate-500">The agents are still working on this case…</p>
+            </Card>
+          )}
+          <History decisions={detail.decisions} currentId={d?.id} />
         </div>
       </div>
 
-      <div className="space-y-2">
-        <h2 className="font-medium">Timeline <span className="text-xs font-normal text-slate-500">(newest first)</span></h2>
-        <ol className="max-h-96 space-y-1 overflow-y-auto rounded border bg-white p-3 text-xs">
+      <details className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-slate-500">
+          Agent timeline ({detail.timeline.length} {detail.timeline.length === 1 ? "step" : "steps"})
+        </summary>
+        <ol className="mt-3 max-h-96 space-y-1 overflow-y-auto text-xs">
           {[...detail.timeline].reverse().map((s) => (
-            <li key={s.id} className="flex gap-2">
-              <span className="w-24 shrink-0 text-slate-400">{when(s.created_at)}</span>
-              <span className="w-24 shrink-0 font-medium text-slate-600">{s.agent}</span>
+            <li key={s.id} className="grid grid-cols-[6.5rem_6rem_1fr] gap-2">
+              <span className="text-slate-400">{when(s.created_at)}</span>
+              <span className="font-medium text-slate-600">{s.agent}</span>
               <span className="text-slate-800">{s.action}</span>
             </li>
           ))}
         </ol>
-      </div>
+      </details>
     </div>
   );
 }

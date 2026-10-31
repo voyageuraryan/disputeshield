@@ -195,7 +195,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
        only accept PROPOSED decisions and resume that decision's run_key (superseded -> 409).
 4. [ ] Poller can miss brand-new disputes while PayPal's list lags (webhook + `poll_disputes --id` cover it).
 5. [ ] Seller sandbox account is India: test buyers must be US accounts.
-6. [~] Queue (AG Grid) + Case detail (approve/reject/retry, evidence, timeline, PDF link) built. User must install Node.
+6. [~] Merchant UI done (phase 7). User must still install Node to run it outside this session.
 7. [ ] Ebook checkout may ask for shipping (payment_source removed from create-order).
 8. [ ] Unpaid test orders #16-30 clutter the dev DB.
 9. [ ] Investigator re-fetches the dispute right after ingest (one extra GET per run).
@@ -269,4 +269,23 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - API for UI: GET /api/disputes, GET /api/disputes/{id} (case, decisions, timeline); /api/decisions/* alias.
 - Frontend: Queue (AG Grid 36, refresh 10s) and CaseDetail; verified headless against live data.
 - Tests: 215 passing (new tests/test_scenarios.py).
+
+## 2026-10-31 — Session 11: phase 7 (merchant UI)
+- Queue (AG Grid 36, Quartz theme, indigo accent): Dispute, Reason, Amount, Buyer, Due in (live countdown,
+  red < 48 h, overdue), Recommendation chip, Confidence, Status (merchant phrasing: Awaiting your approval /
+  Response sent / Response failed / Resolved ...). Sortable, floating column filters, quick search, row click ->
+  case, refresh 10 s, auto-height for short lists. Phones (<768 px): card list + search instead of the grid.
+- CaseDetail, 3 columns at >=1024 px (stacked on phones, recommendation first): left dispute facts + order
+  (items, buyer, ship-to, invoice, PayPal ids, shipments); middle evidence checklist (required/supporting,
+  present/missing, score bar, red flags, rules' baseline) + evidence cards with "View source" dialog (store rows
+  from DB, PayPal capture/trackers fetched live); right recommendation card (action, confidence, reasoning,
+  economic note, missing items, editable note, Approve / Change action / Reject, confirm-before-send, retry for
+  failed, PDF preview), earlier decisions, agent timeline (collapsible).
+- API: DisputeRow.buyer_email; detail adds order + checklist; GET /api/evidence/{id}/source;
+  decisions.economic_note/missing_items stored by the analyst (dev DB backfilled from agent_steps).
+- Verified headless (33 checks, all pass) at 1280x800 and 390x844 on a scratch copy with 5 cases in different
+  states (no horizontal scroll, no console errors, nothing sent); plus live case PP-R-ZWL-10195422 on the real app.
+  Fixed from screenshots: clipped Status column, empty grid space, "1 steps", "Due -" on resolved cases.
+- Dev note: restart the API with scratchpad restart_api.sh (an old uvicorn once kept port 8000 and the
+  "restart" silently failed). Tests: 220 passing.
 
