@@ -268,5 +268,5 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - PII redaction (app/agents/redact.py) for analyst + seller-note prompts; notes containing placeholders rejected.
 - API for UI: GET /api/disputes, GET /api/disputes/{id} (case, decisions, timeline); /api/decisions/* alias.
 - Frontend: Queue (AG Grid 36, refresh 10s) and CaseDetail; verified headless against live data.
-- Tests: 216 passing (new tests/test_scenarios.py).
+- Tests: 215 passing (new tests/test_scenarios.py).
 
