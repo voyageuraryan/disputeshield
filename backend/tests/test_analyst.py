@@ -99,7 +99,7 @@ async def test_case_a_fight_high(pp, engine, demo):
     assert steps[2].startswith("Recommend FIGHT, high confidence: USPS tracking shows delivery")
     # the LLM saw the case file, checklist, baseline and threshold
     p = llm.calls[0]["payload"]
-    assert p["baseline"]["action"] == "FIGHT" and p["merchant_settle_threshold"] == "25 USD"
+    assert p["baseline"]["action"] == "FIGHT" and p["merchant_settle_threshold"] == "25.00 USD"
     assert {e["id"] for e in p["case_file"]["evidence"]} == {e.id for e in case.evidence}
     assert llm.calls[0]["system"] == SYSTEM_PROMPT
 
@@ -117,7 +117,7 @@ async def test_case_b_settle(pp, engine, demo):
     result, steps, decisions, status = await run_analyst(engine, did, case, llm)
 
     assert result.checklist.missing == ["refund_policy"] and result.checklist.rule_score == 0.59
-    assert result.baseline.action == "SETTLE" and "under the 25 threshold" in result.baseline.why
+    assert result.baseline.action == "SETTLE" and "under the 25.00 threshold" in result.baseline.why
     assert decisions[0].recommendation == "SETTLE" and decisions[0].status == DecisionStatus.PROPOSED
     assert "Economic rule suggests SETTLE" in steps[1]
 

@@ -22,6 +22,7 @@ def test_creates_tables():
     assert set(inspect(eng).get_table_names()) == {
         "orders", "shipments", "messages", "disputes", "evidence_items", "agent_steps", "decisions",
         "processed_events",  # idempotency ledger for webhook/poll ingestion
+        "merchant_settings",  # merchant-editable settings (settle threshold)
     }
 
 

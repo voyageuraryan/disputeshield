@@ -25,7 +25,8 @@ from app.agents import llm as llm_module
 from app.agents.llm import LLMError, StructuredLLM, structured_call
 from app.agents.redact import pii_terms, redact
 from app.agents.steps import log_step
-from app.config import get_settings
+from app.config import get_settings  # noqa: F401
+from app.merchant import settle_threshold
 from app.models import Decision, DecisionStatus, Dispute
 from app.rules.evidence_rules import (
     FIGHT_AT,
@@ -127,7 +128,7 @@ def _supersede_proposals(session: Session, dispute_id: int) -> list[int]:
 
 async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key: str | None = None,
                   llm: StructuredLLM = structured_call) -> AnalysisResult:
-    threshold = get_settings().settle_threshold
+    threshold = settle_threshold(session)  # merchant setting (DB), default from config
     checklist = evaluate(case)
     log_step(session, dispute.id, AGENT,
              f"Checklist for {case.reason}: rule score {checklist.rule_score:.2f}"

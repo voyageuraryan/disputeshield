@@ -4,6 +4,7 @@ import { AllCommunityModule, ModuleRegistry, themeQuartz, type ColDef } from "ag
 import { AgGridReact } from "ag-grid-react";
 import { disputesApi, type DisputeRow } from "../api";
 import { ActionChip, caseStatus, Chip, Due, dueIn, label, money, useNow } from "../format";
+import { useToast } from "../Toast";
 
 ModuleRegistry.registerModules([AllCommunityModule]);
 
@@ -25,12 +26,31 @@ function useIsPhone() {
 function useDisputes() {
   const [rows, setRows] = useState<DisputeRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [nonce, setNonce] = useState(0);
+  const known = useRef<Set<string> | null>(null); // ids seen so far; null until the first successful load
+  const toast = useToast();
+
   useEffect(() => {
     let alive = true;
     const load = () =>
       disputesApi
         .list()
-        .then((r) => alive && (setRows(r), setError(null)))
+        .then((r) => {
+          if (!alive) return;
+          if (known.current) {
+            // Toast only disputes that appeared since the page loaded, not the ones already there.
+            for (const d of r.filter((x) => !known.current!.has(x.paypal_dispute_id))) {
+              toast({
+                title: "New dispute",
+                body: `${label(d.reason)} · ${money(d.amount, d.currency)}${d.buyer_email ? ` · ${d.buyer_email}` : ""}`,
+                href: `/cases/${d.paypal_dispute_id}`,
+              });
+            }
+          }
+          known.current = new Set(r.map((x) => x.paypal_dispute_id));
+          setRows(r);
+          setError(null);
+        })
         .catch((e) => alive && setError(e.message));
     load();
     const t = setInterval(load, REFRESH_MS);
@@ -38,8 +58,8 @@ function useDisputes() {
       alive = false;
       clearInterval(t);
     };
-  }, []);
-  return { rows, error };
+  }, [nonce, toast]);
+  return { rows, error, retry: () => setNonce((n) => n + 1) };
 }
 
 const matches = (r: DisputeRow, q: string) =>
@@ -86,7 +106,7 @@ function PhoneList({ rows, search, now }: { rows: DisputeRow[]; search: string; 
 }
 
 export default function Queue() {
-  const { rows, error } = useDisputes();
+  const { rows, error, retry } = useDisputes();
   const [search, setSearch] = useState("");
   const now = useNow(30_000);
   const phone = useIsPhone();
@@ -181,11 +201,36 @@ export default function Queue() {
           className="w-full rounded-md border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 sm:w-72"
         />
       </div>
-      {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
-      {rows && rows.length === 0 && <p className="text-sm text-slate-500">No disputes yet. New ones appear here automatically.</p>}
-
-      {phone ? (
-        rows ? <PhoneList rows={rows} search={search} now={now} /> : !error && <p className="text-sm text-slate-500">Loading…</p>
+      {error && (
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-red-50 p-3 text-sm text-red-700" role="alert">
+          <span>
+            Couldn't load disputes: {error}
+            {rows ? " · showing the last loaded list" : ""}
+          </span>
+          <button onClick={retry} className="rounded-md border border-red-200 bg-white px-3 py-1 text-red-700 hover:bg-red-50">
+            Retry
+          </button>
+        </div>
+      )}
+      {rows && rows.length === 0 ? (
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-10 text-center">
+          <p className="font-medium">No disputes yet</p>
+          <p className="mt-1 text-sm text-slate-500">
+            When a buyer opens a dispute in PayPal it shows up here automatically, and you'll get a notification.
+          </p>
+        </div>
+      ) : phone ? (
+        rows ? (
+          <PhoneList rows={rows} search={search} now={now} />
+        ) : (
+          !error && (
+            <ul className="space-y-2" aria-busy="true" aria-label="Loading disputes">
+              {[0, 1, 2].map((i) => (
+                <li key={i} className="h-24 animate-pulse rounded-lg border border-slate-200 bg-white" />
+              ))}
+            </ul>
+          )
+        )
       ) : (
         // short lists size to their rows; long ones scroll inside a fixed-height grid
         <div style={(rows?.length ?? 0) > 15 ? { height: "calc(100vh - 220px)", minHeight: 360 } : undefined}>

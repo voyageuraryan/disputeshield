@@ -9,6 +9,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.admin import router as admin_router
 from app.api.decisions import router as decisions_router
 from app.api.disputes import router as disputes_router
+from app.api.events import router as events_router
+from app.api.settings import router as settings_router
 from app.api.store import router as store_router
 from app.api.webhooks import router as webhooks_router
 from app.config import get_settings
@@ -49,6 +51,8 @@ app.include_router(disputes_router)
 app.include_router(decisions_router)
 app.include_router(decisions_router, prefix="/api", include_in_schema=False)  # for the Vite proxy
 app.include_router(admin_router)
+app.include_router(events_router)
+app.include_router(settings_router)
 app.include_router(webhooks_router)
 
 

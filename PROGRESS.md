@@ -187,22 +187,53 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked)
-1. [x] Git repo initialised (main), first commit made; .env/DBs/artifacts/recorded webhooks ignored, secret scan clean.
-2. [ ] Webhook re-pointed to new quick tunnel authors-accessories-cell-personals.trycloudflare.com (old one deleted 15:31
-       "Unauthorized: Tunnel not found"); needs restart + register_webhook, or Render / a named tunnel.
-3. [x] Paused runs per dispute version: new proposal supersedes older PROPOSED decisions; approve/reject
-       only accept PROPOSED decisions and resume that decision's run_key (superseded -> 409).
-4. [ ] Poller can miss brand-new disputes while PayPal's list lags (webhook + `poll_disputes --id` cover it).
-5. [ ] Seller sandbox account is India: test buyers must be US accounts.
-6. [~] Merchant UI done (phase 7). User must still install Node to run it outside this session.
-7. [ ] Ebook checkout may ask for shipping (payment_source removed from create-order).
-8. [ ] Unpaid test orders #16-30 clutter the dev DB.
-9. [ ] Investigator re-fetches the dispute right after ingest (one extra GET per run).
-10. [x] SETTLE_THRESHOLD now used by the economic rule.
-11. [x] Analyst LLM run live (Groq gpt-oss-120b) on PP-R-ZWL-10195422 -> PROPOSED GATHER_MORE.
-12. [ ] No refund_policy evidence source yet: every not-as-described case is missing it by design.
-13. [x] LLM prompts redact buyer emails + known shipping/delivery addresses (LLM_REDACT_PII, default on).
+## Open items (tracked) — updated 2026-10-31, session 12
+Legend: [ ] open · [~] partly done · [x] done (kept for history). P1 = blocks a credible demo/deploy.
+
+### P1 — must fix before demo / deploy
+G1  [ ] No authentication on merchant APIs/UI: anyone who can reach the API can approve/reject decisions and
+        change settings (only /admin/sandbox/* is token-protected). Fine on localhost, unsafe once deployed.
+G2  [ ] Not deployed: render.yaml untested; webhook 95P52181NY896745H points at a cloudflared quick tunnel that
+        dies (re-point with app.scripts.register_webhook). Needs the user's Render account.
+G3  [ ] No successful PayPal response proven live yet. PP-R-ZWL-10195422 refuses PROOF_OF_FULFILLMENT with and
+        without tracking (EVIDENCE_TYPE_IS_NOT_ALLOWED; debug ids f233018eb2716, ca534153a1eca, ca534153d2b67),
+        probably because require-evidence forced the state. accept-claim, provide-supporting-info and adjudicate
+        are only tested against mocks. Next: user retries decision #4 as SETTLE (UI "Try again" -> Settle), and
+        demos FIGHT on a fresh dispute that reaches "needs response" naturally.
+G4  [ ] Frontend runs on a scratchpad Node; user must install Node (sudo pacman -S nodejs npm).
+
+### P2 — product gaps
+G5  [ ] "Auto-settle" is advisory by design (rule 5): the threshold makes the agent RECOMMEND settling small weak
+        cases; the merchant still approves. UI says so. Decide if true auto-settle is ever wanted (would need an
+        explicit standing approval and a rule-5 exception).
+G6  [ ] Changing the threshold affects NEW analyses only; existing PROPOSED decisions are not re-analysed, so the
+        case page's "Rules suggest" line (recomputed live) can disagree with an older decision. Option: re-run the
+        analyst for PROPOSED decisions on change, or show "analysed with $X threshold" on the decision.
+G7  [ ] New-dispute toast relies on the queue's 10 s polling (plus ingest latency) and only shows while the queue
+        page is open; no browser/email notifications.
+G8  [ ] No refund_policy evidence source: every not-as-described case is missing it by design.
+G9  [ ] Ebook checkout may ask for a shipping address (payment_source removed from create-order).
+G10 [ ] Seller sandbox account is India: test buyers must be US accounts (IN->IN payments fail generically).
+
+### P3 — technical debt / scale
+G11 [ ] SSE: each open case tab polls SQLite once per second; streams end after 5 min and the browser reconnects
+        (Last-Event-ID, no gaps). Fine for one merchant; a multi-merchant deploy wants pub/sub. Not yet verified
+        behind Render's proxy.
+G12 [ ] SQLite + single process (poller, SSE, agents in one uvicorn worker). Needs Postgres + a job queue to scale.
+G13 [ ] Investigator re-fetches the dispute right after ingest (one extra GET per run).
+G14 [ ] PayPal list endpoint lags for new disputes in sandbox (webhook + poll_disputes --id cover it).
+G15 [ ] gemini-3.8-flash often 503s on the free tier (GEMINI_MODEL lists a second model).
+G16 [ ] Unpaid test orders #16-30 clutter the dev DB.
+G17 [ ] Old timeline rows contain raw codes (run_started...); UI maps them to words.
+G18 [ ] Frontend has no automated tests in the repo (verified with headless Playwright scripts in the scratchpad);
+        consider adding Playwright/Vitest to the repo.
+G19 [ ] AG Grid bundle is large (~1 MB JS); fine for a demo, consider code-splitting.
+
+### Done (history)
+[x] git repo + commits · [x] retry for definite PayPal rejections · [x] atomic approve (no double submit)
+[x] approval re-checks PayPal · [x] resolved disputes close pending decisions · [x] lost checkpoint -> direct execute
+[x] PII redaction for LLM prompts · [x] merchant UI (queue, case) · [x] live timeline (SSE) · [x] settings panel
+[x] SETTLE_THRESHOLD used (now DB-backed merchant setting)
 
 ## 2026-10-31 — Session 8: LLM switched to Groq -> Gemini
 - `app/agents/llm.py` rewritten over httpx (Anthropic SDK removed): Groq chat completions with strict
@@ -288,4 +319,21 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
   Fixed from screenshots: clipped Status column, empty grid space, "1 steps", "Due -" on resolved cases.
 - Dev note: restart the API with scratchpad restart_api.sh (an old uvicorn once kept port 8000 and the
   "restart" silently failed). Tests: 220 passing.
+
+## 2026-10-31 — Session 12: phase 8 (live timeline, toasts, settings)
+- GET /disputes/{id}/events (+ /api alias): SSE of agent_steps. Backlog (or after Last-Event-ID / ?after=),
+  then `event: ready`, then new rows (1 s poll), `: ping` heartbeat every 15 s, `retry: 3000`, ends after 5 min
+  with `event: bye` (browser reconnects without gaps), stops on client disconnect. Verified live through the Vite
+  proxy (new step delivered in ~1 s).
+- CaseDetail: vertical live timeline (icon per agent, one line per step, timestamps, follows new steps unless
+  scrolled up), states connecting / live / reconnecting / polling fallback (after 5 stream errors), empty,
+  loading skeleton; not-found and error states with retry; decisions refresh when steps arrive.
+- Queue: toast for disputes that appear after the page loaded (none for existing ones), with "Open case";
+  loading skeletons, empty state, error + Retry keeping stale data. Network errors shown in plain words.
+- Settings page (/settings): small-dispute settle threshold, default $25, stored in new merchant_settings table
+  (analyst + checklist read it); validation 0..10,000 with <=2 decimals; save/undo/error states; explains that
+  nothing is refunded automatically.
+- Verified: 30 headless scenario checks (live fill 0.9 s, blocked stream -> polling, toast, empty/error/not-found,
+  settings validation/persist/failure, phone layouts) on a scratch copy; real app on PP-R-ZWL-10195422 shows all
+  121 steps live. Tests: 230 passing.
 

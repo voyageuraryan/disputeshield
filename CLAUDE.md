@@ -37,13 +37,13 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
    before saying a task is done.
 
 ## Layout
-backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py}
+backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py
 backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py
 backend/app/rules/    evidence_rules.py
-backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE)
+backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py
 backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webhook.py
-frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Analytics.tsx
+frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Settings.tsx, Analytics.tsx
 
 ## Progress
 See PROGRESS.md. Update it at the end of every session.

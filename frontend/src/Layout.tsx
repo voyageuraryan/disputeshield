@@ -12,6 +12,7 @@ export default function Layout() {
           <nav className="flex gap-2">
             <NavLink to="/queue" className={link}>Disputes</NavLink>
             <NavLink to="/store" className={link}>Store</NavLink>
+            <NavLink to="/settings" className={link}>Settings</NavLink>
           </nav>
         </div>
       </header>

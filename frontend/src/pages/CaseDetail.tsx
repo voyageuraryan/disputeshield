@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { disputesApi, type Decision, type DisputeDetail, type Evidence, type EvidenceSource } from "../api";
 import { ActionChip, addressLines, caseStatus, Chip, day, Due, label, money, useNow, when } from "../format";
+import Timeline from "../Timeline";
+import { useDisputeEvents } from "../useDisputeEvents";
 
 const NOTE_MAX = 1000;
 type Action = "FIGHT" | "SETTLE";
@@ -385,10 +387,23 @@ function History({ decisions, currentId }: { decisions: Decision[]; currentId: n
 
 // ---- page -------------------------------------------------------------------------------------
 
+function CaseSkeleton() {
+  return (
+    <div className="space-y-4" aria-busy="true" aria-label="Loading case">
+      <div className="h-7 w-72 animate-pulse rounded bg-slate-200" />
+      <div className="grid gap-4 lg:grid-cols-12">
+        {["lg:col-span-3", "lg:col-span-5", "lg:col-span-4"].map((c) => (
+          <div key={c} className={`${c} h-72 animate-pulse rounded-lg border border-slate-200 bg-white`} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function CaseDetail() {
   const { disputeId = "" } = useParams();
   const [detail, setDetail] = useState<DisputeDetail | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ msg: string; notFound: boolean } | null>(null);
   const now = useNow(30_000);
 
   const load = useCallback(
@@ -396,23 +411,50 @@ export default function CaseDetail() {
       disputesApi
         .detail(disputeId)
         .then((d) => (setDetail(d), setError(null)))
-        .catch((e) => setError(e.message)),
+        .catch((e: Error) => setError({ msg: e.message, notFound: e.message.startsWith("404") })),
     [disputeId],
   );
+  // Live steps also tell us when to refresh the decision / facts (debounced: agents log in bursts).
+  const refresh = useRef<ReturnType<typeof setTimeout>>();
+  const { steps, state } = useDisputeEvents(disputeId, () => {
+    clearTimeout(refresh.current);
+    refresh.current = setTimeout(load, 700);
+  });
   useEffect(() => {
     load();
-    const t = setInterval(load, 15_000);
-    return () => clearInterval(t);
+    const t = setInterval(load, 60_000); // safety net; live events drive normal refreshes
+    return () => {
+      clearInterval(t);
+      clearTimeout(refresh.current);
+    };
   }, [load]);
 
-  if (error && !detail) return <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>;
-  if (!detail) return <p className="text-sm text-slate-500">Loading…</p>;
+  if (error && !detail) {
+    return (
+      <div className="mx-auto max-w-md rounded-lg border border-slate-200 bg-white p-6 text-center shadow-sm">
+        <p className="font-medium">{error.notFound ? "This dispute isn't in DisputeShield" : "Couldn't load this case"}</p>
+        <p className="mt-1 text-sm text-slate-500">{error.notFound ? `No dispute ${disputeId}. It may not have been ingested yet.` : error.msg}</p>
+        <div className="mt-4 flex justify-center gap-2">
+          <Link to="/queue" className="rounded-md border border-slate-300 px-3 py-1.5 text-sm">Back to disputes</Link>
+          {!error.notFound && (
+            <button onClick={load} className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm text-white">Try again</button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  if (!detail) return <CaseSkeleton />;
   const d = current(detail.decisions);
   const cited = new Set(d?.cited_evidence_ids ?? []);
   const st = caseStatus(detail.dispute);
 
   return (
     <div className="space-y-4">
+      {error && (
+        <p className="rounded-md bg-amber-50 p-2 text-xs text-amber-800">
+          Couldn't refresh ({error.msg}); showing the last loaded data.
+        </p>
+      )}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Link to="/queue" className="text-sm text-indigo-700 hover:underline">
           ← Disputes
@@ -445,23 +487,9 @@ export default function CaseDetail() {
             </Card>
           )}
           <History decisions={detail.decisions} currentId={d?.id} />
+          <Timeline steps={steps} state={state} />
         </div>
       </div>
-
-      <details className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-        <summary className="cursor-pointer text-sm font-semibold uppercase tracking-wide text-slate-500">
-          Agent timeline ({detail.timeline.length} {detail.timeline.length === 1 ? "step" : "steps"})
-        </summary>
-        <ol className="mt-3 max-h-96 space-y-1 overflow-y-auto text-xs">
-          {[...detail.timeline].reverse().map((s) => (
-            <li key={s.id} className="grid grid-cols-[6.5rem_6rem_1fr] gap-2">
-              <span className="text-slate-400">{when(s.created_at)}</span>
-              <span className="font-medium text-slate-600">{s.agent}</span>
-              <span className="text-slate-800">{s.action}</span>
-            </li>
-          ))}
-        </ol>
-      </details>
     </div>
   );
 }

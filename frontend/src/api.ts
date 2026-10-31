@@ -14,10 +14,16 @@ export type StoreConfig = { client_id: string; currency: string; sdk_url: string
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    });
+  } catch {
+    // fetch only throws on network failure ("Failed to fetch"): say it in plain words
+    throw new Error("Can't reach the DisputeShield server. Check your connection and try again.");
+  }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
     const detail = body?.detail;
@@ -160,3 +166,15 @@ export const disputesApi = {
   pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf`,
   source: (evidenceId: number) => req<EvidenceSource>(`/api/evidence/${evidenceId}/source`),
 };
+
+// ---- settings & live events --------------------------------------------------------------
+
+export type MerchantSettings = { settle_threshold: string; currency: string; updated_at: string };
+
+export const settingsApi = {
+  get: () => req<MerchantSettings>("/api/settings"),
+  save: (settle_threshold: string) =>
+    req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify({ settle_threshold }) }),
+};
+
+export const eventsUrl = (disputeId: string) => `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/events`;

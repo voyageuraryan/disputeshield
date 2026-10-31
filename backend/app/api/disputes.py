@@ -19,7 +19,7 @@ from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
 from app.rules.evidence_rules import RULES, economic_baseline, evaluate, red_flag_description
-from app.config import get_settings
+from app.merchant import settle_threshold
 from app.schemas import CaseFile
 
 router = APIRouter(tags=["disputes"])
@@ -139,7 +139,7 @@ def _order(session: Session, order_id: int | None) -> OrderOut | None:
                     shipments=[ShipmentOut(**s.model_dump(include=set(ShipmentOut.model_fields))) for s in ships])
 
 
-def _checklist(case: CaseFile) -> Checklist:
+def _checklist(case: CaseFile, threshold) -> Checklist:
     result = evaluate(case)
     rule = RULES.get(case.reason)
     by_type: dict[str, list[int]] = {}
@@ -151,7 +151,7 @@ def _checklist(case: CaseFile) -> Checklist:
                  for t in rule.required + rule.supporting]
     base = None
     if result.reason_supported:
-        base = economic_baseline(result, case.amount, get_settings().settle_threshold,
+        base = economic_baseline(result, case.amount, threshold,
                                  can_fight=case.can_fight, can_settle=case.can_settle)
     return Checklist(reason_label=rule.label if rule else None, supported=result.reason_supported,
                      rule_score=result.rule_score, items=items,
@@ -175,7 +175,7 @@ def get_dispute_detail(dispute_id: str, session: Session = Depends(get_session))
     decisions = session.exec(select(Decision).where(Decision.dispute_id == d.id).order_by(Decision.id.desc())).all()
     steps = session.exec(select(AgentStep).where(AgentStep.dispute_id == d.id).order_by(AgentStep.id)).all()
     return DisputeDetail(dispute=_row(session, d), order=_order(session, d.order_id), case=case,
-                         checklist=_checklist(case), decisions=[_out(x, session) for x in decisions],
+                         checklist=_checklist(case, settle_threshold(session)), decisions=[_out(x, session) for x in decisions],
                          timeline=[StepOut(**s.model_dump(include=set(StepOut.model_fields))) for s in steps])
 
 

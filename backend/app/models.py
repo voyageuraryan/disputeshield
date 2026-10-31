@@ -161,3 +161,14 @@ class ProcessedEvent(SQLModel, table=True):
     kind: str  # webhook / agent_run
     detail: Optional[dict] = _json_col()
     created_at: datetime = Field(default_factory=utcnow)
+
+
+class MerchantSettings(SQLModel, table=True):
+    """Merchant-editable settings (single row, id=1). Env/config values are only the defaults."""
+
+    __tablename__ = "merchant_settings"
+
+    id: Optional[int] = Field(default=1, primary_key=True)
+    # Under this amount a weak case (rule_score < 0.7) is recommended for SETTLE. Never sent without approval.
+    settle_threshold: Decimal = Field(default=Decimal("25"), max_digits=10, decimal_places=2)
+    updated_at: datetime = Field(default_factory=utcnow)
