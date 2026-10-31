@@ -1,0 +1,192 @@
+"""Analyst: rules first, then the LLM explains.
+
+1. Deterministic checklist (rules/evidence_rules.py) -> rule_score, red flags.
+2. Deterministic economic baseline (FIGHT / SETTLE / GATHER_MORE), limited to what
+   PayPal currently allows.
+3. LLM writes the Recommendation (structured output). It may move ONE step from the
+   baseline, and only when it cites a buyer message or the listing that justifies it.
+4. Code validates: cited ids exist, action allowed by PayPal, within one step,
+   justification cited, GATHER_MORE names what's missing, reasoning length.
+   Invalid -> retry once with the problems listed -> still invalid -> NEEDS_HUMAN.
+5. Saves a PROPOSED decision (older PROPOSED ones for the dispute -> SUPERSEDED) and
+   logs every step to agent_steps.
+"""
+
+from __future__ import annotations
+
+import json
+import logging
+from dataclasses import dataclass
+from decimal import Decimal
+
+from sqlmodel import Session, select
+
+from app.agents import llm as llm_module
+from app.agents.llm import LLMError, StructuredLLM, structured_call
+from app.agents.redact import pii_terms, redact
+from app.agents.steps import log_step
+from app.config import get_settings
+from app.models import Decision, DecisionStatus, Dispute
+from app.rules.evidence_rules import (
+    FIGHT_AT,
+    SETTLE_BELOW,
+    Baseline,
+    economic_baseline,
+    evaluate,
+    red_flag_description,
+    steps_apart,
+)
+from app.schemas import CaseFile, ChecklistResult, Recommendation
+
+log = logging.getLogger(__name__)
+AGENT = "analyst"
+MAX_ATTEMPTS = 2  # first try + one retry (rule 7)
+MAX_REASONING_WORDS = 150  # asked for ~120; small slack
+JUSTIFYING_TYPES = {"buyer_message", "listing"}  # unstructured evidence that can move the call one step
+
+NEEDS_HUMAN = "NEEDS_HUMAN"
+PROPOSED = "PROPOSED"
+
+SYSTEM_PROMPT = f"""You are the analyst for DisputeShield, which helps small merchants respond to PayPal disputes.
+You receive a case file (evidence gathered from PayPal and the merchant's store), a deterministic
+evidence checklist, and a baseline recommendation computed by fixed rules. Write the recommendation.
+
+How the decision works (the rules already applied it; you explain it):
+- rule_score >= {FIGHT_AT}: FIGHT. rule_score < {SETTLE_BELOW}, or the amount is under the merchant's
+  threshold with a weak case: SETTLE. Otherwise GATHER_MORE and name the missing evidence.
+- You may move ONE step from the baseline (SETTLE <-> GATHER_MORE <-> FIGHT) only when unstructured
+  evidence justifies it - a buyer message (for example "it arrived") or a listing that contradicts or
+  supports the complaint - and you must cite that evidence item's id. Otherwise keep the baseline.
+- Only choose an action PayPal currently allows (see allowed_actions); GATHER_MORE is always possible.
+
+Rules for your output:
+- Cite evidence only by the integer ids in the case file. Never invent evidence, facts, dates or ids.
+- reasoning: plain English for a busy merchant, at most about 120 words.
+- missing_items: evidence types still needed (use the checklist's names); required for GATHER_MORE.
+- economic_note: one or two sentences weighing the amount against the effort and the odds.
+- confidence: low, medium or high, reflecting how strong the cited evidence is.
+- Personal data is replaced by placeholders such as [email] and [shipping address]; refer to them
+  generically ("the buyer's address") and never try to reconstruct them."""
+
+
+@dataclass
+class AnalysisResult:
+    recommendation: Recommendation | None
+    checklist: ChecklistResult
+    baseline: Baseline | None
+    decision_id: int | None
+    needs_human: bool
+    problems: list[str]
+
+
+def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline, threshold: Decimal) -> str:
+    payload = {
+        "case_file": case.model_dump(mode="json"),
+        "checklist": {**checklist.model_dump(mode="json"),
+                      "red_flag_details": [red_flag_description(case.reason, c) for c in checklist.red_flags]},
+        "baseline": {"action": baseline.action, "why": baseline.why},
+        "merchant_settle_threshold": f"{threshold} {case.currency}",
+        "allowed_actions": case.allowed_actions,
+    }
+    return ("Here is the case. Write the recommendation.\n\n"
+            + json.dumps(payload, indent=2, sort_keys=True, default=str))
+
+
+def validate(rec: Recommendation, case: CaseFile, baseline: Baseline) -> list[str]:
+    """Every problem with an LLM recommendation; empty list means it is acceptable."""
+    problems: list[str] = []
+    try:
+        rec.validate_against(case)  # cited ids exist + action allowed by PayPal
+    except ValueError as exc:
+        problems.append(str(exc))
+    by_id = {e.id: e for e in case.evidence}
+    if steps_apart(rec.action, baseline.action) > 1:
+        problems.append(f"{rec.action} is more than one step from the baseline {baseline.action}")
+    elif rec.action != baseline.action:
+        cited_types = {by_id[i].type for i in rec.cited_evidence_ids if i in by_id}
+        if not cited_types & JUSTIFYING_TYPES:
+            problems.append(f"moving from {baseline.action} to {rec.action} must cite a buyer_message or listing "
+                            f"item that justifies it")
+    if rec.action == "FIGHT" and not rec.cited_evidence_ids:
+        problems.append("FIGHT must cite the evidence it relies on")
+    if rec.action == "GATHER_MORE" and not rec.missing_items:
+        problems.append("GATHER_MORE must name the missing items")
+    if len(rec.reasoning.split()) > MAX_REASONING_WORDS:
+        problems.append(f"reasoning is {len(rec.reasoning.split())} words; keep it to about 120")
+    return problems
+
+
+def _supersede_proposals(session: Session, dispute_id: int) -> list[int]:
+    older = session.exec(select(Decision).where(Decision.dispute_id == dispute_id,
+                                                Decision.status == DecisionStatus.PROPOSED)).all()
+    for d in older:
+        d.status = DecisionStatus.SUPERSEDED
+        session.add(d)
+    return [d.id for d in older]
+
+
+async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key: str | None = None,
+                  llm: StructuredLLM = structured_call) -> AnalysisResult:
+    threshold = get_settings().settle_threshold
+    checklist = evaluate(case)
+    log_step(session, dispute.id, AGENT,
+             f"Checklist for {case.reason}: rule score {checklist.rule_score:.2f}"
+             + (f", missing {', '.join(checklist.missing)}" if checklist.missing else ", nothing required missing")
+             + (f", red flags: {', '.join(checklist.red_flags)}" if checklist.red_flags else ""),
+             checklist.model_dump(mode="json"))
+
+    if not checklist.reason_supported:
+        return _needs_human(session, dispute, checklist, None,
+                            [f"No evidence rule for PayPal reason {case.reason}; a person should review this case"])
+
+    baseline = economic_baseline(checklist, case.amount, threshold,
+                                 can_fight=case.can_fight, can_settle=case.can_settle)
+    log_step(session, dispute.id, AGENT, f"Economic rule suggests {baseline.action}: {baseline.why}",
+             {"baseline": baseline.action, "why": baseline.why, "amount": str(case.amount),
+              "threshold": str(threshold), "allowed_actions": case.allowed_actions})
+
+    prompt = redact(build_prompt(case, checklist, baseline, threshold), pii_terms(session, case.order_id))
+    problems: list[str] = []
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        user = prompt if not problems else (
+            prompt + "\n\nYour previous answer was rejected for these reasons; fix them:\n- " + "\n- ".join(problems))
+        try:
+            rec = await llm(system=SYSTEM_PROMPT, user=user, output_model=Recommendation)
+        except LLMError as exc:
+            problems = [f"LLM call failed: {exc}"]
+        else:
+            problems = validate(rec, case, baseline)
+            if not problems:
+                return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt)
+        log_step(session, dispute.id, AGENT, f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS})",
+                 {"problems": problems})
+    return _needs_human(session, dispute, checklist, baseline, problems)
+
+
+def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
+             rec: Recommendation, run_key: str | None, attempt: int) -> AnalysisResult:
+    superseded = _supersede_proposals(session, dispute.id)
+    decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
+                        reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
+                        status=DecisionStatus.PROPOSED, run_key=run_key)
+    dispute.agent_status = PROPOSED
+    session.add_all([decision, dispute])
+    session.commit()
+    session.refresh(decision)
+    moved = "" if rec.action == baseline.action else f" (moved from {baseline.action})"
+    log_step(session, dispute.id, AGENT, f"Recommend {rec.action}{moved}, {rec.confidence} confidence: {rec.reasoning}",
+             {"decision_id": decision.id, "cited_evidence_ids": rec.cited_evidence_ids,
+              "missing_items": rec.missing_items, "economic_note": rec.economic_note,
+              "baseline": baseline.action, "rule_score": checklist.rule_score, "attempt": attempt,
+              "llm": llm_module.last_provider.get(),
+              "superseded_decision_ids": superseded})
+    return AnalysisResult(rec, checklist, baseline, decision.id, False, [])
+
+
+def _needs_human(session: Session, dispute: Dispute, checklist: ChecklistResult, baseline: Baseline | None,
+                 problems: list[str]) -> AnalysisResult:
+    dispute.agent_status = NEEDS_HUMAN
+    session.add(dispute)
+    session.commit()
+    log_step(session, dispute.id, AGENT, "Needs human review: " + "; ".join(problems), {"problems": problems})
+    return AnalysisResult(None, checklist, baseline, None, True, problems)

@@ -1,0 +1,49 @@
+{
+  "id": "4S541016HD390220V",
+  "amount": {
+    "currency_code": "USD",
+    "value": "89.00"
+  },
+  "final_capture": true,
+  "seller_protection": {
+    "status": "ELIGIBLE",
+    "dispute_categories": [
+      "ITEM_NOT_RECEIVED",
+      "UNAUTHORIZED_TRANSACTION"
+    ]
+  },
+  "invoice_id": "DS-31-19c56b70",
+  "custom_id": "31",
+  "status": "PENDING",
+  "status_details": {
+    "reason": "BUYER_COMPLAINT"
+  },
+  "supplementary_data": {
+    "related_ids": {
+      "order_id": "2WB80238HM8587143"
+    }
+  },
+  "payee": {
+    "email_address": "sb-secn253645168@business.example.com",
+    "merchant_id": "WQERH797VQCJQ"
+  },
+  "create_time": "2026-10-31T10:50:09Z",
+  "update_time": "2026-10-31T11:06:33Z",
+  "links": [
+    {
+      "href": "https://api.sandbox.paypal.com/v2/payments/captures/4S541016HD390220V",
+      "rel": "self",
+      "method": "GET"
+    },
+    {
+      "href": "https://api.sandbox.paypal.com/v2/payments/captures/4S541016HD390220V/refund",
+      "rel": "refund",
+      "method": "POST"
+    },
+    {
+      "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2WB80238HM8587143",
+      "rel": "up",
+      "method": "GET"
+    }
+  ]
+}

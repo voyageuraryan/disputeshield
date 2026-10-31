@@ -1,0 +1,65 @@
+# Render Blueprint: backend API (web service) + frontend (static site).
+# Secrets use `sync: false`: Render prompts for them on first Blueprint creation.
+services:
+  - type: web
+    name: disputeshield-api
+    runtime: python
+    rootDir: backend
+    # starter (paid) because Free web services spin down after 15 min idle and have
+    # an ephemeral filesystem (no persistent disks), which would wipe the SQLite DB.
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    # One process only: the dispute poller runs inside it, and SQLite is single-writer.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    disk:
+      name: data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.14
+      - key: DATABASE_URL
+        value: sqlite:////var/data/disputeshield.db
+      - key: CHECKPOINT_DB  # paused agent runs (LangGraph) must survive restarts too
+        value: /var/data/checkpoints.db
+      - key: PAYPAL_BASE_URL
+        value: https://api-m.sandbox.paypal.com
+      - key: PAYPAL_CLIENT_ID
+        sync: false
+      - key: PAYPAL_CLIENT_SECRET
+        sync: false
+      - key: PAYPAL_WEBHOOK_ID
+        sync: false
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: ADMIN_TOKEN
+        sync: false
+      - key: ARTIFACTS_DIR
+        value: /var/data/artifacts
+      - key: CORS_ORIGINS  # the static site's URL, e.g. https://disputeshield-web.onrender.com
+        sync: false
+      - key: POLL_DISPUTES
+        value: "true"
+      - key: POLL_INTERVAL_S
+        value: "60"
+
+  - type: web
+    name: disputeshield-web
+    runtime: static
+    rootDir: frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Public URL of disputeshield-api, e.g. https://disputeshield-api.onrender.com
+      # (fromService `host` is the private-network hostname, which browsers can't reach.)
+      - key: VITE_API_BASE_URL
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html

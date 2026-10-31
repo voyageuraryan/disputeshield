@@ -1,0 +1,9 @@
+backend/.venv/
+backend/.env
+backend/*.db
+__pycache__/
+.pytest_cache/
+frontend/node_modules/
+frontend/dist/
+backend/recorded_webhooks/
+backend/artifacts/

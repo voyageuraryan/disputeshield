@@ -1,0 +1,8 @@
+{
+  "paypal-auth-algo": "SHA256withRSA",
+  "paypal-auth-version": "v2",
+  "paypal-cert-url": "https://api.sandbox.paypal.com/v1/notifications/certs/CERT-360caa42-fca2a594-bf9ab596",
+  "paypal-transmission-id": "348f84ab-d51b-11f1-be2c-19b474f8960b",
+  "paypal-transmission-sig": "betIkR7LJuEXi25E2rswoswNHP2W/rM5RC4tiokDKLFzoh2dTjly1+4gju5rWZh37EZl8yLu4YOjfB/SlW+fJh6M/n9KwS2gsKdo5xOMmi4sg6tzAQrkgbEveOBRhiJq19wDDoK5VoQuVve6l7arxjT9hk/qjoWW/qILhj+mlUsmcmPzl3oEU7xbvGKiMPZ2Tf7ljFHkhgMSHC0dKgJg5zLDqq7TGuuXeId7DNivs+qGOdTSgE23jL4Ei2CY1c4Q3lz74joGsESxERDp9xD+Y0V9n3NITOZxXJL1/qKkMadwQK/B5fKNPlHOuw63Rt56ea3pd+/GgpL/WZqIH450oA==",
+  "paypal-transmission-time": "2026-10-31T11:07:04Z"
+}

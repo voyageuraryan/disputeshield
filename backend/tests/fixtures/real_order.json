@@ -1,0 +1,200 @@
+{
+  "id": "2WB80238HM8587143",
+  "intent": "CAPTURE",
+  "status": "COMPLETED",
+  "payment_source": {
+    "paypal": {
+      "email_address": "sb-hizpg53637037@personal.example.com",
+      "account_id": "A9SZTAF6P42TU",
+      "account_status": "VERIFIED",
+      "name": {
+        "given_name": "John",
+        "surname": "Doe"
+      },
+      "address": {
+        "country_code": "US"
+      }
+    }
+  },
+  "purchase_units": [
+    {
+      "reference_id": "order-31",
+      "amount": {
+        "currency_code": "USD",
+        "value": "89.00",
+        "breakdown": {
+          "item_total": {
+            "currency_code": "USD",
+            "value": "89.00"
+          }
+        }
+      },
+      "payee": {
+        "email_address": "sb-secn253645168@business.example.com",
+        "merchant_id": "WQERH797VQCJQ"
+      },
+      "custom_id": "31",
+      "invoice_id": "DS-31-19c56b70",
+      "items": [
+        {
+          "name": "Handmade walnut lamp",
+          "unit_amount": {
+            "currency_code": "USD",
+            "value": "89.00"
+          },
+          "quantity": "1",
+          "sku": "LAMP-01",
+          "category": "PHYSICAL_GOODS"
+        }
+      ],
+      "shipping": {
+        "name": {
+          "full_name": "John Doe"
+        },
+        "address": {
+          "address_line_1": "2211 N First St",
+          "admin_area_2": "San Jose",
+          "admin_area_1": "CA",
+          "postal_code": "95131",
+          "country_code": "US"
+        },
+        "trackers": [
+          {
+            "id": "4S541016HD390220V-9400111899562837465012",
+            "status": "SHIPPED",
+            "items": [],
+            "links": [
+              {
+                "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2WB80238HM8587143",
+                "rel": "up",
+                "method": "GET"
+              },
+              {
+                "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2WB80238HM8587143/trackers/4S541016HD390220V-9400111899562837465012",
+                "rel": "update",
+                "method": "PATCH"
+              }
+            ],
+            "notify_payer": false
+          }
+        ]
+      },
+      "payments": {
+        "captures": [
+          {
+            "id": "4S541016HD390220V",
+            "status": "PENDING",
+            "status_details": {
+              "reason": "BUYER_COMPLAINT"
+            },
+            "amount": {
+              "currency_code": "USD",
+              "value": "89.00"
+            },
+            "final_capture": true,
+            "seller_protection": {
+              "status": "ELIGIBLE",
+              "dispute_categories": [
+                "ITEM_NOT_RECEIVED",
+                "UNAUTHORIZED_TRANSACTION"
+              ]
+            },
+            "invoice_id": "DS-31-19c56b70",
+            "custom_id": "31",
+            "links": [
+              {
+                "href": "https://api.sandbox.paypal.com/v2/payments/captures/4S541016HD390220V",
+                "rel": "self",
+                "method": "GET"
+              },
+              {
+                "href": "https://api.sandbox.paypal.com/v2/payments/captures/4S541016HD390220V/refund",
+                "rel": "refund",
+                "method": "POST"
+              },
+              {
+                "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2WB80238HM8587143",
+                "rel": "up",
+                "method": "GET"
+              }
+            ],
+            "create_time": "2026-10-31T10:50:09Z",
+            "update_time": "2026-10-31T11:06:33Z"
+          }
+        ],
+        "refunds": [
+          {
+            "id": "5KK23043FS120103U",
+            "amount": {
+              "currency_code": "USD",
+              "value": "84.55"
+            },
+            "seller_payable_breakdown": {
+              "gross_amount": {
+                "currency_code": "USD",
+                "value": "84.55"
+              },
+              "paypal_fee": {
+                "currency_code": "USD",
+                "value": "0.00"
+              },
+              "platform_fees": [
+                {
+                  "amount": {
+                    "currency_code": "USD",
+                    "value": "0.00"
+                  }
+                }
+              ],
+              "net_amount": {
+                "currency_code": "USD",
+                "value": "84.55"
+              },
+              "total_refunded_amount": {
+                "currency_code": "USD",
+                "value": "0.00"
+              }
+            },
+            "invoice_id": "DS-31-19c56b70",
+            "custom_id": "31",
+            "status": "PENDING",
+            "links": [
+              {
+                "href": "https://api.sandbox.paypal.com/v2/payments/refunds/5KK23043FS120103U",
+                "rel": "self",
+                "method": "GET"
+              },
+              {
+                "href": "https://api.sandbox.paypal.com/v2/payments/captures/4S541016HD390220V",
+                "rel": "up",
+                "method": "GET"
+              }
+            ],
+            "create_time": "2026-10-31T04:06:33-07:00",
+            "update_time": "2026-10-31T04:06:33-07:00"
+          }
+        ]
+      }
+    }
+  ],
+  "payer": {
+    "name": {
+      "given_name": "John",
+      "surname": "Doe"
+    },
+    "email_address": "sb-hizpg53637037@personal.example.com",
+    "payer_id": "A9SZTAF6P42TU",
+    "address": {
+      "country_code": "US"
+    }
+  },
+  "create_time": "2026-10-31T10:50:09Z",
+  "update_time": "2026-10-31T11:06:33Z",
+  "links": [
+    {
+      "href": "https://api.sandbox.paypal.com/v2/checkout/orders/2WB80238HM8587143",
+      "rel": "self",
+      "method": "GET"
+    }
+  ]
+}
