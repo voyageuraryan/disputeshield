@@ -29,6 +29,21 @@ def test_grid_reports_no_missing_features(stack, page):
     assert not grid_msgs, grid_msgs
 
 
+def test_countdown_refresh_after_30s_has_no_grid_errors(stack, browser):
+    """Regression: the 30 s countdown refresh calls api.refreshCells (needs RenderApiModule)."""
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    errs = []
+    pg.on("console", lambda m: m.type == "error" and "AG Grid" in m.text and errs.append(m.text))
+    pg.clock.install()
+    pg.goto(f"{stack.base}/queue")
+    pg.wait_for_selector(".ag-row")
+    pg.clock.fast_forward(65_000)  # two countdown ticks
+    pg.wait_for_timeout(500)
+    assert not errs, errs
+    ctx.close()
+
+
 def test_queue_columns_sort_filter_search_countdown(stack, page):
     page.goto(f"{stack.base}/queue")
     page.wait_for_selector(".ag-row")

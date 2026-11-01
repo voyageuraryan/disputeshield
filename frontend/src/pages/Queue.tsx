@@ -6,6 +6,7 @@ import {
   ModuleRegistry,
   NumberFilterModule,
   QuickFilterModule,
+  RenderApiModule,
   RowStyleModule,
   TextFilterModule,
   TooltipModule,
@@ -26,6 +27,7 @@ ModuleRegistry.registerModules([
   TextFilterModule,
   NumberFilterModule,
   QuickFilterModule,
+  RenderApiModule, // api.refreshCells: re-renders the "Due in" countdowns every 30 s
   RowStyleModule,
   TooltipModule,
   ...(import.meta.env.DEV ? [ValidationModule] : []),
