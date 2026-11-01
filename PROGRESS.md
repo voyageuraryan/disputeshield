@@ -193,10 +193,11 @@ User decisions (session 13): login = Log in with PayPal; auto-settle stays advis
 SQLite on Render disk.
 
 ### P1
-G1  [~] Merchant login built (Log in with PayPal, allowlist MERCHANT_LOGIN_EMAILS, signed 12 h sessions, every
-        merchant API/SSE/PDF protected, store/webhooks/health public). WAITING ON USER: enable "Log in with PayPal"
-        on the sandbox app + Return URL http://localhost:8000/api/auth/paypal/callback (PayPal currently answers
-        "invalid client_id or redirect_uri"). Until then the local dashboard needs AUTH_MODE=off to be usable.
+G1  [x] Log in with PayPal VERIFIED LIVE 2026-11-01 (sandbox business account). PayPal refused http://localhost as
+        Return URL, so AUTH_REDIRECT_URI uses the cloudflared tunnel (changes on restart: update .env + PayPal app).
+        userinfo: spec path without schema gave 401; now tries the documented variants. Allowed:
+        sb-secn253645168@business.example.com, sb-lbmfs53656037@business.example.com. Personal (buyer) accounts
+        fail at userinfo, which is fine (buyers never use the dashboard).
 G2  [~] Deploy prepared (render.yaml with all settings, AUTH_SECRET generated, DEPLOY.md). WAITING ON USER:
         push to GitHub + Render account. Webhook still on a cloudflared quick tunnel locally.
 G3  [~] No successful PayPal response proven live. WAITING ON USER: (a) on PP-R-ZWL-10195422 decision #4 ->
