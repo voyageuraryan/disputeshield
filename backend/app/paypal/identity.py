@@ -12,13 +12,23 @@ Requires "Log in with PayPal" enabled on the app with this redirect URI as a Ret
 
 from __future__ import annotations
 
+import logging
 from urllib.parse import urlencode
 
 from app.config import SANDBOX_WEB_URL, get_settings
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 
+log = logging.getLogger(__name__)
 SCOPES = "openid email"
-USERINFO_PATHS = ("/v1/identity/openidconnect/userinfo", "/v1/identity/oauth2/userinfo")
+# Seen live 2026-11-01: the spec's path without a schema answers 401 (empty body) to a valid sandbox token, so we
+# try the documented variants in order. The guide's oauth2 path with schema=paypalv1.1 comes first.
+USERINFO_CANDIDATES = (
+    ("/v1/identity/oauth2/userinfo", {"schema": "paypalv1.1"}),
+    ("/v1/identity/openidconnect/userinfo", {"schema": "openid"}),
+    ("/v1/identity/oauth2/userinfo", None),
+    ("/v1/identity/openidconnect/userinfo", None),
+)
+RETRY_NEXT_ON = {400, 401, 403, 404}
 
 
 def authorize_url(state: str) -> str:
@@ -38,15 +48,31 @@ async def exchange_code(code: str, *, client: PayPalClient | None = None) -> dic
 
 
 async def userinfo(access_token: str, *, client: PayPalClient | None = None) -> dict:
+    """The user's profile. Tries each documented variant; 4xx (wrong path/schema for this account) -> next one.
+    5xx and network errors are not retried here (they surface as a failed login the user can retry)."""
     c = client or get_paypal_client()
     last: PayPalError | None = None
-    for path in USERINFO_PATHS:
+    for path, params in USERINFO_CANDIDATES:
         try:
-            return await c.call_without_app_token(
-                "GET", path, idempotent=True,
+            info = await c.call_without_app_token(
+                "GET", path, idempotent=True, params=params,
                 headers={"Authorization": f"Bearer {access_token}", "Accept": "application/json"})
         except PayPalError as exc:
-            if exc.status_code != 404:
+            if exc.status_code not in RETRY_NEXT_ON:
                 raise
+            log.info("userinfo %s %s -> %s; trying the next variant", path, params, exc.status_code)
             last = exc
+            continue
+        log.info("userinfo answered by %s %s", path, params)
+        return _normalise(info or {})
     raise last  # type: ignore[misc]
+
+
+def _normalise(info: dict) -> dict:
+    """The paypalv1.1 schema returns emails as a list; openid returns `email`. Return one shape."""
+    email = info.get("email")
+    if not email:
+        emails = info.get("emails") or []
+        primary = next((e for e in emails if e.get("primary")), emails[0] if emails else {})
+        email = primary.get("value")
+    return {**info, "email": email, "user_id": info.get("user_id") or info.get("payer_id") or info.get("sub")}

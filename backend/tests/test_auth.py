@@ -132,23 +132,25 @@ def test_next_cannot_redirect_elsewhere(client, evil):
     assert verify(q["state"], "state")["next"] == "/queue"
 
 
-def mock_paypal(router, email="merchant@business.example.com", userinfo_path="openidconnect"):
+def mock_paypal(router, email="merchant@business.example.com", userinfo_path="oauth2"):
     tok = router.post(f"{BASE}/v1/oauth2/token").respond(200, json={"access_token": "USER-AT", "token_type": "Bearer",
                                                                     "expires_in": 28800, "refresh_token": "R"})
     oidc = router.get(f"{BASE}/v1/identity/openidconnect/userinfo")
     oauth2 = router.get(f"{BASE}/v1/identity/oauth2/userinfo")
     info = {"user_id": "https://www.paypal.com/webapps/auth/identity/user/abc", "email": email, "name": "Shop Owner"}
-    if userinfo_path == "openidconnect":
-        oidc.respond(200, json=info)
-    else:
-        oidc.respond(404, json={"name": "NOT_FOUND"})
-        oauth2.respond(200, json=info)
+    if userinfo_path == "oauth2":  # paypalv1.1 schema: emails list
+        oauth2.respond(200, json={"user_id": info["user_id"], "name": "Shop Owner",
+                                  "emails": [{"value": email, "primary": True, "confirmed": True}]})
+    else:  # like the live sandbox: oauth2 refuses, openidconnect?schema=openid works
+        oauth2.respond(401)
+        oidc.mock(side_effect=lambda req: httpx.Response(200, json=info) if req.url.params.get("schema") == "openid"
+                  else httpx.Response(401))
     return tok, oidc, oauth2
 
 
 @respx.mock
 def test_full_login(client):
-    tok, oidc, _ = mock_paypal(respx)
+    tok, _, oauth2 = mock_paypal(respx)
     _, q = start(client)
     r = client.get(f"/api/auth/paypal/callback?code=AUTHCODE&state={q['state']}")
     f = fragment(r)
@@ -156,17 +158,40 @@ def test_full_login(client):
     req = tok.calls[0].request
     assert req.headers["Authorization"].startswith("Basic ")
     assert parse_qs(req.content.decode()) == {"grant_type": ["authorization_code"], "code": ["AUTHCODE"]}
-    assert oidc.calls[0].request.headers["Authorization"] == "Bearer USER-AT"
+    ui = oauth2.calls[0].request
+    assert ui.headers["Authorization"] == "Bearer USER-AT" and ui.url.params["schema"] == "paypalv1.1"
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {f['token']}"}).json()
     assert me["email"] == "merchant@business.example.com"
 
 
 @respx.mock
-def test_userinfo_falls_back_to_guide_path(client):
-    _, _, oauth2 = mock_paypal(respx, userinfo_path="oauth2")
+def test_userinfo_tries_next_variant_after_401(client):
+    """Live sandbox (2026-11-01): a valid token got 401 from one userinfo variant; another must be tried."""
+    _, oidc, oauth2 = mock_paypal(respx, userinfo_path="openidconnect")
     _, q = start(client)
-    assert "token" in fragment(client.get(f"/api/auth/paypal/callback?code=C&state={q['state']}"))
-    assert oauth2.call_count == 1
+    f = fragment(client.get(f"/api/auth/paypal/callback?code=C&state={q['state']}"))
+    assert "token" in f, f
+    assert oauth2.call_count == 1 and oidc.calls[-1].request.url.params["schema"] == "openid"
+
+
+@respx.mock
+def test_userinfo_all_variants_refuse(client):
+    respx.post(f"{BASE}/v1/oauth2/token").respond(200, json={"access_token": "AT", "expires_in": 1})
+    oauth2 = respx.get(f"{BASE}/v1/identity/oauth2/userinfo").respond(401)
+    oidc = respx.get(f"{BASE}/v1/identity/openidconnect/userinfo").respond(401)
+    _, q = start(client)
+    f = fragment(client.get(f"/api/auth/paypal/callback?code=C&state={q['state']}"))
+    assert f["error"] == "PayPal login failed; please try again"
+    assert oauth2.call_count == 2 and oidc.call_count == 2  # all four variants tried
+
+
+@respx.mock
+def test_userinfo_server_error_not_retried(client):
+    respx.post(f"{BASE}/v1/oauth2/token").respond(200, json={"access_token": "AT", "expires_in": 1})
+    oauth2 = respx.get(f"{BASE}/v1/identity/oauth2/userinfo").respond(500)
+    _, q = start(client)
+    assert "error" in fragment(client.get(f"/api/auth/paypal/callback?code=C&state={q['state']}"))
+    assert oauth2.call_count == 3  # the client's own GET retries (5xx is retried for reads), no other variant
 
 
 @respx.mock
