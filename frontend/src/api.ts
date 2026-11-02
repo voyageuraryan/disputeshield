@@ -124,6 +124,7 @@ export type Shipment = {
   status: string | null;
   delivered_at: string | null;
   delivered_address: Record<string, string> | null;
+  delivery_recorded_by?: string | null;
 };
 
 export type Order = {
@@ -138,6 +139,7 @@ export type Order = {
   paypal_order_id: string | null;
   capture_id: string | null;
   invoice_id: string | null;
+  digital_only?: boolean;
   shipments: Shipment[];
 };
 
@@ -200,4 +202,23 @@ export const authApi = {
   config: () => req<{ mode: "paypal" | "off" }>("/api/auth/config"),
   me: () => req<{ email: string | null; name: string | null; expires_at: number | null }>("/api/auth/me"),
   startUrl: (next: string) => `${API_BASE}/api/auth/paypal/start?next=${encodeURIComponent(next)}`,
+};
+
+// ---- store back-office: orders, tracking, delivery (merchant only) ---------------------------
+
+export type StoreOrder = Order & { digital_only: boolean; disputes: string[] };
+export type DeliveryAddress = { address_line_1: string; admin_area_2?: string; admin_area_1?: string; postal_code: string; country_code: string };
+
+export const ordersApi = {
+  list: () => req<StoreOrder[]>("/api/store/orders"),
+  addTracking: (orderId: number, carrier: string, trackingNumber: string) =>
+    req<{ id: number }>(`/api/store/orders/${orderId}/shipments`, {
+      method: "POST",
+      body: JSON.stringify({ carrier, tracking_number: trackingNumber }),
+    }),
+  recordDelivery: (orderId: number, shipmentId: number, deliveredOn: string, address?: DeliveryAddress) =>
+    req<Shipment>(`/api/store/orders/${orderId}/shipments/${shipmentId}/delivery`, {
+      method: "POST",
+      body: JSON.stringify({ delivered_on: deliveredOn, address: address ?? null }),
+    }),
 };

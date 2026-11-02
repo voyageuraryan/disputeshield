@@ -36,16 +36,32 @@ function Account() {
   );
 }
 
+/** Merchant pages (queue, orders, settings) appear only for a signed-in merchant (or when login is switched off
+ * for local dev). Buyers using the store, and anyone signed out, see only the Store tab. */
+export function useMerchantNav(): boolean {
+  useLocation(); // re-check the session on navigation (e.g. right after logging in or out)
+  const [authOff, setAuthOff] = useState(false);
+  useEffect(() => {
+    authApi
+      .config()
+      .then((c) => setAuthOff(c.mode === "off"))
+      .catch(() => setAuthOff(false));
+  }, []);
+  return authOff || !tokenExpired(getToken());
+}
+
 export default function Layout() {
+  const merchant = useMerchantNav();
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header className="border-b bg-white">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-4 gap-y-2 px-3 py-3 sm:px-4">
           <span className="text-lg font-semibold">DisputeShield</span>
           <nav className="flex gap-1 sm:gap-2">
-            <NavLink to="/queue" className={link}>Disputes</NavLink>
+            {merchant && <NavLink to="/queue" className={link}>Disputes</NavLink>}
+            {merchant && <NavLink to="/orders" className={link}>Orders</NavLink>}
             <NavLink to="/store" className={link}>Store</NavLink>
-            <NavLink to="/settings" className={link}>Settings</NavLink>
+            {merchant && <NavLink to="/settings" className={link}>Settings</NavLink>}
           </nav>
           <Account />
         </div>

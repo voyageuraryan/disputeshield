@@ -44,6 +44,9 @@ class Shipment(SQLModel, table=True):
     status: Optional[str] = None
     delivered_at: Optional[datetime] = None
     delivered_address: Optional[dict] = _json_col()
+    # "merchant" when the merchant recorded delivery from the carrier's confirmation (sandbox carriers never
+    # report delivery); None when it came from a carrier feed / seed data.
+    delivery_recorded_by: Optional[str] = None
 
 
 class MessageSender(str, Enum):

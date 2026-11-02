@@ -22,6 +22,8 @@ export const LABELS: Record<string, string> = {
   accept_claim: "refund the buyer",
   make_offer: "make an offer",
   appeal: "appeal",
+  escalate: "escalate to a PayPal claim",
+  send_message: "message the buyer",
   acknowledge_return_item: "acknowledge a return",
   delivery_confirmation: "Delivery confirmation",
   tracking: "Tracking",
@@ -119,4 +121,12 @@ export function addressLines(a: Record<string, string> | null | undefined) {
   return [a.address_line_1, a.address_line_2, [a.admin_area_2, a.admin_area_1, a.postal_code].filter(Boolean).join(", "), a.country_code].filter(
     Boolean,
   ) as string[];
+}
+
+/** How a FIGHT reaches PayPal at the case's current stage (mirrors build_action_request on the server). */
+export function fightRoute(allowed: string[]): "evidence" | "supporting" | "escalate" | null {
+  if (allowed.includes("provide_evidence")) return "evidence";
+  if (allowed.includes("provide_supporting_info")) return "supporting";
+  if (allowed.includes("escalate")) return "escalate";
+  return null;
 }

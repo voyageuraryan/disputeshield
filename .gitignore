@@ -8,3 +8,5 @@ frontend/dist/
 backend/recorded_webhooks/
 backend/artifacts/
 .venv-e2e/
+e2e/sandbox-accounts.env
+.run/

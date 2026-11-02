@@ -59,6 +59,9 @@ How the decision works (the rules already applied it; you explain it):
   evidence justifies it - a buyer message (for example "it arrived") or a listing that contradicts or
   supports the complaint - and you must cite that evidence item's id. Otherwise keep the baseline.
 - Only choose an action PayPal currently allows (see allowed_actions); GATHER_MORE is always possible.
+- What DisputeShield can send: FIGHT = evidence, supporting info, or (in an inquiry where PayPal takes no
+  evidence yet) escalating the case to a PayPal claim with the seller note; SETTLE = accept the claim, which
+  refunds the buyer in full. It cannot send partial offers or messages to the buyer, so never suggest them.
 
 Rules for your output:
 - Cite evidence only by the integer ids in the case file. Never invent evidence, facts, dates or ids.

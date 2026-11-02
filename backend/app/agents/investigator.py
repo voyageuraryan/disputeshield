@@ -268,9 +268,11 @@ class Investigator:
                 match = {True: "matches the order's shipping address",
                          False: f"does NOT match the order's shipping address ({_addr(order.shipping_address)})",
                          None: "address not recorded"}[same]
+                by = (" (recorded by the merchant from the carrier's confirmation)"
+                      if sh.delivery_recorded_by == "merchant" else "")
                 row = self.evidence(type="delivery_confirmation", source="store",
                                     source_ref=f"store:shipment/{sh.id}/delivery",
-                                    summary=f"Carrier delivered {_day(sh.delivered_at)} to {where}; {match}",
+                                    summary=f"Carrier delivered {_day(sh.delivered_at)} to {where}; {match}{by}",
                                     flags=[{True: "address_match", False: "address_mismatch",
                                             None: "address_unknown"}[same]])
                 self.step(f"Delivery address {'matches' if same else 'differs from' if same is False else 'unknown vs'} "

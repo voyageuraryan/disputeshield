@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from sqlmodel import Session, select
 
 from app.agents.investigator import build_case_file
+from app.catalog import digital_only
 from app.api.decisions import DecisionOut, _out
 from app.agents.runner import run_agents
 from app.db import get_engine, get_session
@@ -65,6 +66,7 @@ class ShipmentOut(BaseModel):
     status: str | None
     delivered_at: datetime | None
     delivered_address: dict | None
+    delivery_recorded_by: str | None = None
 
 
 class OrderOut(BaseModel):
@@ -79,6 +81,7 @@ class OrderOut(BaseModel):
     paypal_order_id: str | None
     capture_id: str | None
     invoice_id: str | None
+    digital_only: bool = False
     shipments: list[ShipmentOut]
 
 
@@ -135,10 +138,13 @@ def _find(session: Session, dispute_id: str) -> Dispute:
 
 def _order(session: Session, order_id: int | None) -> OrderOut | None:
     o = session.get(Order, order_id) if order_id else None
-    if o is None:
-        return None
+    return order_out(session, o) if o else None
+
+
+def order_out(session: Session, o: Order) -> OrderOut:
     ships = session.exec(select(Shipment).where(Shipment.order_id == o.id).order_by(Shipment.id)).all()
-    return OrderOut(**o.model_dump(include=set(OrderOut.model_fields) - {"shipments"}),
+    return OrderOut(**o.model_dump(include=set(OrderOut.model_fields) - {"shipments", "digital_only"}),
+                    digital_only=digital_only(o.items),
                     shipments=[ShipmentOut(**s.model_dump(include=set(ShipmentOut.model_fields))) for s in ships])
 
 

@@ -171,3 +171,12 @@ def test_baseline_respects_what_paypal_allows():
 
 def test_steps_apart():
     assert steps_apart("SETTLE", "FIGHT") == 2 and steps_apart("GATHER_MORE", "FIGHT") == 1
+
+
+def test_baseline_wording_when_only_fight_is_blocked():
+    """Inquiry-stage SNAD (seen live): PayPal allows accept_claim/make_offer but no evidence."""
+    from app.rules.evidence_rules import economic_baseline as eb
+    strong = type("C", (), {"rule_score": Decimal("0.88"), "missing": []})()
+    assert "settling is still possible" in eb(strong, Decimal("45"), Decimal("25"), can_fight=False).why
+    assert "does not allow a response right now" in eb(strong, Decimal("45"), Decimal("25"),
+                                                        can_fight=False, can_settle=False).why

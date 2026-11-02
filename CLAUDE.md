@@ -12,6 +12,7 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 - Hosting: Render (one web service for API, one static site for frontend)
 
 ## Commands
+- Everything at once (tunnel + backend + frontend, auto-rewires the tunnel URL): ./dev.sh  (stop: ./dev.sh stop)
 - Backend dev: cd backend && uvicorn app.main:app --reload --port 8000
 - Backend tests: cd backend && pytest -q
 - Frontend dev: cd frontend && npm run dev

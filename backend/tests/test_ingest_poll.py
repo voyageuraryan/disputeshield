@@ -68,9 +68,9 @@ def summary(dispute_id, update_time):
             "dispute_amount": {"currency_code": "USD", "value": "5.00"}}
 
 
-def detail(dispute_id, update_time):
+def detail(dispute_id, update_time, **changes):
     d = copy.deepcopy(DISPUTE)
-    d.update(dispute_id=dispute_id, update_time=update_time)
+    d.update(dispute_id=dispute_id, update_time=update_time, **changes)
     return d
 
 
@@ -88,7 +88,8 @@ async def test_poll_ingests_new_and_changed_only(pp, engine):
                                             summary("PP-D-2", "2026-10-31T11:00:00Z")]}),
     ]
     d1 = {"update_time": "2026-10-31T10:00:00Z"}  # PayPal serves the current version
-    respx.get(f"{LIST}/PP-D-1").mock(side_effect=lambda req: httpx.Response(200, json=detail("PP-D-1", d1["update_time"])))
+    respx.get(f"{LIST}/PP-D-1").mock(side_effect=lambda req: httpx.Response(
+        200, json=detail("PP-D-1", d1["update_time"], **{k: v for k, v in d1.items() if k != "update_time"})))
     g2 = respx.get(f"{LIST}/PP-D-2").respond(200, json=detail("PP-D-2", "2026-10-31T11:00:00Z"))
 
     first = await poll_once(engine, pp)
@@ -99,7 +100,7 @@ async def test_poll_ingests_new_and_changed_only(pp, engine):
     assert await poll_once(engine, pp) == []  # nothing changed: no detail fetches
     assert g2.call_count == 1  # ingest only (investigator reuses the fresh copy); second poll fetches nothing
 
-    d1["update_time"] = "2026-11-01T10:00:00Z"  # PP-D-1 changes at PayPal
+    d1.update(update_time="2026-11-01T10:00:00Z", status="UNDER_REVIEW")  # PP-D-1 changes at PayPal
     third = await poll_once(engine, pp)
     assert [r.paypal_dispute_id for r in third] == ["PP-D-1"]
     with Session(engine) as s:

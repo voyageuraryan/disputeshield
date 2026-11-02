@@ -233,7 +233,7 @@ async def test_fight_not_allowed_by_paypal(pp, engine, demo):
     assert case.can_fight is False
     fight = rec("FIGHT", "high", ids_of(case, "tracking", "buyer_message"))
     result, steps, _, _ = await run_analyst(engine, did, case, ScriptedLLM(fight, fight))
-    assert result.baseline.action == "GATHER_MORE" and "does not allow a response right now" in result.baseline.why
+    assert result.baseline.action == "GATHER_MORE" and "does not accept evidence at this stage (settling is still possible)" in result.baseline.why
     assert result.needs_human
     assert any(p.startswith("FIGHT is not possible now; PayPal allows only ['accept_claim']") for p in result.problems)
 
@@ -278,3 +278,9 @@ async def test_graph_ends_without_approval_when_needs_human(pp, engine, demo, tm
         actions = [a.action for a in s.exec(select(AgentStep).order_by(AgentStep.id)).all()]
     assert "Waiting for merchant approval" not in actions
     assert not any(a.startswith("Resolution") for a in actions)
+
+
+def test_prompt_only_offers_actions_the_app_can_send():
+    from app.agents.analyst import SYSTEM_PROMPT
+    assert "escalating the case to a PayPal claim" in SYSTEM_PROMPT
+    assert "cannot send partial offers or messages" in SYSTEM_PROMPT

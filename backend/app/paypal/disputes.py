@@ -175,13 +175,14 @@ async def get_dispute(dispute_id: str, *, client: PayPalClient | None = None) ->
 # acknowledge_return_item. Seen live on a CHARGEBACK under PayPal review:
 # rels = self, accept_claim, adjudicate, provide_supporting_info, require_evidence.
 
-# Ways to argue the merchant's side.
-FIGHT_ACTIONS = ("provide_evidence", "provide_supporting_info", "appeal")
+# Ways to argue the merchant's side. escalate (INQUIRY stage only) hands the case to PayPal as a claim when
+# PayPal won't take evidence yet (e.g. a not-as-described inquiry); PayPal then asks for evidence.
+FIGHT_ACTIONS = ("provide_evidence", "provide_supporting_info", "appeal", "escalate")
 # Ways to concede or settle (make_offer: INQUIRY stage only, per spec).
 SETTLE_ACTIONS = ("accept_claim", "make_offer")
 # Sandbox-only test endpoints that simulate PayPal; never merchant actions.
 SANDBOX_ONLY_ACTIONS = ("adjudicate", "require_evidence")
-MERCHANT_ACTIONS = FIGHT_ACTIONS + SETTLE_ACTIONS + ("acknowledge_return_item", "send_message", "escalate")
+MERCHANT_ACTIONS = FIGHT_ACTIONS + SETTLE_ACTIONS + ("acknowledge_return_item", "send_message")
 
 
 def allowed_actions(raw: dict | None) -> list[str]:
@@ -204,6 +205,8 @@ def allowed_actions(raw: dict | None) -> list[str]:
 #   provide-supporting-info  JSON {"notes"} or multipart "input" {"notes"} + files. Allowed while PayPal
 #                          reviews a CHARGEBACK / PRE_ARBITRATION / ARBITRATION.
 #   accept-claim           JSON {"note"}; PayPal refunds the buyer.
+#   escalate               JSON {"note"} (1-2000 chars; schema "escalate", "A merchant request to escalate a
+#                          dispute, by ID, to a PayPal claim"). Spec: the stage must be INQUIRY.
 # Files: .jpg .jpeg .gif .png .pdf, < 10 MB each, <= 50 MB per call.
 # None of these document PayPal-Request-Id, so the client never re-sends them after an
 # ambiguous failure (5xx / timeout); reconcile with get_dispute() instead.
@@ -278,6 +281,18 @@ async def accept_claim(decision, dispute_id: str, note: str, *, client: PayPalCl
     require_approved(decision)
     _check_id(dispute_id)
     return await (client or get_paypal_client()).post(f"{DISPUTES_PATH}/{dispute_id}/accept-claim",
+                                                      json={"note": note})
+
+
+ESCALATE_NOTE_MAX = 2000
+
+
+async def escalate(decision, dispute_id: str, note: str, *, client: PayPalClient | None = None) -> dict:
+    require_approved(decision)
+    _check_id(dispute_id)
+    if not note or len(note) > ESCALATE_NOTE_MAX:
+        raise ValueError(f"escalate note must be 1-{ESCALATE_NOTE_MAX} characters")
+    return await (client or get_paypal_client()).post(f"{DISPUTES_PATH}/{dispute_id}/escalate",
                                                       json={"note": note})
 
 

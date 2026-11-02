@@ -1,20 +1,24 @@
-"""Demo storefront API: catalog, PayPal checkout (create/capture), shipment tracking."""
+"""Demo storefront API: catalog, PayPal checkout (create/capture), shipment tracking.
+
+Catalog and checkout are public (buyers never log in); listing orders and adding tracking are merchant-only."""
 
 from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import date, datetime, time, timezone
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
-from app.catalog import PRODUCTS, Product
+from app.auth import require_merchant
+from app.catalog import PRODUCTS, Product, digital_only
 from app.config import get_settings
 from app.db import get_session
-from app.models import Order, Shipment
+from app.api.disputes import OrderOut, order_out
+from app.models import AgentStep, Dispute, Order, Shipment
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.orders import LineItem, capture_order, create_order, parse_capture
 from app.paypal.tracking import add_tracking
@@ -158,6 +162,14 @@ class ShipmentIn(BaseModel):
     tracking_number: str = Field(min_length=1, max_length=64)
     notify_payer: bool = False
 
+    @field_validator("carrier", "tracking_number")
+    @classmethod
+    def _strip(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("must not be blank")
+        return v
+
 
 class ShipmentOut(BaseModel):
     id: int
@@ -169,7 +181,15 @@ class ShipmentOut(BaseModel):
     paypal_tracker_added: bool
 
 
-@router.post("/orders/{order_id}/shipments", response_model=ShipmentOut)
+def _note_on_disputes(session: Session, order: Order, action: str, detail: dict) -> None:
+    """Show tracking/delivery changes on the timeline of every dispute about this order."""
+    for d in session.exec(select(Dispute).where(Dispute.order_id == order.id)).all():
+        session.add(AgentStep(dispute_id=d.id, agent="merchant", action=action, detail=detail))
+    session.commit()
+
+
+@router.post("/orders/{order_id}/shipments", response_model=ShipmentOut,
+             dependencies=[Depends(require_merchant)])  # merchant-only: writes to PayPal
 async def add_shipment(
     order_id: int,
     body: ShipmentIn,
@@ -181,6 +201,12 @@ async def add_shipment(
         raise HTTPException(404, "unknown order")
     if not (order.paypal_order_id and order.capture_id):
         raise HTTPException(409, "order is not captured in PayPal; tracking can only be added to captured orders")
+    if digital_only(order.items):
+        raise HTTPException(409, "this order only has digital items; there is nothing to ship")
+    dup = session.exec(select(Shipment).where(Shipment.order_id == order.id,
+                                              Shipment.tracking_number == body.tracking_number)).first()
+    if dup:
+        raise HTTPException(409, f"tracking {body.tracking_number} is already on order #{order.id}")
     try:
         await add_tracking(order.paypal_order_id, capture_id=order.capture_id,
                            tracking_number=body.tracking_number, carrier=body.carrier,
@@ -192,22 +218,95 @@ async def add_shipment(
     session.add(shipment)
     session.commit()
     session.refresh(shipment)
-    return ShipmentOut(**shipment.model_dump(include={"id", "order_id", "carrier", "tracking_number",
-                                                      "status", "delivered_at"}),
-                       paypal_tracker_added=True)
+    out = ShipmentOut(**shipment.model_dump(include={"id", "order_id", "carrier", "tracking_number",
+                                                     "status", "delivered_at"}),
+                      paypal_tracker_added=True)
+    _note_on_disputes(session, order, f"Added tracking {body.tracking_number} ({body.carrier}) to order #{order.id} "
+                      "and uploaded it to PayPal; re-analyse to include it",
+                      {"shipment_id": shipment.id})
+    return out
 
 
-class OrderOut(BaseModel):
+class DeliveryIn(BaseModel):
+    """Delivery as confirmed by the carrier (the merchant copies it from the carrier's tracking page).
+    address None = delivered to the order's shipping address."""
+    delivered_on: date
+    address: dict[str, str] | None = None
+
+    @field_validator("address")
+    @classmethod
+    def _address(cls, v: dict[str, str] | None) -> dict[str, str] | None:
+        if v is None:
+            return None
+        v = {k: (val or "").strip() for k, val in v.items() if k in ADDRESS_KEYS}
+        missing = [k for k in ("address_line_1", "postal_code", "country_code") if not v.get(k)]
+        if missing:
+            raise ValueError(f"address needs {', '.join(missing)}")
+        v["country_code"] = v["country_code"].upper()
+        if len(v["country_code"]) != 2:
+            raise ValueError("country_code must be 2 letters, e.g. US")
+        return v
+
+
+ADDRESS_KEYS = ("address_line_1", "address_line_2", "admin_area_2", "admin_area_1", "postal_code", "country_code")
+
+
+class DeliveryOut(BaseModel):
     id: int
-    paypal_order_id: str | None
-    capture_id: str | None
-    buyer_email: str | None
-    amount: Decimal
-    currency: str
-    items: list[dict] | None
-    created_at: datetime
+    order_id: int
+    status: str | None
+    delivered_at: datetime | None
+    delivered_address: dict | None
+    delivery_recorded_by: str | None
 
 
-@router.get("/orders", response_model=list[OrderOut])
-def list_orders(session: Session = Depends(get_session)) -> list[Order]:
-    return list(session.exec(select(Order).order_by(Order.id.desc())).all())
+@router.post("/orders/{order_id}/shipments/{shipment_id}/delivery", response_model=DeliveryOut,
+             dependencies=[Depends(require_merchant)])
+def record_delivery(order_id: int, shipment_id: int, body: DeliveryIn,
+                    session: Session = Depends(get_session)) -> DeliveryOut:
+    """Record the carrier's delivery confirmation (date + address). Stored in our DB only: PayPal has no
+    endpoint for a seller to mark a parcel delivered, and the sandbox carriers never report delivery."""
+    order = session.get(Order, order_id)
+    shipment = session.get(Shipment, shipment_id)
+    if order is None or shipment is None or shipment.order_id != order.id:
+        raise HTTPException(404, "unknown order or shipment")
+    if not shipment.tracking_number:
+        raise HTTPException(409, "add a tracking number before recording delivery")
+    today = datetime.now(timezone.utc).date()
+    ordered = order.created_at.date()
+    if body.delivered_on > today:
+        raise HTTPException(422, "delivery date can't be in the future")
+    if body.delivered_on < ordered:
+        raise HTTPException(422, f"delivery date can't be before the order date ({ordered})")
+    address = body.address or order.shipping_address
+    if not address:
+        raise HTTPException(422, "the order has no shipping address; enter the delivery address")
+    shipment.delivered_at = datetime.combine(body.delivered_on, time(12, 0), tzinfo=timezone.utc)
+    shipment.delivered_address = address
+    shipment.status = "DELIVERED"
+    shipment.delivery_recorded_by = "merchant"
+    session.add(shipment)
+    session.commit()
+    session.refresh(shipment)
+    out = DeliveryOut(**shipment.model_dump(include=set(DeliveryOut.model_fields)))
+    _note_on_disputes(session, order, f"Recorded delivery of {shipment.tracking_number} on {body.delivered_on} "
+                      + ("to the order's shipping address" if body.address is None else "to a different address")
+                      + "; re-analyse to include it", {"shipment_id": shipment.id})
+    return out
+
+
+class StoreOrderOut(OrderOut):
+    disputes: list[str]  # PayPal dispute ids about this order
+
+
+@router.get("/orders", response_model=list[StoreOrderOut],
+            dependencies=[Depends(require_merchant)])  # merchant-only: lists buyer emails
+def list_orders(session: Session = Depends(get_session)) -> list[StoreOrderOut]:
+    # Hide abandoned checkouts (a PayPal order that was never captured); seeded/demo orders have no PayPal ids.
+    abandoned = Order.paypal_order_id.is_not(None) & Order.capture_id.is_(None)
+    orders = session.exec(select(Order).where(~abandoned).order_by(Order.id.desc())).all()
+    out = []
+    for o in orders:
+        ids = session.exec(select(Dispute.paypal_dispute_id).where(Dispute.order_id == o.id)).all()
+        out.append(StoreOrderOut(**order_out(session, o).model_dump(), disputes=list(ids)))
+    return out

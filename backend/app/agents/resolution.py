@@ -4,7 +4,8 @@ resolve()  (graph node "resolve", before the approval interrupt)
   FIGHT   LLM drafts a factual seller note (< 1,000 chars, cites only case evidence ids; retry once,
           then NEEDS_HUMAN - rule 7). A one-page PDF evidence summary is generated (ReportLab).
           Request: provide-evidence (when PayPal allows it) with PROOF_OF_FULFILLMENT + tracking_info,
-          else provide-supporting-info (case under PayPal review), both with the PDF attached.
+          else provide-supporting-info (case under PayPal review), both with the PDF attached;
+          else, in an inquiry that takes no evidence, escalate (note only) so PayPal reviews it as a claim.
   SETTLE  accept-claim with a short templated note.
   GATHER_MORE  nothing to send; the merchant may approve with a different action or reject.
 
@@ -34,6 +35,7 @@ from app.paypal.disputes import (
     Attachment,
     NotApprovedError,
     accept_claim,
+    escalate,
     provide_evidence,
     provide_supporting_info,
 )
@@ -200,6 +202,10 @@ def build_action_request(session: Session, dispute: Dispute, case: CaseFile, act
             return {"endpoint": "provide-evidence", "evidences": [evidence], "attachments": attachments}
         if "provide_supporting_info" in case.allowed_actions:
             return {"endpoint": "provide-supporting-info", "notes": note, "attachments": attachments}
+        if "escalate" in case.allowed_actions:
+            # Inquiry where PayPal takes no evidence yet: ask PayPal to review it as a claim (note only; the
+            # escalate request has no file part). PayPal then asks for evidence and we analyse again.
+            return {"endpoint": "escalate", "note": note}
         raise ValueError(f"PayPal allows no way to contest this dispute now (allowed: {case.allowed_actions})")
     if action == "SETTLE":
         if "accept_claim" not in case.allowed_actions:
@@ -298,6 +304,8 @@ async def _send(decision: Decision, pid: str, req: dict, client: PayPalClient | 
         return await provide_supporting_info(decision, pid, req["notes"], attachments, client=client)
     if req.get("endpoint") == "accept-claim":
         return await accept_claim(decision, pid, req["note"], client=client)
+    if req.get("endpoint") == "escalate":
+        return await escalate(decision, pid, req["note"], client=client)
     raise ValueError(f"decision {decision.id} has no PayPal request to execute")
 
 

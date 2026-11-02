@@ -262,3 +262,43 @@ def test_callback_error_and_expired_session(auth_stack, browser):
     pg.wait_for_url(re.compile(r".*/login\?.*reason="), timeout=8000)
     pg.wait_for_selector("text=Your session ended. Please log in again.")  # login page loads lazily
     ctx.close()
+
+
+# ---- orders: tracking + delivery (G28) ------------------------------------------------------
+
+def test_orders_page_record_delivery(stack, page):
+    page.goto(f"{stack.base}/orders")
+    page.wait_for_selector("text=Order #")
+    assert page.get_by_role("link", name="Orders").count() == 1
+    ebooks = stack.sql("select count(*) from orders where items like ?", "%EBOOK-01%")[0][0]
+    assert ebooks > 0 and page.locator("text=Digital item: nothing to ship").count() == ebooks
+    card = page.locator("section", has_text="9400111899220000000002")  # Nina's lamp, in transit
+    assert "In transit" in card.inner_text() or "in transit" in card.inner_text()
+    card.get_by_role("button", name="Record delivery").click()
+    card.get_by_role("button", name="Save delivery").click()
+    page.wait_for_selector("text=Delivery recorded for order")
+    card = page.locator("section", has_text="9400111899220000000002")
+    assert "recorded by you" in card.inner_text()
+    row = stack.sql("select status, delivery_recorded_by from shipments where tracking_number=?", "9400111899220000000002")
+    assert row == [("DELIVERED", "merchant")]
+    assert real_errors(page) == []
+
+
+def test_case_page_shipping_card(stack, page):
+    page.goto(f"{stack.base}/cases/PP-DEMO-B")  # phone case, never shipped
+    card = page.locator("section", has_text="Shipping & tracking")
+    card.wait_for()
+    assert "No tracking yet" in card.inner_text()
+    card.get_by_role("button", name="+ Add tracking").click()
+    save = card.get_by_role("button", name="Save tracking")
+    assert save.is_disabled()
+    card.get_by_label("Tracking number").fill("9400111899229999999999")
+    assert save.is_enabled()  # not clicked: it would call PayPal
+    card.get_by_role("button", name="Cancel").click()
+    assert real_errors(page) == []
+
+
+def test_orders_page_fits_a_phone(stack, phone):
+    phone.goto(f"{stack.base}/orders")
+    phone.wait_for_selector("text=Order #")
+    assert overflow(phone) == 0

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { caseStatus, dueIn, label, money } from "../format";
+import { caseStatus, dueIn, fightRoute, label, money } from "../format";
 
 const H = 3_600_000;
 const NOW = Date.parse("2026-11-01T12:00:00Z");
@@ -37,4 +37,13 @@ describe("labels and money", () => {
   });
   it("falls back to readable text", () => expect(label("SOME_NEW_CODE")).toBe("some new code"));
   it("formats currency", () => expect(money("61.5", "USD")).toMatch(/61\.50/));
+});
+
+describe("fightRoute", () => {
+  it("prefers evidence, then supporting info, then escalation", () => {
+    expect(fightRoute(["accept_claim", "provide_evidence", "escalate"])).toBe("evidence");
+    expect(fightRoute(["provide_supporting_info", "accept_claim"])).toBe("supporting");
+    expect(fightRoute(["accept_claim", "make_offer", "escalate", "send_message"])).toBe("escalate");
+    expect(fightRoute(["accept_claim"])).toBeNull();
+  });
 });

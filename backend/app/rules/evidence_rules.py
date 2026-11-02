@@ -157,7 +157,9 @@ def economic_baseline(checklist: ChecklistResult, amount: Decimal, threshold: De
         b = Baseline("GATHER_MORE", f"rule score {s:.2f} is between {SETTLE_BELOW} and {FIGHT_AT}"
                                     + (f"; missing {', '.join(checklist.missing)}" if checklist.missing else ""))
     if b.action == "FIGHT" and not can_fight:
-        return Baseline("GATHER_MORE", b.why + "; but PayPal does not allow a response right now")
+        return Baseline("GATHER_MORE", b.why + ("; but PayPal does not accept evidence at this stage"
+                                                " (settling is still possible)" if can_settle
+                                                else "; but PayPal does not allow a response right now"))
     if b.action == "SETTLE" and not can_settle:
         return Baseline("GATHER_MORE", b.why + "; but PayPal does not allow settling right now")
     return b

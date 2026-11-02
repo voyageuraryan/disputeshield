@@ -33,11 +33,12 @@ def sent_input(route, i=0):
     return json.loads(INPUT.search(route.calls[i].request.content).group(1))
 
 
-def paypal_now(api, pid, status="WAITING_FOR_SELLER_RESPONSE", rels=SELLER_TURN, update="2026-10-31T10:00:00.000Z"):
+def paypal_now(api, pid, status="WAITING_FOR_SELLER_RESPONSE", rels=SELLER_TURN, update="2026-10-31T10:00:00.000Z",
+               stage="CHARGEBACK"):
     """Change what GET /disputes/{pid} returns from now on (PayPal's current state)."""
     api.mock.get(f"{DISPUTES}/{pid}").respond(200, json={
         "dispute_id": pid, "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "status": status,
-        "dispute_life_cycle_stage": "CHARGEBACK", "dispute_amount": {"currency_code": "USD", "value": "89.00"},
+        "dispute_life_cycle_stage": stage, "dispute_amount": {"currency_code": "USD", "value": "89.00"},
         "update_time": update, "links": [{"rel": r, "href": "x", "method": "POST"} for r in ("self", *rels)]})
 
 
@@ -64,6 +65,67 @@ async def test_second_click_after_execution_sends_nothing(api, engine, demo):
     assert api.post(f"/api/decisions/{dec_id}/approve").json()["status"] == "EXECUTED"
     assert api.post(f"/api/decisions/{dec_id}/approve").status_code == 409
     assert pe.call_count == 1
+
+
+# ---- PayPal updates the case because *we* responded (seen live 2026-11-01, PP-R-ADP-10195745) ----
+
+async def ingest(api, engine, pid="PP-D-A"):
+    with Session(engine) as s:
+        return await ingest_dispute(s, pid, client=api.pp)
+
+
+def proposed(engine, did):
+    with Session(engine) as s:
+        return [d.id for d in s.exec(select(Decision).where(Decision.dispute_id == did,
+                                                            Decision.status == DecisionStatus.PROPOSED)).all()]
+
+
+async def test_paypal_update_after_our_response_starts_no_new_analysis(api, engine, demo):
+    _, dec_id, did = await start_case(api, engine, demo["A"], SELLER_TURN)
+    api.mock.post(f"{DISPUTES}/PP-D-A/provide-evidence").respond(200, json={})
+    assert api.post(f"/api/decisions/{dec_id}/approve").json()["status"] == "EXECUTED"
+    await ingest(api, engine)  # the dispute row now mirrors PayPal (INQUIRY, waiting for us)
+
+    # PayPal moves to review because of our evidence and fires CUSTOMER.DISPUTE.UPDATED
+    paypal_now(api, "PP-D-A", status="UNDER_REVIEW", rels=["provide_supporting_info"], stage="INQUIRY",
+               update="2026-10-31T11:00:00.000Z")
+    assert (await ingest(api, engine)).run_key is None
+    # ...and re-saves it again with only a new update_time
+    paypal_now(api, "PP-D-A", status="UNDER_REVIEW", rels=["provide_supporting_info"], stage="INQUIRY",
+               update="2026-10-31T12:00:00.000Z")
+    assert (await ingest(api, engine)).run_key is None
+    assert proposed(engine, did) == [] and status_of(engine, dec_id) == DecisionStatus.EXECUTED
+    assert any("after your response" in a for _, a in actions(engine, did))
+
+
+async def test_seller_asked_again_after_response_gets_new_analysis(api, engine, demo):
+    _, dec_id, did = await start_case(api, engine, demo["A"], SELLER_TURN)
+    api.mock.post(f"{DISPUTES}/PP-D-A/provide-evidence").respond(200, json={})
+    api.post(f"/api/decisions/{dec_id}/approve")
+    paypal_now(api, "PP-D-A", status="UNDER_REVIEW", rels=["provide_supporting_info"], stage="INQUIRY")
+    await ingest(api, engine)
+    # escalation to a chargeback is a new request to the seller
+    paypal_now(api, "PP-D-A", status="UNDER_REVIEW", rels=["provide_supporting_info"], stage="CHARGEBACK")
+    assert (await ingest(api, engine)).run_key
+    # so is PayPal asking for more evidence
+    paypal_now(api, "PP-D-A", status="WAITING_FOR_SELLER_RESPONSE", rels=SELLER_TURN, stage="CHARGEBACK")
+    assert (await ingest(api, engine)).run_key
+
+
+async def test_run_key_ignores_update_time_but_not_material_changes(api, engine, demo):
+    from app.ingest import run_key
+    from app.paypal.disputes import Dispute as PPDispute
+    base = {"dispute_id": "PP-K", "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "status": "UNDER_REVIEW",
+            "dispute_life_cycle_stage": "CHARGEBACK", "update_time": "2026-10-31T10:00:00Z",
+            "links": [{"rel": "provide_supporting_info", "href": "x"}]}
+    k = run_key(PPDispute.model_validate(base))
+
+    def key(**ch):
+        return run_key(PPDispute.model_validate({**base, **ch}))
+    assert key(update_time="2026-11-02T10:00:00Z") == k
+    assert key(status="WAITING_FOR_SELLER_RESPONSE") != k
+    assert key(links=[]) != k
+    assert key(messages=[{"posted_by": "BUYER", "content": "where is it?"}]) != k
 
 
 # ---- PayPal state changed since the recommendation -------------------------------------------

@@ -26,7 +26,7 @@ from app.db import create_db_and_tables, get_engine
 from app.main import app
 from app.models import AgentStep, Decision, DecisionStatus, Dispute, Shipment
 from app.paypal.client import PayPalClient, get_paypal_client
-from app.paypal.disputes import Attachment, NotApprovedError, accept_claim, provide_evidence
+from app.paypal.disputes import Attachment, NotApprovedError, accept_claim, escalate, provide_evidence
 from app.schemas import CaseFile, EvidenceItem, SellerNote
 from app.scripts.seed import seed
 from tests.conftest import BASE, token_response
@@ -169,6 +169,26 @@ def test_settle_and_disallowed(engine, demo):
             build_action_request(s, d, c2, "FIGHT", "n", None)
 
 
+INQUIRY_SNAD = ["accept_claim", "make_offer", "escalate", "send_message"]  # seen live on an SNAD inquiry
+
+
+def test_fight_in_an_inquiry_without_evidence_escalates(engine, demo):
+    did = _dispute_with_order(engine, demo["A"], INQUIRY_SNAD)
+    with Session(engine) as s:
+        d = s.get(Dispute, did)
+        c = build_case_file(s, d)
+        assert c.can_fight and c.can_settle
+        req = build_action_request(s, d, c, "FIGHT", "We shipped what the listing describes.", "/x/e.pdf")
+    assert req == {"endpoint": "escalate", "note": "We shipped what the listing describes."}  # no file part
+
+
+def test_evidence_beats_escalate_when_paypal_takes_both(engine, demo):
+    did = _dispute_with_order(engine, demo["A"], ["provide_evidence", "escalate", "accept_claim"])
+    with Session(engine) as s:
+        d = s.get(Dispute, did)
+        assert build_action_request(s, d, build_case_file(s, d), "FIGHT", "n", None)["endpoint"] == "provide-evidence"
+
+
 # ---- PayPal calls: approval guard + exact wire format ------------------------------------
 
 def decision(status):
@@ -183,6 +203,8 @@ async def test_money_moving_calls_refuse_without_approval(pp, status):
         await accept_claim(decision(status), "PP-D-1", "n", client=pp)
     with pytest.raises(NotApprovedError):
         await provide_evidence(decision(status), "PP-D-1", [], [], client=pp)
+    with pytest.raises(NotApprovedError):
+        await escalate(decision(status), "PP-D-1", "n", client=pp)
     assert route.call_count == 0
 
 
@@ -209,6 +231,17 @@ async def test_accept_claim_json_and_never_resent_on_5xx(pp, sleeps):
     with pytest.raises(Exception):
         await accept_claim(decision(DecisionStatus.APPROVED), "PP-D-1", "Refund.", client=pp)
     assert route.call_count == 1 and json.loads(route.calls[0].request.content) == {"note": "Refund."}
+
+
+@respx.mock
+async def test_escalate_json_matches_spec(pp):
+    respx.post(f"{BASE}/v1/oauth2/token").respond(200, json=token_response())
+    route = respx.post(f"{DISPUTES}/PP-D-1/escalate").respond(200, json={"links": []})
+    await escalate(decision(DecisionStatus.APPROVED), "PP-D-1", "Please review.", client=pp)
+    assert json.loads(route.calls[0].request.content) == {"note": "Please review."}
+    with pytest.raises(ValueError):
+        await escalate(decision(DecisionStatus.APPROVED), "PP-D-1", "x" * 2001, client=pp)
+    assert route.call_count == 1
 
 
 # ---- end to end: graph pauses, API approves, execute calls PayPal ---------------------------
@@ -394,3 +427,25 @@ def test_admin_helpers(api, engine, monkeypatch):
     assert r.status_code == 200 and json.loads(adj.calls[0].request.content) == {"adjudication_outcome": "SELLER_FAVOR"}
     assert api.post("/admin/sandbox/disputes/PP-D-A/adjudicate", json={"outcome": "MAYBE"},
                     headers={"X-Admin-Token": "s3cret"}).status_code == 422
+    # G26: PayPal refuses adjudicate in some states -> the helper explains instead of a bare 502
+    api.mock.post(f"{DISPUTES}/PP-D-B/adjudicate").respond(422, json={
+        "name": "UNPROCESSABLE_ENTITY", "debug_id": "f350719ea974e",
+        "details": [{"issue": "ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE"}]})
+    r = api.post("/admin/sandbox/disputes/PP-D-B/adjudicate", json={"outcome": "SELLER_FAVOR"},
+                 headers={"X-Admin-Token": "s3cret"})
+    assert r.status_code == 502 and "current state" in r.json()["detail"]["hint"]
+
+
+async def test_inquiry_fight_flow_escalates_to_a_claim(api, engine, demo):
+    """G23: delivered case A, but PayPal's inquiry takes no evidence: Fight = escalate with the drafted note."""
+    result, dec_id, did = await start_case(api, engine, demo["A"], INQUIRY_SNAD)
+    assert result["__interrupt__"][0].value["action_request"]["endpoint"] == "escalate"
+    with Session(engine) as s:
+        dec = s.get(Decision, dec_id)
+        assert dec.recommendation == "FIGHT" and dec.draft_note
+    esc = api.mock.post(f"{DISPUTES}/PP-D-A/escalate").respond(200, json={"links": []})
+    r = api.post(f"/decisions/{dec_id}/approve", json={"note": "Delivered 15 Oct to the shipping address (#2)."})
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "EXECUTED" and r.json()["action_request"]["endpoint"] == "escalate"
+    assert json.loads(esc.calls[0].request.content) == {"note": "Delivered 15 Oct to the shipping address (#2)."}
+    assert ("executor", "PayPal accepted escalate for PP-D-A") == actions(engine, did)[-1]

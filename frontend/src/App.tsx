@@ -8,6 +8,7 @@ const Queue = lazy(() => import("./pages/Queue"));
 const CaseDetail = lazy(() => import("./pages/CaseDetail"));
 const Store = lazy(() => import("./pages/Store"));
 const Settings = lazy(() => import("./pages/Settings"));
+const Orders = lazy(() => import("./pages/Orders"));
 const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/queue" element={page(<Queue />)} />
         <Route path="/cases/:disputeId" element={page(<CaseDetail />)} />
         <Route path="/store" element={page(<Store />, false)} />
+        <Route path="/orders" element={page(<Orders />)} />
         <Route path="/settings" element={page(<Settings />)} />
         <Route path="/login" element={page(<Login />, false)} />
         <Route path="/auth/callback" element={page(<AuthCallback />, false)} />

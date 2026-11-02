@@ -6,6 +6,7 @@ match it to a store order, and claim an agent run for this dispute version.
 
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,7 +18,7 @@ from sqlmodel import Session, select
 from app.models import AgentStep, Decision, DecisionStatus, Dispute, Order, ProcessedEvent
 from app.paypal.client import PayPalClient
 from app.paypal.disputes import Dispute as PayPalDispute
-from app.paypal.disputes import get_dispute
+from app.paypal.disputes import allowed_actions, get_dispute
 
 log = logging.getLogger(__name__)
 
@@ -98,9 +99,34 @@ def close_pending_decisions(session: Session, dispute: Dispute, why: str) -> lis
     return [d.id for d in pending]
 
 
+def material_state(pp: PayPalDispute) -> dict:
+    """What PayPal changed that matters to the merchant. update_time alone is not enough:
+    PayPal bumps it (and fires CUSTOMER.DISPUTE.UPDATED) when *we* respond, which must not
+    start a new analysis and put the case back to "awaiting your approval"."""
+    raw = pp.raw or {}
+    due = pp.seller_response_due_date
+    return {
+        "status": pp.status, "stage": pp.dispute_life_cycle_stage, "reason": pp.reason,
+        "state": raw.get("dispute_state"),
+        "amount": str(pp.dispute_amount.value) if pp.dispute_amount else None,
+        "due": due.isoformat() if isinstance(due, datetime) else None,
+        "actions": allowed_actions(raw),
+        "messages": len(raw.get("messages") or []),
+    }
+
+
 def run_key(pp: PayPalDispute) -> str:
-    version = pp.update_time.isoformat() if isinstance(pp.update_time, datetime) else "none"
-    return f"run:{pp.dispute_id}:{version}"
+    """One agent run per material version of the dispute (stable across PayPal's own re-saves)."""
+    m = material_state(pp)
+    version = "|".join(f"{k}={','.join(v) if isinstance(v, list) else v}" for k, v in m.items())
+    return f"run:{pp.dispute_id}:{hashlib.sha1(version.encode()).hexdigest()[:16]}"
+
+
+def seller_turn_again(prev_status: str | None, prev_stage: str | None, pp: PayPalDispute) -> bool:
+    """After the merchant has responded, only a new request for the seller deserves a new analysis."""
+    if pp.dispute_life_cycle_stage and prev_stage and pp.dispute_life_cycle_stage != prev_stage:
+        return True  # escalated, e.g. INQUIRY -> CHARGEBACK
+    return pp.status == "WAITING_FOR_SELLER_RESPONSE" and prev_status != "WAITING_FOR_SELLER_RESPONSE"
 
 
 def claim(session: Session, key: str, kind: str, dispute_row_id: int | None, detail: dict | None = None) -> bool:
@@ -113,6 +139,13 @@ def claim(session: Session, key: str, kind: str, dispute_row_id: int | None, det
     except IntegrityError:  # concurrent claim
         return False
     return True
+
+
+def responded_since_last_run(session: Session, dispute_row_id: int) -> bool:
+    """True when the newest decision on this dispute was sent to PayPal (or is being sent)."""
+    latest = session.exec(select(Decision).where(Decision.dispute_id == dispute_row_id)
+                          .order_by(Decision.id.desc())).first()
+    return latest is not None and latest.status in (DecisionStatus.EXECUTED, DecisionStatus.APPROVED)
 
 
 def already_processed(session: Session, key: str) -> bool:
@@ -130,11 +163,20 @@ async def ingest_dispute(
     """Fetch, upsert, match, and claim an agent run. Commits once at the end, so a
     failure leaves nothing half-recorded and the webhook/poll can safely retry."""
     pp = await get_dispute(paypal_dispute_id, client=client)
+    before = session.exec(select(Dispute).where(Dispute.paypal_dispute_id == pp.dispute_id)).first()
+    prev_status, prev_stage = (before.status, before.stage) if before else (None, None)
     row = upsert_dispute(session, pp)
     claimed = None
     key = run_key(pp)
     if claim(session, key, "agent_run", row.id, {"status": pp.status}):
         claimed = key
+        if responded_since_last_run(session, row.id) and not seller_turn_again(prev_status, prev_stage, pp):
+            claimed = None  # PayPal is processing our response; keep the case as "response sent"
+            session.add(AgentStep(dispute_id=row.id, agent="orchestrator",
+                                  action=f"PayPal updated the case after your response (status {pp.status}); "
+                                         "nothing new is asked of you, so no new analysis",
+                                  detail={"status": pp.status, "stage": pp.dispute_life_cycle_stage,
+                                          "allowed_actions": allowed_actions(pp.raw)}))
     if event_key:
         claim(session, event_key, "webhook", row.id, event_detail)
     session.commit()

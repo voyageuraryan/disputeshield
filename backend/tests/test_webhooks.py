@@ -124,7 +124,8 @@ def test_dispute_created_full_flow(client, engine, paid_order):
         assert d.seller_response_due.year == 2026
         assert d.raw["dispute_id"] == "PP-D-27803"
         keys = {e.key for e in s.exec(select(ProcessedEvent)).all()}
-        assert keys == {f"evt:{EVENT['id']}", "run:PP-D-27803:2026-10-31T12:00:00+00:00"}
+        run = {k for k in keys if k.startswith("run:PP-D-27803:")}
+        assert keys == {f"evt:{EVENT['id']}"} | run and len(run) == 1  # one run per material version
     assert steps(engine) == [("orchestrator", "run_started"), ("orchestrator", "Waiting for merchant approval")]
 
 

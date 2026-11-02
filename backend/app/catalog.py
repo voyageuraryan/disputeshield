@@ -61,3 +61,9 @@ PRODUCTS: dict[str, Product] = {
         ),
     ]
 }
+
+
+def digital_only(items: list[dict] | None) -> bool:
+    """True when every line item is a digital product (nothing to ship or track)."""
+    cats = [getattr(PRODUCTS.get((i or {}).get("sku") or ""), "category", None) for i in items or []]
+    return bool(cats) and all(c == "DIGITAL_GOODS" for c in cats)

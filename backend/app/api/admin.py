@@ -17,6 +17,7 @@ from pydantic import BaseModel
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
+from app.agents.resolution import paypal_issues
 from app.agents.runner import run_agents
 from app.config import get_settings
 from app.db import get_engine, get_session
@@ -84,9 +85,17 @@ def _version(session: Session, dispute_id: str) -> str | None:
         return None
 
 
+STATE_HINT = ("PayPal's sandbox refused this in the case's current state. Seen live: adjudicate is refused on a "
+              "chargeback that PayPal is reviewing, even when the case lists it. Try a case that was escalated "
+              "from an inquiry to a claim, or let PayPal resolve the case on its own schedule.")
+
+
 def _paypal_error(exc: PayPalError) -> HTTPException:
-    return HTTPException(502, {"paypal_status": exc.status_code, "debug_id": exc.debug_id,
-                               "paypal": exc.body if isinstance(exc.body, dict) else None})
+    body = exc.body if isinstance(exc.body, dict) else None
+    detail = {"paypal_status": exc.status_code, "debug_id": exc.debug_id, "paypal": body}
+    if "ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE" in paypal_issues(body):
+        detail["hint"] = STATE_HINT
+    return HTTPException(502, detail)
 
 
 @router.post("/disputes/{dispute_id}/require-evidence")

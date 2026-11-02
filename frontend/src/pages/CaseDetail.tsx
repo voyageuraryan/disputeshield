@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { disputesApi, type Decision, type DisputeDetail, type Evidence, type EvidenceSource } from "../api";
-import { ActionChip, addressLines, caseStatus, Chip, day, Due, label, money, useNow, when } from "../format";
+import { ActionChip, addressLines, caseStatus, Chip, day, Due, fightRoute, label, money, useNow, when } from "../format";
+import ShippingPanel from "../ShippingPanel";
 import Timeline from "../Timeline";
 import { useDisputeEvents } from "../useDisputeEvents";
 
@@ -27,7 +28,7 @@ const Field = ({ k, children }: { k: string; children: React.ReactNode }) => (
 
 // ---- left: facts + order -----------------------------------------------------------------
 
-function Facts({ detail, now }: { detail: DisputeDetail; now: number }) {
+function Facts({ detail, now, onDone }: { detail: DisputeDetail; now: number; onDone: () => void }) {
   const { dispute: d, case: c, order: o } = detail;
   return (
     <div className="space-y-4">
@@ -74,22 +75,39 @@ function Facts({ detail, now }: { detail: DisputeDetail; now: number }) {
             <Field k="Invoice">{o.invoice_id ?? "-"}</Field>
             <Field k="PayPal order">{o.paypal_order_id ?? "-"}</Field>
             <Field k="Capture">{o.capture_id ?? "-"}</Field>
-            {o.shipments.map((s) => (
-              <Field key={s.id} k="Shipment">
-                <div>
-                  {s.carrier ?? "Carrier?"} {s.tracking_number ?? "(untracked)"}
-                </div>
-                <div className="text-slate-500">
-                  {label(s.status)}
-                  {s.delivered_at ? ` · delivered ${day(s.delivered_at)}` : ""}
-                </div>
-                {s.delivered_address && <div className="text-slate-500">to {addressLines(s.delivered_address).join(", ")}</div>}
-              </Field>
-            ))}
           </dl>
         )}
       </Card>
+      {o && <ShippingCard detail={detail} onDone={onDone} />}
     </div>
+  );
+}
+
+function ShippingCard({ detail, onDone }: { detail: DisputeDetail; onDone: () => void }) {
+  const [saved, setSaved] = useState<string | null>(null);
+  const o = detail.order!;
+  const resolved = detail.dispute.status === "RESOLVED";
+  return (
+    <Card title="Shipping & tracking">
+      {saved && (
+        <div role="status" className="mb-3 rounded-md bg-emerald-50 p-2 text-sm text-emerald-800">
+          {saved}{" "}
+          {!resolved && (
+            <>
+              Re-analyse so the agents use it: <ReanalyzeButton disputeId={detail.dispute.paypal_dispute_id} onDone={onDone} />
+            </>
+          )}
+        </div>
+      )}
+      <ShippingPanel
+        order={o}
+        digitalOnly={o.digital_only}
+        onSaved={(what) => {
+          setSaved(what === "tracking" ? "Tracking saved and uploaded to PayPal." : "Delivery recorded.");
+          onDone();
+        }}
+      />
+    </Card>
   );
 }
 
@@ -221,6 +239,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
   const [error, setError] = useState<string | null>(null);
 
   const changed = action !== null && action !== d.recommendation;
+  const escalating = action === "FIGHT" && fightRoute(c.allowed_actions) === "escalate";
   const allowed = action === "FIGHT" ? c.can_fight : action === "SETTLE" ? c.can_settle : false;
   const needsNote = action === "FIGHT" && !note.trim();
   const err = d.paypal_response?.error ? d.paypal_response : null;
@@ -294,9 +313,22 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
         </p>
       )}
       {d.status === "EXECUTED" && (
-        <p className="mt-3 rounded-md bg-indigo-50 p-3 text-sm text-indigo-800">
-          Sent to PayPal ({d.action_request?.endpoint}) on {when(d.executed_at)}. PayPal will now review it.
-        </p>
+        <div className="mt-3 rounded-md bg-indigo-50 p-3 text-sm text-indigo-800">
+          <p>
+            Sent to PayPal ({d.action_request?.endpoint}) on {when(d.executed_at)}.{" "}
+            {d.approved_action === "SETTLE"
+              ? "PayPal refunds the buyer and closes the case."
+              : d.action_request?.endpoint === "escalate"
+                ? "PayPal will review it as a claim and will probably ask you for evidence; DisputeShield analyses the case again when it does."
+                : "PayPal will now review it."}
+          </p>
+          {d.final_note && (
+            <p className="mt-2 whitespace-pre-wrap text-indigo-900">
+              <span className="font-medium">Note sent: </span>
+              {d.final_note}
+            </p>
+          )}
+        </div>
       )}
       {d.status === "REJECTED" && <p className="mt-3 text-sm text-slate-600">You rejected this recommendation.</p>}
       {d.status === "SUPERSEDED" && <p className="mt-3 text-sm text-slate-600">Replaced by a newer analysis or closed because the case was resolved.</p>}
@@ -306,7 +338,10 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
           <div className="text-sm">
             {action ? (
               <>
-                You are about to <span className="font-semibold">{action === "FIGHT" ? "fight (send evidence)" : "settle (refund the buyer)"}</span>
+                You are about to{" "}
+                <span className="font-semibold">
+                  {action === "SETTLE" ? "settle (refund the buyer)" : escalating ? "fight by escalating to a PayPal claim" : "fight (send evidence)"}
+                </span>
                 {changed && <span className="text-slate-500"> — changed from {label(d.recommendation)}</span>}.
               </>
             ) : (
@@ -331,7 +366,13 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
               {note.length}/{NOTE_MAX}
             </span>
           </label>
-          {action === "FIGHT" && d.action_request?.endpoint !== "accept-claim" && d.status === "PROPOSED" && d.action_request && (
+          {escalating && (
+            <p className="text-xs text-slate-600">
+              At this stage PayPal doesn't accept evidence. Escalating asks PayPal to review the case with your note; PayPal then asks for
+              evidence, and the agents prepare it.
+            </p>
+          )}
+          {action === "FIGHT" && !escalating && d.action_request?.endpoint !== "accept-claim" && d.status === "PROPOSED" && d.action_request && (
             <a href={disputesApi.pdfUrl(d.id)} target="_blank" rel="noreferrer" className="block text-xs font-medium text-indigo-700 hover:underline">
               Preview the evidence PDF →
             </a>
@@ -340,7 +381,9 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
           {confirming ? (
             <div className="rounded-md border border-indigo-200 bg-indigo-50 p-3 text-sm">
               <p className="text-indigo-900">
-                Send this {action === "FIGHT" ? "evidence" : "refund"} to PayPal now? This can't be undone.
+                {escalating
+                  ? "Escalate this case to a PayPal claim now? This can't be undone."
+                  : `Send this ${action === "FIGHT" ? "evidence" : "refund"} to PayPal now? This can't be undone.`}
               </p>
               <div className="mt-2 flex gap-2">
                 <button disabled={busy} onClick={send} className="rounded-md bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50">
@@ -450,8 +493,22 @@ function CaseSkeleton() {
   );
 }
 
+const WIDE = "(min-width: 1024px)"; // Tailwind lg
+
+function useIsWide() {
+  const [wide, setWide] = useState(() => window.matchMedia(WIDE).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(WIDE);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
+}
+
 export default function CaseDetail() {
   const { disputeId = "" } = useParams();
+  const wide = useIsWide();
   const [detail, setDetail] = useState<DisputeDetail | null>(null);
   const [error, setError] = useState<{ msg: string; notFound: boolean } | null>(null);
   const now = useNow(30_000);
@@ -522,7 +579,7 @@ export default function CaseDetail() {
 
       <div className="grid gap-4 lg:grid-cols-12">
         <div className="lg:col-span-3">
-          <Facts detail={detail} now={now} />
+          <Facts detail={detail} now={now} onDone={load} />
         </div>
         <div className="lg:col-span-5">
           <EvidencePanel detail={detail} cited={cited} />
@@ -537,8 +594,10 @@ export default function CaseDetail() {
             </Card>
           )}
           <History decisions={detail.decisions} currentId={d?.id} />
-          <Timeline steps={steps} state={state} />
+          {wide && <Timeline steps={steps} state={state} />}
         </div>
+        {/* On phones the (long) timeline goes last, after the facts and evidence. */}
+        {!wide && <Timeline steps={steps} state={state} />}
       </div>
     </div>
   );

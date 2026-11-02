@@ -24,6 +24,9 @@ MERCHANT_ENDPOINTS = [
     ("POST", "/decisions/1/approve"), ("POST", "/api/decisions/1/approve"), ("POST", "/api/decisions/1/reject"),
     ("POST", "/api/decisions/1/retry"), ("GET", "/api/decisions/1/evidence.pdf"),
     ("GET", "/api/settings"), ("PUT", "/api/settings"), ("GET", "/api/auth/me"),
+    # store back-office: buyer emails and PayPal tracking writes are merchant-only
+    ("GET", "/api/store/orders"), ("POST", "/api/store/orders/1/shipments"),
+    ("POST", "/api/store/orders/1/shipments/1/delivery"),
 ]
 
 
@@ -62,6 +65,10 @@ def test_merchant_endpoints_need_login(client, method, path):
 def test_public_endpoints_stay_open(client):
     assert client.get("/health").status_code == 200
     assert client.get("/api/store/products").status_code == 200
+    assert client.get("/api/store/config").status_code == 200
+    # buyer checkout stays public: reaches validation / PayPal config, never a login challenge
+    assert client.post("/api/store/orders", json={}).status_code != 401
+    assert client.post("/api/store/orders/X/capture").status_code != 401
     assert client.get("/api/auth/config").json() == {"mode": "paypal"}
     assert client.post("/webhooks/paypal", content=b"{}").status_code == 400  # signature check, not login
 

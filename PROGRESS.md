@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-10-31, session 13
+## Open items (tracked) — updated 2026-11-01, session 14 (live testing)
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -200,10 +200,11 @@ G1  [x] Log in with PayPal VERIFIED LIVE 2026-11-01 (sandbox business account). 
         fail at userinfo, which is fine (buyers never use the dashboard).
 G2  [~] Deploy prepared (render.yaml with all settings, AUTH_SECRET generated, DEPLOY.md). WAITING ON USER:
         push to GitHub + Render account. Webhook still on a cloudflared quick tunnel locally.
-G3  [~] No successful PayPal response proven live. WAITING ON USER: (a) on PP-R-ZWL-10195422 decision #4 ->
-        "Try again" -> Settle (refund) to prove accept-claim; (b) a fresh dispute that reaches "needs response"
-        naturally to prove provide-evidence. Debug ids for PayPal support: f233018eb2716, ca534153a1eca, ca534153d2b67.
-G4  [~] WAITING ON USER: install Node (sudo pacman -S nodejs npm).
+G3  [~] PROVEN LIVE 2026-11-01: accept-claim (PP-R-YXS-10195747, $45 mug, then RESOLVED via webhook) and
+        provide-supporting-info (PP-R-ADP-10195745). Still unproven: provide-evidence (needs a case PayPal itself
+        moves to WAITING_FOR_SELLER_RESPONSE with evidence requested; old refusals: f233018eb2716, ca534153a1eca,
+        ca534153d2b67).
+G4  [x] Node installed (/usr/bin/node).
 
 ### P2
 G5  [x] Decided: advisory (rule 5). Settings page says nothing is refunded automatically.
@@ -213,7 +214,7 @@ G7  [x] App-wide new-dispute alerts: GET /api/events/disputes (SSE) -> toast on 
         (No browser/OS notifications: not requested.)
 G8  [x] Refund policy in Settings -> refund_policy evidence (store:settings/refund_policy) for new investigations.
         WAITING ON USER for the actual policy text.
-G9  [~] Digital-only orders send payment_source.paypal.experience_context.shipping_preference=NO_SHIPPING (live: order
+G9  [x] VERIFIED LIVE 2026-11-01 (order #33: no address asked). Digital-only orders send payment_source.paypal.experience_context.shipping_preference=NO_SHIPPING (live: order
         created, checkout opens). WAITING ON USER: buy the ebook once with the US buyer to confirm no address asked.
 G10 [x] Decided: keep India seller; Store page tells buyers to use a US sandbox account.
 
@@ -230,7 +231,38 @@ G18 [x] Frontend tests in repo: Vitest unit tests (npm test, 19) + Playwright e2
 G19 [x] Pages lazy-loaded; AG Grid trimmed to the modules used. First load 178 kB; queue chunk 897 kB (was 1.2 MB in
         the main bundle).
 
-### New, found this session (fixed)
+### Found in live testing 2026-11-01 (session 14)
+G20 [x] P1. Our own response made PayPal fire CUSTOMER.DISPUTE.UPDATED (new update_time) -> new agent run -> a new
+        PROPOSED decision -> case back to "Awaiting your approval" right after "Response sent" (invites a duplicate
+        response; it happened: a second supporting-info note was sent on PP-R-ADP-10195745 from that decision).
+        Fix: run key = material state (status, stage, reason, state, amount, due date, allowed actions, message
+        count), not update_time; after an EXECUTED/APPROVED decision a new analysis starts only if the seller is
+        asked again (stage escalation or back to WAITING_FOR_SELLER_RESPONSE); otherwise a timeline step explains it.
+        LIVE ONLY AFTER THE USER RESTARTS THE BACKEND (it runs without --reload).
+G21 [x] P1 security. GET /api/store/orders (buyer emails) and POST /api/store/orders/{id}/shipments (writes to
+        PayPal) were public -> require_merchant. Live after backend restart.
+G22 [x] Inquiry-stage SNAD: PayPal allows only make_offer/accept_claim/escalate/send_message (no evidence). Baseline
+        said "PayPal does not allow a response right now" -> now "does not accept evidence at this stage
+        (settling is still possible)".
+G23 [x] Inquiry-stage fight: escalate (POST /v1/customer/disputes/{id}/escalate, JSON {note} 1-2000, spec: stage
+        must be INQUIRY) added to FIGHT_ACTIONS; FIGHT order: provide-evidence > supporting-info > escalate. UI says
+        "fight by escalating to a PayPal claim". Analyst prompt: never suggest partial offers / messages (can't send).
+        Not yet run live.
+G24 [x] Executed decision card didn't show the note sent (E9) -> shows "Note sent" + settle wording.
+G25 [x] Phone layout put the long timeline above facts/evidence -> timeline last on phones.
+G26 [~] P3 sandbox fact (admin helper now returns a "hint" explaining it): adjudicate refused (ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE, debug f350719ea974e) on
+        a CHARGEBACK-stage case UNDER_PAYPAL_REVIEW; buyer-filed INR with tracking opened directly as CHARGEBACK.
+G27 [ ] P3 cosmetic: PayPal consent screen names the app "Default Application" (rename in the PayPal app settings).
+G28 [x] Tracking + delivery from the dashboard: Orders page (merchant tab) and a "Shipping & tracking" card on
+        each case: Add tracking (saved + uploaded to PayPal; no digital orders; no duplicates) and Record delivery
+        (date between order date and today; order's address or a different one; stored locally with
+        delivery_recorded_by="merchant", since PayPal has no seller "delivered" API). Both log a timeline step on
+        the order's disputes and prompt Re-analyse. Tracking + delivery -> INR reaches FIGHT (tested).
+G29 [x] Buyers / signed-out visitors saw the Disputes and Settings tabs on the Store (pages themselves were already
+        protected). Layout now shows them only to a signed-in merchant (or AUTH_MODE=off); tests in
+        frontend/src/__tests__/layout.test.tsx.
+
+### New, found in session 13 (fixed)
 - AuthCallback lost the login result in development (StrictMode double effect) and ignored a new #fragment in the
   same tab -> derived from the router location.
 - AG Grid trim dropped CellStyleModule (Amount alignment) and used deprecated tooltipField -> fixed; e2e test now
@@ -345,3 +377,43 @@ G19 [x] Pages lazy-loaded; AG Grid trimmed to the modules used. First load 178 k
 See the open-items list above for each item. Tests: backend 275, frontend unit 19, e2e 14 (all passing; e2e
 and SSE suites run repeatedly to check for flakiness).
 
+
+## 2026-11-01 — Session 14: live human-style testing (headless browser, real sandbox)
+Results: A2 A5 A6 ✅ (A4 = same allowlist check as A5) · B1 B2 B3 B4 B5 ✅ (orders 32-34; ebook no address) ·
+tracking on PayPal visible to buyer ✅ · C1 ✅ (PP-R-ADP-10195745, webhook, 4 s after PayPal created it) · C3 ✅
+(PP-R-YXS-10195747) · D1 D3 ✅ · E1 E2 E3 E4 E13 ✅ · E5 ✅ accept-claim live -> RESOLVED · E7 ✅ supporting-info live ·
+E9 ✅ after G24 · E10 ✅ (second tab 409; message hidden by G20, fixed) · H2 ❌ PayPal refuses (G26) · I1 ✅ I2 ✅ after G25.
+Not run: C4 (buyer "unauthorized" flow may lock the buyer account), C5 (would stop the user's tunnel), C7, E6, H1.
+Fixed: G20-G22, G24, G25. Tests: backend 283, frontend 19, e2e 15 — all pass.
+
+## 2026-11-01 — Session 15: docs for hand testing, nav fix, new tunnel
+- Tunnel now https://endorsement-innovative-boats-ratio.trycloudflare.com: AUTH_REDIRECT_URI in backend/.env
+  updated, webhook 95P52181NY896745H re-pointed (register_webhook --write-env). PayPal app Return URL is the
+  user's step. Backend needs a restart to load .env.
+- G29 fixed (merchant tabs hidden from buyers); G28 recorded.
+- docs/TEST_SCENARIOS.md rewritten (start/stop, tunnel URL places, Result column);
+  new docs/END_TO_END_FLOWS.md (tracking explained, every choice, 12 hand-test flows).
+- Frontend 23 Vitest tests pass.
+
+## 2026-11-01 — Session 15b: closing G23, G28 (+ G26 hint)
+- G28: POST /api/store/orders/{id}/shipments/{sid}/delivery, GET /api/store/orders returns shipments,
+  digital_only, disputes; frontend Orders page + ShippingPanel (case page card). Evidence summary marks
+  merchant-recorded delivery.
+- G23: escalate as the inquiry-stage Fight route (spec checked: schema.json "escalate").
+- G26: adjudicate refusal now returns a hint. Still a sandbox limit.
+- Docs: END_TO_END_FLOWS (tracking via UI, Flow 4 escalate, new Flows 13-14), TEST_SCENARIOS (D7, D9).
+- Tests: backend 297, frontend 30, e2e 18 — all pass. Backend restart needed (new column + endpoints).
+- Open: G3 (provide-evidence and escalate not yet proven live), G26 (sandbox), G27 (user's PayPal app name).
+
+## 2026-11-02 — Session 16: one-command launcher
+- `./dev.sh` starts the cloudflared quick tunnel, backend and frontend. Its logs and pids go in `.run/` (gitignored).
+- On each new tunnel URL it rewrites `AUTH_REDIRECT_URI` in backend/.env and re-points the PayPal webhook (`register_webhook --write-env`). It then shows a banner and a notify-send alert with the Return URL to set in the PayPal app. That is the only manual step left.
+- A watchdog restarts a dead tunnel, backend or frontend. A tunnel whose public URL fails /health 3 times is replaced, and the Return URL banner is shown again.
+- Commands: `status`, `url`, `logs`, `stop`. `stop` signals the running launcher so the watchdog doesn't respawn anything.
+- Verified live:
+  - start
+  - public /health 200
+  - webhook re-pointed (status lists it)
+  - kill cloudflared → new URL wired up and backend restarted
+  - double-start guard
+  - external stop leaves nothing running
