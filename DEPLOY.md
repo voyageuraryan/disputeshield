@@ -13,7 +13,8 @@ hackathon (PROGRESS G12); the free plan has no disk and sleeps, which would wipe
 |---|---|
 | `PAYPAL_CLIENT_ID`, `PAYPAL_CLIENT_SECRET` | from your sandbox app |
 | `PAYPAL_WEBHOOK_ID` | after step 3 below (leave empty first) |
-| `GROQ_API_KEY`, `GEMINI_API_KEY` | your LLM keys |
+| `GROQ_API_KEY`, `GEMINI_API_KEY` | your LLM keys (Gemini also does the troubleshooting web research: Grounding with Google Search, 5,000 free searches/month on Gemini 3+) |
+| `TAVILY_API_KEY` | optional research fallback (tavily.com, 1,000 free credits/month) |
 | `ADMIN_TOKEN` | any long random string (sandbox demo helpers) |
 | `MERCHANT_LOGIN_EMAILS` | the PayPal email allowed to log in (your sandbox **business** account) |
 | `AUTH_REDIRECT_URI` | `https://disputeshield-api.onrender.com/api/auth/paypal/callback` (your API host) |

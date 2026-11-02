@@ -50,7 +50,7 @@ def test_queue_columns_sort_filter_search_countdown(stack, page):
     assert page.locator(".ag-header-cell-text").all_inner_texts() == [
         "Dispute", "Reason", "Amount", "Buyer", "Due in", "Recommendation", "Confidence", "Status"]
     rows = page.locator(".ag-grid-scrolling-container .ag-row")
-    assert rows.count() == 6  # A, B, C, D, R, E
+    assert rows.count() == 8  # A, B, C, D, F, G, R, E
     assert "PP-DEMO-A" in page.locator(".ag-row[row-index='0']").inner_text()  # soonest deadline first
     assert page.locator(".ag-grid-scrolling-container .font-semibold.text-red-600").count() == 2  # under 48 h
     page.fill("input[type=search]", "case-b")
@@ -365,6 +365,67 @@ def test_settings_auto_invite_toggle(stack, page):
 
 
 def test_help_page_fits_a_phone(stack, phone):
+    phone.goto(f"{stack.base}/help/1?t=nope")
+    phone.wait_for_selector("[role=alert]")
+    assert overflow(phone) == 0
+
+
+# ---- phase 9B: buyer chat --------------------------------------------------------------------------------
+
+def emailed_link(stack, page, pid):
+    page.goto(f"{stack.base}/cases/{pid}")
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.get_by_role("button", name="Email the link instead").click()
+    box = card.get_by_label("Buyer's private link")
+    box.wait_for()
+    return box.input_value()
+
+
+def test_buyer_chat_safety_stop_and_one_device(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-F")
+    buyer = browser.new_context()
+    bp = buyer.new_page()
+    bp.goto(link)
+    bp.wait_for_selector("text=What's going wrong with it?")  # the agent's opening question
+    other = browser.new_context()  # same link in a second browser (e.g. the merchant from the PayPal thread)
+    op = other.new_page()
+    op.goto(link)
+    op.wait_for_selector("text=already open in another browser")
+    other.close()
+    bp.fill("#msg", "It started smoking when I plugged it in")
+    bp.get_by_role("button", name="Send").click()
+    bp.wait_for_selector("text=For your safety, please stop using it now")
+    bp.wait_for_selector("text=Stopped for your safety")
+    assert bp.locator("#msg").count() == 0  # the chat is closed
+    buyer.close()
+    page.reload()
+    page.wait_for_selector("text=Stopped for safety")
+    assert page.locator("text=SAFETY STOP").count() >= 1  # merchant timeline
+    assert real_errors(page) == []
+
+
+def test_buyer_chat_assistant_down_then_talk_to_seller(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-G")
+    buyer = browser.new_context()
+    bp = buyer.new_page()
+    bp.goto(link)
+    bp.wait_for_selector("text=What's going wrong with it?")
+    bp.fill("#msg", "It doesn't turn on at all")
+    bp.keyboard.press("Enter")
+    bp.wait_for_selector("text=having trouble answering")  # no LLM configured in the UI suite
+    bp.once("dialog", lambda d: d.accept())
+    bp.get_by_role("button", name="Talk to the seller").click()
+    bp.wait_for_selector("text=The seller is taking it from here")
+    buyer.close()
+    page.reload()
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    page.wait_for_selector("text=Handed to you")
+    card.locator("summary", has_text="Conversation").click()
+    assert "It doesn't turn on at all" in card.inner_text()
+
+
+def test_help_chat_fits_a_phone(stack, phone, browser):
     phone.goto(f"{stack.base}/help/1?t=nope")
     phone.wait_for_selector("[role=alert]")
     assert overflow(phone) == 0

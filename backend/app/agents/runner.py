@@ -11,7 +11,6 @@ from sqlalchemy.engine import Engine
 from sqlmodel import Session
 
 from app.agents.graph import build_graph, thread_config
-from app.agents import llm as llm_module
 from app.agents.llm import StructuredLLM
 from app.agents.steps import log_step
 from app.config import get_settings

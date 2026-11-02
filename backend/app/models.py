@@ -218,6 +218,29 @@ class TroubleshootingSession(SQLModel, table=True):
     invited_via: Optional[str] = None  # paypal_message / email
     buyer_last_seen_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=utcnow)
+    # Phase 9B (all nullable so the auto-migration can add them)
+    language: Optional[str] = None            # buyer's language (BCP-47 code), replies use it
+    symptom: Optional[str] = None             # short English summary of the problem (redacted)
+    clarifications: Optional[int] = 0         # clarifying questions asked so far (max 2)
+    awaiting_fixed_confirm: Optional[bool] = False  # agent thinks it's fixed; buyer must confirm with a button
+    plan_generic: Optional[bool] = None       # True = generic safe plan (not product-specific)
+    device_hash: Optional[str] = None         # SHA-256 of the device key of the first browser that opened it
+    ended_reason: Optional[str] = None
+
+
+class ResearchCache(SQLModel, table=True):
+    """Web research per (model, symptom), reused for 24 h so the same fault isn't searched again."""
+
+    __tablename__ = "research_cache"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    key: str = Field(unique=True, index=True)  # sha256 of normalised model + symptom
+    product_model: Optional[str] = None
+    symptom: str
+    provider: str
+    notes: Optional[list[str]] = _json_col()
+    sources: Optional[list[dict]] = _json_col()
+    created_at: datetime = Field(default_factory=utcnow)
 
 
 class TSStep(SQLModel, table=True):

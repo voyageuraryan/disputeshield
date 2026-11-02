@@ -16,7 +16,7 @@ from sqlmodel import Session, select
 
 from app.agents.steps import log_step
 from app.merchant import get_merchant_settings
-from app.models import (TS_OPEN_STATUSES, Dispute, Order, TroubleshootingSession, TSMessage, TSStatus)
+from app.models import (TS_OPEN_STATUSES, AgentStep, Dispute, Order, TroubleshootingSession, TSMessage, TSStatus)
 from app.paypal.client import PayPalClient, PayPalError
 from app.paypal.disputes import MESSAGE_MAX, allowed_actions, send_message
 from app.troubleshooting.access import build_link, compute_expiry, is_expired, new_token
@@ -102,6 +102,8 @@ async def invite(s: Session, dispute: Dispute, *, via: str = "paypal_message", r
                                              expires_at=expires_at)
     row.product_name, row.product_model = elig.product_name or row.product_name, elig.product_model
     row.token_hash, row.expires_at, row.status = token_hash, expires_at, TSStatus.INVITED
+    row.device_hash = None  # a new link may be opened on a new device (it binds to the first one again)
+    row.ended_reason = None
     s.add(row)
     s.flush()  # need the id for the link; nothing is committed until the invite is sent
     link = build_link(row.id, token)
@@ -133,6 +135,17 @@ async def invite(s: Session, dispute: Dispute, *, via: str = "paypal_message", r
              {"session_id": row.id, "via": via, "expires_at": expires_at.isoformat(), "actor": actor})
     s.refresh(row)
     return InviteResult(row, sent=True, already_invited=False, via=via, link=link if via == "email" else None)
+
+
+def close_for_resolved_dispute(s: Session, dispute: Dispute) -> None:
+    """G32: when PayPal resolves the dispute, an open troubleshooting session ends too (its link already
+    answers 'case closed'). Caller commits."""
+    row = session_for(s, dispute.id)
+    if row and row.status in TS_OPEN_STATUSES:
+        row.status, row.ended_reason, row.awaiting_fixed_confirm = TSStatus.EXPIRED, "dispute resolved", False
+        s.add(row)
+        s.add(AgentStep(dispute_id=dispute.id, agent=AGENT, action="Troubleshooting closed: the dispute is resolved",
+                        detail={"session_id": row.id}))
 
 
 async def auto_invite(s: Session, dispute: Dispute, client: PayPalClient | None = None) -> None:

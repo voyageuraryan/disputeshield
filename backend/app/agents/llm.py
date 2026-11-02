@@ -63,12 +63,18 @@ def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
 
     def walk(node: Any) -> None:
         if isinstance(node, dict):
-            node.pop("title", None)
+            node.pop("title", None)  # the schema's own "title" annotation
             if node.get("type") == "object" and "properties" in node:
                 node["required"] = list(node["properties"])
                 node["additionalProperties"] = False
-            for v in node.values():
-                walk(v)
+            for k, v in node.items():
+                if k in ("properties", "$defs") and isinstance(v, dict):
+                    # a mapping of NAME -> schema: a field may itself be called "title", so don't treat
+                    # the mapping as a schema (that deleted fields named "title" while still requiring them)
+                    for sub in v.values():
+                        walk(sub)
+                else:
+                    walk(v)
         elif isinstance(node, list):
             for v in node:
                 walk(v)

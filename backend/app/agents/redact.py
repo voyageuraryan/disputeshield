@@ -59,6 +59,37 @@ def redact(text: str, terms: dict[str, str]) -> str:
     return EMAIL.sub("[email]", text)
 
 
+# Buyer chat (Phase 9B) may contain phone or card numbers the order doesn't know about.
+PHONE = re.compile(r"(?<![\w])(?:\+\d{1,3}[\s.-]?)?(?:\(\d{2,4}\)[\s.-]?)?\d{3,4}[\s.-]\d{3,4}(?:[\s.-]\d{2,4})?(?![\w])")
+CARD = re.compile(r"(?<!\d)\d(?:[ -]?\d){12,18}(?!\d)")
+
+
+def _luhn(digits: str) -> bool:
+    total, parity = 0, len(digits) % 2
+    for i, ch in enumerate(digits):
+        d = int(ch)
+        if i % 2 == parity:
+            d *= 2
+            if d > 9:
+                d -= 9
+        total += d
+    return total % 10 == 0
+
+
+def redact_buyer_text(text: str, terms: dict[str, str]) -> str:
+    """redact() plus payment-card numbers (Luhn-valid) and phone numbers, for free text the buyer typed.
+    Not used on dispute data: 22-digit tracking numbers must survive there."""
+    text = redact(text, terms)
+    if not get_settings().llm_redact_pii:
+        return text
+
+    def card(m: re.Match) -> str:
+        digits = re.sub(r"\D", "", m.group(0))
+        return "[card number]" if 13 <= len(digits) <= 19 and _luhn(digits) else m.group(0)
+
+    return PHONE.sub("[phone]", CARD.sub(card, text))
+
+
 def contains_placeholder(text: str) -> str | None:
     m = PLACEHOLDER.search(text)
     return m.group(0) if m else None

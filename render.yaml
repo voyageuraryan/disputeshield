@@ -35,6 +35,9 @@ services:
         sync: false
       - key: GEMINI_API_KEY
         sync: false
+      # Buyer troubleshooting web research fallback (optional; free tier 1,000 credits/month)
+      - key: TAVILY_API_KEY
+        sync: false
       - key: ADMIN_TOKEN
         sync: false
       # Log in with PayPal (merchant login). AUTH_MODE=off is ignored on Render.

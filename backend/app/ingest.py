@@ -15,6 +15,7 @@ from decimal import Decimal
 from sqlalchemy.exc import IntegrityError
 from sqlmodel import Session, select
 
+from app.troubleshooting.service import close_for_resolved_dispute
 from app.models import AgentStep, Decision, DecisionStatus, Dispute, Order, ProcessedEvent
 from app.paypal.client import PayPalClient
 from app.paypal.disputes import Dispute as PayPalDispute
@@ -92,6 +93,7 @@ def close_pending_decisions(session: Session, dispute: Dispute, why: str) -> lis
     outcome = ((dispute.raw or {}).get("dispute_outcome") or {}).get("outcome_code")
     dispute.agent_status = "RESOLVED"
     session.add(dispute)
+    close_for_resolved_dispute(session, dispute)
     session.add(AgentStep(dispute_id=dispute.id, agent="orchestrator",
                           action=f"{why}" + (f" ({outcome})" if outcome else "")
                           + (f"; closed pending decision(s) {[d.id for d in pending]}" if pending else ""),

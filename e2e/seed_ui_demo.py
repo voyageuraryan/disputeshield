@@ -55,5 +55,12 @@ with Session(engine) as s:
                   stage="INQUIRY", amount=Decimal("59.00"), currency="USD", seller_response_due=now + timedelta(hours=120),
                   raw={"update_time": now.isoformat(), "links": links("accept_claim", "escalate")},
                   agent_status="PROPOSED"))
+    # Phase 9B: two more faulty-lamp inquiries so the chat tests don't depend on each other.
+    for pid, email in (("PP-DEMO-F", "rosa@demo.test"), ("PP-DEMO-G", "nina@demo.test")):
+        o = s.exec(select(Order).where(Order.buyer_email == email)).first()
+        s.add(Dispute(paypal_dispute_id=pid, order_id=o.id, reason=SNAD, status="WAITING_FOR_SELLER_RESPONSE",
+                      stage="INQUIRY", amount=Decimal("89.00"), currency="USD",
+                      seller_response_due=now + timedelta(hours=120),
+                      raw={"update_time": now.isoformat(), "links": links("accept_claim")}, agent_status="PROPOSED"))
     s.commit()
 print("seeded")

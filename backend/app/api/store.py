@@ -7,7 +7,6 @@ from __future__ import annotations
 import logging
 import uuid
 from datetime import date, datetime, time, timezone
-from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field, field_validator

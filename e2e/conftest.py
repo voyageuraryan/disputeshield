@@ -42,7 +42,9 @@ class Stack:
         self.base = f"http://localhost:{web_port}"
         env = {**os.environ, "DATABASE_URL": f"sqlite:///{self.db}", "CHECKPOINT_DB": str(tmp / "ck.db"),
                "POLL_DISPUTES": "false", "CORS_ORIGINS": self.base, "AUTH_MODE": auth_mode, "AUTH_SECRET": SECRET,
-               "MERCHANT_LOGIN_EMAILS": "merchant@business.example.com", "FRONTEND_URL": self.base, "ARTIFACTS_DIR": str(tmp / "artifacts"),
+               "MERCHANT_LOGIN_EMAILS": "merchant@business.example.com", "FRONTEND_URL": self.base,
+               # hermetic: never call the real LLMs / web search from UI tests (backend/.env has real keys)
+               "GROQ_API_KEY": "", "GEMINI_API_KEY": "", "TAVILY_API_KEY": "", "ARTIFACTS_DIR": str(tmp / "artifacts"),
                "PAYPAL_CLIENT_ID": "e2e", "PAYPAL_CLIENT_SECRET": "e2e", "PYTHONPATH": str(BACKEND)}
         self.env = env
         self.procs = []

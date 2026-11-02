@@ -214,7 +214,8 @@ def test_invite_when_paypal_does_not_allow_messages(client, engine):
     assert steps(engine)[-1] == "Email invite to buyer@example.com recorded (dev stub: no email is actually sent)"
     assert client.get(f"/api/help/{sid}", params={"t": token}).status_code == 200
     with Session(engine) as s:
-        assert [m.body for m in s.exec(select(TSMessage))] == ["Invite sent via email"]
+        bodies = [m.body for m in s.exec(select(TSMessage))]
+    assert bodies[0] == "Invite sent via email" and bodies[1].endswith("What's going wrong with it?")
 
 
 def test_invite_refusals(client, engine):
@@ -271,9 +272,15 @@ def test_buyer_view_marks_active(client, engine):
     assert r.status_code == 200
     body = r.json()
     assert body["status"] == "ACTIVE" and body["product_model"] == "Lumina LD-200"
-    assert body["steps"] == [] and body["messages"] == []  # system messages stay merchant-side
-    assert set(body) == {"id", "status", "product_name", "product_model", "expires_at", "steps", "messages"}
-    assert client.get(f"/api/help/{sid}", headers={"X-Help-Token": token}).status_code == 200
+    assert body["steps"] == [] and not body["ended"] and not body["awaiting_fixed_confirm"]
+    # the agent's first turn is one open question; system messages stay merchant-side
+    assert [(m["role"], m["body"]) for m in body["messages"]] == [
+        ("agent", "Hi! I'm here to help get your Smart LED desk lamp working. What's going wrong with it?")]
+    device = body["device_key"]
+    assert device and len(device) >= 43
+    again = client.get(f"/api/help/{sid}", headers={"X-Help-Token": token, "X-Help-Device": device})
+    assert again.status_code == 200 and again.json()["device_key"] is None  # issued once
+    assert len(again.json()["messages"]) == 1  # the opener isn't repeated
     assert steps(engine).count("The buyer opened the troubleshooting page") == 1  # only the first open
     with Session(engine) as s:
         assert s.get(TroubleshootingSession, sid).buyer_last_seen_at is not None
@@ -336,7 +343,10 @@ def test_buyer_route_refuses_merchant_credentials(client, engine):
 def test_buyer_rate_limit(client, engine, monkeypatch):
     sid, token = invited(client, engine)
     monkeypatch.setattr(access, "buyer_limiter", RateLimiter(capacity=2, refill_per_s=0.01))
-    assert [client.get(f"/api/help/{sid}", params={"t": token}).status_code for _ in range(3)] == [200, 200, 429]
+    first = client.get(f"/api/help/{sid}", params={"t": token})
+    dev = {"X-Help-Device": first.json()["device_key"]}
+    assert [first.status_code] + [client.get(f"/api/help/{sid}", params={"t": token}, headers=dev).status_code
+                                  for _ in range(2)] == [200, 200, 429]
     r = client.get(f"/api/help/{sid}", params={"t": "wrong"})  # bad guesses are throttled too
     assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
 

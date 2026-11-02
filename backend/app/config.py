@@ -55,6 +55,16 @@ class Settings(BaseSettings):
     gemini_model: str = "gemini-3.8-flash,gemini-2.5-flash"
     cors_origins: str = "http://localhost:5173"  # comma-separated
 
+    # Phase 9B: troubleshooting research. Gemini (GEMINI_API_KEY) with Google Search grounding first, then
+    # Tavily search (optional; free tier 1,000 credits/month). RESEARCH_MODEL defaults to GEMINI_MODEL.
+    tavily_api_key: SecretStr = SecretStr("")
+    research_model: str = ""
+    # Base URL for buyer troubleshooting links (defaults to FRONTEND_URL). dev.sh sets it to a public tunnel
+    # so a buyer on another device can open the link while the merchant dashboard stays on localhost.
+    buyer_portal_url: str = ""
+    # Uploaded buyer proof (photos/videos) for troubleshooting steps.
+    proof_max_bytes: int = 15 * 1024 * 1024
+
     @property
     def cors_origin_list(self) -> list[str]:
         return [o.strip() for o in self.cors_origins.split(",") if o.strip()]

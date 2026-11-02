@@ -208,3 +208,26 @@ async def test_gemini_overload_retried_once_on_same_model(monkeypatch):
     assert (await call()).action == "FIGHT"
     assert first.call_count == 2 and second.call_count == 0
     assert llm_mod.last_provider.get() == "gemini:gemini-3.8-flash"
+
+
+def test_strict_schema_keeps_fields_named_title():
+    """Regression (found live, Phase 9B): fields called "title" were deleted from the schema but still required,
+    so Groq and Gemini rejected every troubleshooting plan."""
+    from pydantic import BaseModel
+
+    from app.agents.llm import strict_json_schema
+
+    class Item(BaseModel):
+        title: str
+        why: str
+
+    class Plan(BaseModel):
+        title: str
+        items: list[Item]
+
+    schema = strict_json_schema(Plan)
+    assert set(schema["properties"]) == {"title", "items"} and schema["required"] == ["title", "items"]
+    item = schema["$defs"]["Item"]
+    assert set(item["properties"]) == {"title", "why"} and item["required"] == ["title", "why"]
+    assert "title" not in item and "title" not in schema  # the annotations are still stripped
+    assert item["additionalProperties"] is False

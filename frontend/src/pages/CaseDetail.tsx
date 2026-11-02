@@ -105,6 +105,75 @@ const TS_STATUS: Record<string, { text: string; tone: Tone }> = {
 };
 
 /** Phase 9A: invite the buyer of a faulty electronic item to a private troubleshooting page. */
+const STEP_DONE: Record<string, string> = {
+  PENDING: "not done yet",
+  DONE_FIXED: "fixed it",
+  DONE_NOT_FIXED: "done, not fixed",
+  SKIPPED: "skipped",
+  CANT_DO: "couldn't do it",
+};
+
+/** What the buyer and the troubleshooting agent did: steps (with proof files), sources, conversation. */
+function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingStatus }) {
+  const steps = st.steps ?? [];
+  const proofs = st.proofs ?? [];
+  const msgs = (st.messages ?? []).filter((m) => m.role !== "system");
+  const sources = (st.sources ?? []).filter((x) => !x.url.startsWith("internal:"));
+  if (!steps.length && !msgs.length) return null;
+  return (
+    <div className="mt-3 space-y-3 text-sm">
+      {steps.length > 0 && (
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Steps{st.session?.plan_generic ? " (generic, not product-specific)" : ""}
+          </p>
+          <ol className="mt-1 space-y-1">
+            {steps.map((x) => (
+              <li key={x.id}>
+                {x.ordinal}. {x.title} <span className="text-slate-500">({STEP_DONE[x.status] ?? x.status})</span>
+                {proofs
+                  .filter((p) => p.step_id === x.id)
+                  .map((p, n) => (
+                    <a key={p.id} href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="ml-2 text-indigo-700 hover:underline">
+                      {p.mime.startsWith("video") ? "video" : "photo"} {n + 1}
+                    </a>
+                  ))}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+      {sources.length > 0 && (
+        <p className="text-xs text-slate-500">
+          Based on:{" "}
+          {sources.map((x, i) => (
+            <span key={x.id}>
+              {i > 0 && ", "}
+              <a href={x.url} target="_blank" rel="noopener noreferrer nofollow" className="underline">
+                {x.title || "source"}
+              </a>
+            </span>
+          ))}
+        </p>
+      )}
+      {msgs.length > 0 && (
+        <details>
+          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Conversation ({msgs.length})
+          </summary>
+          <ul className="mt-1 max-h-64 space-y-1 overflow-y-auto">
+            {msgs.map((m, i) => (
+              <li key={i} className="whitespace-pre-line">
+                <span className="font-medium">{m.role === "buyer" ? "Buyer" : m.role === "merchant" ? "You" : "Assistant"}:</span> {m.body}
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
+  );
+}
+
 export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
   const id = detail.dispute.paypal_dispute_id;
   const [st, setSt] = useState<TroubleshootingStatus | null>(null);
@@ -171,8 +240,12 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
           </Field>
           <Field k="Link works until">{when(s.expires_at)}</Field>
           <Field k="Buyer last seen">{s.buyer_last_seen_at ? when(s.buyer_last_seen_at) : "not yet"}</Field>
+          {s.symptom && <Field k="Problem">{s.symptom}</Field>}
+          {s.language && s.language !== "en" && <Field k="Language">{s.language}</Field>}
+          {s.ended_reason && <Field k="Ended">{s.ended_reason}</Field>}
         </dl>
       )}
+      {s && <TroubleshootingDetails id={id} st={st} />}
       {open && (
         <div className="mt-3 flex flex-wrap gap-2">
           {!s ? (

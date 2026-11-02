@@ -42,7 +42,8 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 ## Layout
 backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py, auth.py, events_bus.py}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
-backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py
+backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py,
+                      troubleshooter.py (buyer troubleshooting agent), web_research.py (grounded search), redact.py
 backend/app/rules/    evidence_rules.py
 backend/app/troubleshooting/  eligibility.py, access.py (link tokens, expiry, rate limit), service.py (invite)
 backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py,

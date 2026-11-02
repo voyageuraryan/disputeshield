@@ -267,13 +267,18 @@ G30 [ ] P2 Delivery evidence is merchant-entered (self-attested) yet counts as f
         decision 2026-11-02: keep manual entry for now. Options when revisited: carrier/aggregator tracking feed
         (EasyPost/Shippo test trackers in sandbox), labels bought in-app, or weight manual entry lower + require a
         carrier screenshot.
-G31 [ ] P2 (before 9B accepts proofs) The merchant can open the buyer's troubleshooting link: it is in the PayPal
+G31 [~] P2 (mitigated in 9B: the link binds to the first browser that opens it; others get "already open in
+        another browser"; resend re-binds. Remaining: if the merchant opens it FIRST, the buyer is locked out
+        until a new link is sent. Full fix = buyer signs in with PayPal.) Was: The merchant can open the buyer's troubleshooting link: it is in the PayPal
         thread the merchant can read, in the email-stub response, and in the stored dispute.raw (seller message).
         Proof uploaded later can't be attributed strictly to the buyer. Fix idea: bind the session to the first
         device that opens it, or buyer Log in with PayPal.
-G32 [ ] P3 Session status isn't closed when the dispute resolves (the buyer link already answers 410 "case
+G32 [x] (9B: sessions close with "dispute resolved" when ingest sees RESOLVED) P3 Session status isn't closed when the dispute resolves (the buyer link already answers 410 "case
         closed"; the merchant card keeps the last status). Close sessions on ingest once 9B defines outcomes.
-G33 [ ] P2 Buyer links use FRONTEND_URL (localhost:5173 in dev): only same-computer testing until the frontend is
+G33 [ ] P2 (9B: BUYER_PORTAL_URL setting added. Tunnelling the Vite DEV server publicly was blocked by the
+        permission system, rightly: a dev server shouldn't face the internet. Options for the user: deploy the
+        static frontend (Render) and set BUYER_PORTAL_URL, or have dev.sh tunnel a production build
+        (vite build + a static server) instead of the dev server.) Buyer links use FRONTEND_URL (localhost:5173 in dev): only same-computer testing until the frontend is
         deployed (Render) or tunnelled; dev.sh tunnels the backend only.
 G34 [ ] P3 Email invite is a dev stub (timeline entry; link shown once to the merchant to pass on).
 G35 [ ] P3 Buyer rate limit is in-memory, per process (resets on restart, not shared across workers). Fine for one
@@ -283,6 +288,23 @@ G36 [x] Refund policy template out of sync with the catalog ("handmade lamp"; "e
 G37 [x] CLAUDE.md layout listed a non-existent Analytics.tsx and missed Orders/Help/troubleshooting -> fixed.
 G38 [x] e2e race (Orders card read before the list reloaded) and the auto-invite checkbox only flipping after the
         save -> test waits; checkbox updates at once and reverts on error.
+G40 [ ] P2 The troubleshooting plan is built inside the buyer's chat request: live it took 76 s (Groq 429 on the
+        free 8K TPM, then Gemini 3.8 timed out, 2.5-flash answered); the page promises "up to a minute". Fix:
+        build in the background and poll, and/or try the fastest provider first for plans.
+G41 [ ] P2 Troubleshooting outcomes (DEFECT_CONFIRMED / RESOLVED_FIXED / SAFETY_STOP) don't feed the dispute's
+        evidence or recommendation yet; the merchant sees them on the case card and timeline only.
+G42 [ ] P3 Citations are checked for existence, not relevance: live, "E5" also matched car recalls
+        (carexpert, drive.com.au stored as sources) and a proof step cited a "no recall found" page.
+G43 [ ] P3 A safety stop notifies the merchant on the case timeline/card only (no app-wide toast or email).
+G44 [ ] P3 Proof files are kept indefinitely under ARTIFACTS_DIR (no retention); no EXIF/phash/vision checks yet
+        (ts_proofs columns reserved).
+G45 [x] Latent llm.py bug found live: strict_json_schema deleted fields named "title" but still required them,
+        so Groq and Gemini rejected every troubleshooting plan -> fixed + regression test.
+G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test would have spent real quota) ->
+        keys blanked for the UI suite.
+G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
+        StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
+G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
 G39 [x] Merchant card kept showing "Invited" after the link expired (expiry was only noticed when the buyer
         opened it) -> the status check expires it too.
 
@@ -484,3 +506,56 @@ Fixed: G20-G22, G24, G25. Tests: backend 283, frontend 19, e2e 15 — all pass.
 - Docs: TEST_SCENARIOS section T (T1–T10), END_TO_END_FLOWS Flow 15, refund policy template, CLAUDE.md layout,
   .env.example.
 - Open: G30–G35 (above), G3, G26, G27.
+
+## 2026-11-02 — Phase 9B: the troubleshooting agent
+- app/agents/web_research.py: research(product, model, symptom) returns ResearchNotes.
+  - Gemini Grounding with Google Search via the **Interactions API**. Checked the docs: generateContent /
+    groundingMetadata are no longer documented for search.
+    - POST /v1beta/interactions with tools [{type: google_search}] and store=false (the API stores
+      interactions by default)
+    - citations come from steps[model_output].content[].annotations url_citation, whose offsets are BYTES
+  - Fallback: Tavily (/search, Bearer, exclude_domains as real domains). groq/compound is not used.
+  - Marketplace/forum domains are dropped when anything else exists; official and support domains rank first.
+  - 24 h cache table research_cache. Sources are stored in ts_sources.
+  - **Verified live 2026-11-02** (scratch DB): 7 Google queries (incl. recall, firmware, safety notice) and
+    8 cited sources.
+- app/agents/troubleshooter.py:
+  - build_plan: research, then an LLM plan with a strict schema. The validator checks: 3-7 steps; every step
+    cites a stored source; ≤60 words; average sentence <20 words; one proof step; no casing / mains / sealed
+    battery / soldering / bypass.
+  - It retries once with the problems, then falls back to the generic safe plan, which cites an internal
+    "not product-specific" source.
+  - Plans are validated in English and then translated for the buyer.
+  - **Live**: draft 1 was rejected (long sentences), the retry passed, Spanish translation, every step cited.
+  - Intake: one open question, at most 2 clarifying questions. Language is detected by a heuristic plus the
+    LLM, and replies are in that language.
+  - agent_reply returns AgentTurn:
+    - buyer text sits inside <buyer_message>, framed as data
+    - a code guard blocks outcome promises, sensitive-data requests and blame (retry once, then a neutral reply)
+    - only the buyer's button sets RESOLVED_FIXED
+    - DEFECT_CONFIRMED is computed by code: all steps finished-not-fixed plus the requested proof
+    - DECLINED → EXPIRED; HANDOFF → HANDED_TO_MERCHANT
+  - Safety: a multilingual keyword list with English negation handling ("no smoke"), plus the LLM's flag.
+    A hit gives SAFETY_STOP, a fixed message in the buyer's language, and the merchant timeline entry
+    "SAFETY STOP". The Hindi "आग"/"आगे" false positive was caught in testing and fixed.
+  - PII: redact_buyer_text (emails, order addresses, Luhn-valid card numbers, phone numbers) runs before every
+    LLM call; tracking numbers are kept.
+- Buyer API:
+  - POST /api/help/{sid}/messages | /confirm | /handoff | /steps/{id}/proof
+  - The proof is the raw body; its type is sniffed from the magic bytes; the size is capped while streaming.
+  - Chat rate limit; 60-message cap; per-session lock.
+  - Device binding (G31): X-Help-Device.
+- Merchant API: status now includes steps, sources, transcript and proofs; a proof file endpoint.
+- UI:
+  - The buyer page is a chat with step buttons, sources, proof upload, the "Is it working now?" confirm, and
+    "Talk to the seller".
+  - The merchant card shows the problem, language, steps with proof links, sources and the conversation.
+- Fixed this phase: G31 (mitigated), G32, G45-G48, and the live-found misleading "generic plan" reason.
+  G33 is blocked (see above).
+- Tests:
+  - backend 380 (+45)
+  - frontend 43 (+7)
+  - e2e 25 (+3; demo cases PP-DEMO-F/G; hermetic LLM keys)
+  - vite build OK
+- Docs: TEST_SCENARIOS T11-T20, END_TO_END_FLOWS Flow 16, .env.example, render.yaml (TAVILY_API_KEY),
+  DEPLOY.md, CLAUDE.md layout.

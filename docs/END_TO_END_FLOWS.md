@@ -266,10 +266,27 @@ Result: ______
 3. Click **Invite via PayPal message**. *Expected:* PayPal shows the seller message with a private link
    (`…/help/<n>?t=…`) in the buyer's case; card → *Invited, not opened yet*; link works until 48 h before
    PayPal's response deadline (5 days if PayPal gives none).
-4. Open the link (as the buyer). *Expected:* "Let's get your Wireless earbuds working" + "steps are being prepared"
-   (steps arrive in a later phase). Merchant card → *Buyer opened the page*.
+4. Open the link (as the buyer). *Expected:* "Let's get your Wireless earbuds working" and the assistant asks
+   "What's going wrong with it?". Merchant card → *Buyer opened the page*. (Continue with Flow 16.)
 5. **Send a new link**: the old link stops working, the new one works.
 6. The rest of the case is unchanged: the agents still recommend Fight / Settle / Gather more as before; the
    troubleshooting session doesn't move money or answer PayPal for you.
+
+Result: ______
+
+### Flow 16 — The troubleshooting agent fixes it, or confirms the defect (Phase 9B)
+Start from Flow 15 step 4 (buyer page open).
+1. Buyer types the problem, e.g. "The left earbud won't charge and the case light stays off".
+   *Expected:* after up to ~1–1.5 min: 3–7 steps, each with a **Source:** link (sites the web search found:
+   the maker's support pages when they exist, otherwise similar official guidance). The last step asks for a
+   photo/video. If no usable sources or plan: 5 **general safety-checked steps, not specific to your model**.
+2. **Path A (fixed):** press **That fixed it** on a step → **Yes, it works now**.
+   *Expected:* "Fixed"; merchant card **Fixed by troubleshooting**; timeline "Fixed: the buyer confirmed…".
+3. **Path B (defect):** on every step press **Done, still not working**; upload the requested video/photo.
+   *Expected:* "You've tried every step…"; card **Defect confirmed** with the proof link (*video 1*) and the
+   whole conversation. The agents' dispute recommendation is unchanged by this (see PROGRESS G41).
+4. **Path C (safety):** type "it's getting hot to the touch". *Expected:* the fixed safety message, chat closed,
+   card **Stopped for safety**, timeline **SAFETY STOP …** — contact the buyer.
+5. **Path D (seller):** **Talk to the seller** → card **Handed to you**.
 
 Result: ______

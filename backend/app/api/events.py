@@ -13,7 +13,6 @@ GET /disputes/{id}/events (and /api/disputes/{id}/events for the Vite proxy)
 
 from __future__ import annotations
 
-import asyncio
 import json
 import time
 

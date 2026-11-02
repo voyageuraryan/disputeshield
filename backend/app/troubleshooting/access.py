@@ -57,7 +57,8 @@ def is_expired(expires_at: datetime, now: datetime | None = None) -> bool:
 
 
 def build_link(session_id: int, token: str) -> str:
-    return f"{get_settings().frontend_url.rstrip('/')}/help/{session_id}?t={token}"
+    s = get_settings()
+    return f"{(s.buyer_portal_url or s.frontend_url).rstrip('/')}/help/{session_id}?t={token}"
 
 
 # ---- rate limiting (in-memory token bucket per session; single process) ------------------

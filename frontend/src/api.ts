@@ -251,6 +251,10 @@ export const ordersApi = {
 // ---- buyer troubleshooting (phase 9A) -----------------------------------------------------------
 
 export type TSSessionBrief = {
+  language?: string | null;
+  symptom?: string | null;
+  plan_generic?: boolean | null;
+  ended_reason?: string | null;
   id: number;
   status: string;
   product_name: string;
@@ -269,6 +273,10 @@ export type TroubleshootingStatus = {
   can_message: boolean;
   buyer_email_known: boolean;
   session: TSSessionBrief | null;
+  steps?: TSStepView[];
+  sources?: TSSourceView[];
+  messages?: TSMessageView[];
+  proofs?: { id: number; step_id: number | null; mime: string; size: number; created_at: string }[];
 };
 
 export type InviteResult = {
@@ -286,7 +294,26 @@ export const troubleshootingApi = {
       method: "POST",
       body: JSON.stringify({ via, resend }),
     }),
+  // <img>/<video>/<a> can't send headers, so the merchant session goes in the query string (like the PDF link).
+  proofUrl: (disputeId: string, proofId: number) =>
+    `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/proofs/${proofId}?token=${encodeURIComponent(getToken() ?? "")}`,
 };
+
+export type TSStepView = {
+  id: number;
+  ordinal: number;
+  title: string;
+  instruction: string;
+  why: string | null;
+  safety_level: string;
+  requires_proof: boolean;
+  proof_kind: "photo" | "video" | "screenshot" | "none";
+  status: "PENDING" | "DONE_FIXED" | "DONE_NOT_FIXED" | "SKIPPED" | "CANT_DO";
+  source_ids: number[];
+  proofs: number;
+};
+export type TSSourceView = { id: number; title: string | null; url: string };
+export type TSMessageView = { role: string; body: string; step_id: number | null; created_at: string };
 
 export type BuyerSession = {
   id: number;
@@ -294,21 +321,75 @@ export type BuyerSession = {
   product_name: string;
   product_model: string | null;
   expires_at: string;
-  steps: { id: number; ordinal: number; title: string; instruction: string; why: string | null; safety_level: string; requires_proof: boolean; proof_kind: string; status: string }[];
-  messages: { role: string; body: string; created_at: string }[];
+  language: string | null;
+  plan_generic: boolean | null;
+  awaiting_fixed_confirm: boolean;
+  ended: boolean;
+  steps: TSStepView[];
+  sources: TSSourceView[];
+  messages: TSMessageView[];
+  device_key?: string | null;
+  reply?: string | null;
 };
 
-/** Buyer page calls: only the link token, never the merchant's session (the server refuses it). */
-export const helpApi = {
-  get: async (sessionId: string, token: string): Promise<BuyerSession> => {
-    let res: Response;
+const DEVICE_KEY = (id: string) => `ds_help_dev_${id}`;
+function deviceKey(id: string): string | null {
+  try {
+    return localStorage.getItem(DEVICE_KEY(id)) ?? sessionStorage.getItem(DEVICE_KEY(id));
+  } catch {
+    return null;
+  }
+}
+function rememberDevice(id: string, key: string) {
+  try {
+    localStorage.setItem(DEVICE_KEY(id), key);
+  } catch {
     try {
-      res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}`, { headers: { "X-Help-Token": token } });
+      sessionStorage.setItem(DEVICE_KEY(id), key);
     } catch {
-      throw new ApiError("We can't reach the server. Check your connection and try again.", 0, null);
+      /* storage blocked: the page still works until it's reloaded */
     }
-    const body = await res.json().catch(() => null);
-    if (!res.ok) throw new ApiError(errorText(body?.detail) || "Something went wrong.", res.status, body?.detail);
-    return body as BuyerSession;
+  }
+}
+
+/** Buyer page calls: the link token + this browser's device key, never the merchant's session. */
+async function helpReq(sessionId: string, token: string, path = "", init?: RequestInit): Promise<BuyerSession> {
+  const dev = deviceKey(sessionId);
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}${path}`, {
+      ...init,
+      headers: { "X-Help-Token": token, ...(dev ? { "X-Help-Device": dev } : {}), ...(init?.headers ?? {}) },
+    });
+  } catch {
+    throw new ApiError("We can't reach the server. Check your connection and try again.", 0, null);
+  }
+  const body = await res.json().catch(() => null);
+  if (!res.ok) throw new ApiError(errorText(body?.detail) || "Something went wrong.", res.status, body?.detail);
+  if (body?.device_key) rememberDevice(sessionId, body.device_key);
+  return body as BuyerSession;
+}
+
+const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+
+// The first page load binds the link to this browser. Concurrent loads (React StrictMode runs effects twice,
+// fast reloads) must share that one request, or the second one arrives without the device key and is refused.
+const inflight = new Map<string, Promise<BuyerSession>>();
+
+export const helpApi = {
+  get: (sessionId: string, token: string) => {
+    const k = `${sessionId}:${token}`;
+    let p = inflight.get(k);
+    if (!p) {
+      p = helpReq(sessionId, token).finally(() => inflight.delete(k));
+      inflight.set(k, p);
+    }
+    return p;
   },
+  send: (sessionId: string, token: string, body: string, stepId?: number, stepStatus?: TSStepView["status"]) =>
+    helpReq(sessionId, token, "/messages", json({ body, step_id: stepId ?? null, step_status: stepStatus ?? null })),
+  confirm: (sessionId: string, token: string, fixed: boolean) => helpReq(sessionId, token, "/confirm", json({ fixed })),
+  handoff: (sessionId: string, token: string) => helpReq(sessionId, token, "/handoff", { method: "POST" }),
+  uploadProof: (sessionId: string, token: string, stepId: number, file: File) =>
+    helpReq(sessionId, token, `/steps/${stepId}/proof`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file }),
 };
