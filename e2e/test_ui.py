@@ -50,7 +50,7 @@ def test_queue_columns_sort_filter_search_countdown(stack, page):
     assert page.locator(".ag-header-cell-text").all_inner_texts() == [
         "Dispute", "Reason", "Amount", "Buyer", "Due in", "Recommendation", "Confidence", "Status"]
     rows = page.locator(".ag-grid-scrolling-container .ag-row")
-    assert rows.count() == 8  # A, B, C, D, F, G, R, E
+    assert rows.count() == 11  # A, B, C, D, F, G, H, I, J, R, E
     assert "PP-DEMO-A" in page.locator(".ag-row[row-index='0']").inner_text()  # soonest deadline first
     assert page.locator(".ag-grid-scrolling-container .font-semibold.text-red-600").count() == 2  # under 48 h
     page.fill("input[type=search]", "case-b")
@@ -412,7 +412,9 @@ def test_buyer_chat_assistant_down_then_talk_to_seller(stack, page, browser):
     bp.wait_for_selector("text=What's going wrong with it?")
     bp.fill("#msg", "It doesn't turn on at all")
     bp.keyboard.press("Enter")
-    bp.wait_for_selector("text=having trouble answering")  # no LLM configured in the UI suite
+    # no LLM in the UI suite: the buyer isn't left stuck; they get the generic safe checklist (9C)
+    bp.wait_for_selector("text=I can't look up your exact model right now")
+    bp.wait_for_selector("text=General safety-checked steps, not specific to your model")
     bp.once("dialog", lambda d: d.accept())
     bp.get_by_role("button", name="Talk to the seller").click()
     bp.wait_for_selector("text=The seller is taking it from here")
@@ -429,3 +431,89 @@ def test_help_chat_fits_a_phone(stack, phone, browser):
     phone.goto(f"{stack.base}/help/1?t=nope")
     phone.wait_for_selector("[role=alert]")
     assert overflow(phone) == 0
+
+
+# ---- phase 9C: buyer page --------------------------------------------------------------------------------
+
+SAMPLE = str(__import__("pathlib").Path(__file__).parent / "fixtures" / "lamp-not-lighting.jpg")
+
+
+def test_buyer_full_flow_to_defect_confirmed(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-H")
+    buyer = browser.new_context(viewport={"width": 1280, "height": 900})
+    bp = buyer.new_page()
+    errors = []
+    bp.on("pageerror", lambda e: errors.append(str(e)))
+    bp.goto(link)
+    # header: store, order, product, PayPal case, time left
+    bp.wait_for_selector("h1:has-text('Help with your order #INV-H-9C')")
+    head = bp.inner_text("header")
+    assert "Demo store" in head and "Smart LED desk lamp" in head and "PayPal case PP-DEMO-H" in head and "left" in head
+    bp.wait_for_selector("text=What's going wrong with it?")
+    bp.fill("#msg", "The lamp won't light up at all")
+    bp.get_by_role("button", name="Send").click()
+    bp.wait_for_selector("text=I can't look up your exact model right now")  # streamed in (SSE), no reload
+    steps = bp.locator("aside")  # desktop: checklist on the right
+    steps.wait_for()
+    box = steps.bounding_box()
+    chat = bp.locator("section[aria-label='Chat']").bounding_box()
+    assert chat["x"] < box["x"] and 0.5 < chat["width"] / (chat["width"] + box["width"]) < 0.7  # ~60/40
+    for n in range(1, 5):
+        card = steps.locator("li[aria-current='step']")
+        card.get_by_role("button", name="Done, still not working").click()
+        bp.wait_for_selector(f"text=Next, step {n + 1}")
+    last = steps.locator("li[aria-current='step']")
+    assert "Show the problem" in last.inner_text()
+    last.get_by_role("button", name="Done, still not working").click()
+    bp.wait_for_selector("text=Please add the video for step 5")
+    steps.get_by_label("Upload a video for step 5").set_input_files(SAMPLE)
+    bp.wait_for_selector("text=We've sent your results to the seller")
+    assert bp.locator("#msg").count() == 0 and "Talk to the seller" not in bp.inner_text("body")
+    assert errors == []
+    buyer.close()
+    # merchant: outcome, the photo with its checks (GPS removed), and the timeline
+    page.reload()
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    page.wait_for_selector("text=Defect confirmed")
+    assert "removed: GPS location" in card.inner_text()
+    assert "AI look: automatic photo check is off" in card.inner_text()
+    assert real_errors(page) == []
+
+
+def test_buyer_link_expired_and_tampered(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-I")
+    buyer = browser.new_context()
+    bp = buyer.new_page()
+    bp.goto(link[:-3] + ("xyz" if not link.endswith("xyz") else "abc"))  # tampered token
+    bp.wait_for_selector("[role=alert]:has-text(\"isn't valid\")")
+    stack.sql("update troubleshooting_sessions set expires_at='2020-01-01 00:00:00.000000' where dispute_id=?",
+              did(stack, "PP-DEMO-I"))
+    bp.goto(link)
+    bp.wait_for_selector("text=This help page has closed")
+    assert "expired" in bp.inner_text("[role=alert]")
+    buyer.close()
+
+
+def test_buyer_page_on_a_phone_has_steps_bar_and_sheet(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-J")
+    phone = browser.new_context(viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True)
+    bp = phone.new_page()
+    bp.goto(link)
+    bp.wait_for_selector("text=What's going wrong with it?")
+    bp.fill("#msg", "It flickers and then goes off")
+    bp.get_by_role("button", name="Send").click()
+    bar = bp.get_by_role("button", name="Steps 1/5")  # substring match
+    bar.wait_for()
+    assert bp.locator("aside").is_hidden()  # no side panel on a phone
+    assert overflow(bp) == 0
+    bar.click()
+    sheet = bp.get_by_role("dialog", name="Troubleshooting steps")
+    sheet.wait_for()
+    assert "Restart it" in sheet.inner_text()
+    assert overflow(bp) == 0
+    size = bp.evaluate("parseFloat(getComputedStyle(document.querySelector('#msg')).fontSize)")
+    assert size >= 16  # 16px base text (also stops iOS zooming into the box)
+    bp.keyboard.press("Escape")
+    sheet.wait_for(state="detached")
+    phone.close()

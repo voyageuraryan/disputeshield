@@ -62,5 +62,17 @@ with Session(engine) as s:
                       stage="INQUIRY", amount=Decimal("89.00"), currency="USD",
                       seller_response_due=now + timedelta(hours=120),
                       raw={"update_time": now.isoformat(), "links": links("accept_claim")}, agent_status="PROPOSED"))
+    # Phase 9C: more faulty lamps (own orders): H for the full buyer flow to DEFECT_CONFIRMED, I for an
+    # expired/tampered link, J for the phone layout.
+    from app.catalog import PRODUCTS, order_item
+    for pid, email in (("PP-DEMO-H", "hana@demo.test"), ("PP-DEMO-I", "ivan@demo.test"),
+                       ("PP-DEMO-J", "jo@demo.test")):
+        o = Order(buyer_email=email, invoice_id=f"INV-{pid[-1]}-9C", amount=Decimal("89.00"), currency="USD",
+                  items=[order_item(PRODUCTS["LAMP-01"], 1)])
+        s.add(o); s.commit(); s.refresh(o)
+        s.add(Dispute(paypal_dispute_id=pid, order_id=o.id, reason=SNAD, status="WAITING_FOR_SELLER_RESPONSE",
+                      stage="INQUIRY", amount=Decimal("89.00"), currency="USD",
+                      seller_response_due=now + timedelta(hours=120),
+                      raw={"update_time": now.isoformat(), "links": links("accept_claim")}, agent_status="PROPOSED"))
     s.commit()
 print("seeded")

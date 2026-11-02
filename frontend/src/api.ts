@@ -276,7 +276,32 @@ export type TroubleshootingStatus = {
   steps?: TSStepView[];
   sources?: TSSourceView[];
   messages?: TSMessageView[];
-  proofs?: { id: number; step_id: number | null; mime: string; size: number; created_at: string }[];
+  proofs?: TSProofView[];
+};
+
+export type TSProofChecks = {
+  detected_type?: string;
+  converted?: string;
+  duration_s?: number;
+  metadata_removed?: string[];
+  taken_after_dispute?: "yes" | "no" | "unknown";
+  capture_time_note?: string;
+  duplicate_of_steps?: number[];
+  reused_from_other_cases?: string[];
+  near_duplicates?: { proof_id: number; distance: number; step?: number; case?: string }[];
+  evidence_ready?: boolean;
+  evidence_copy?: string;
+};
+export type TSProofView = {
+  id: number;
+  step_id: number | null;
+  mime: string;
+  size: number;
+  created_at: string;
+  original_mime?: string | null;
+  checks?: TSProofChecks | null;
+  vision_verdict?: { shows_step?: "yes" | "no" | "unclear"; what_is_visible?: string; concerns?: string; skipped?: string; error?: string } | null;
+  evidence_ready?: boolean;
 };
 
 export type InviteResult = {
@@ -311,9 +336,11 @@ export type TSStepView = {
   status: "PENDING" | "DONE_FIXED" | "DONE_NOT_FIXED" | "SKIPPED" | "CANT_DO";
   source_ids: number[];
   proofs: number;
+  proof_files?: { id: number; kind: "image" | "video" }[];
+  buyer_note?: string | null;
 };
 export type TSSourceView = { id: number; title: string | null; url: string };
-export type TSMessageView = { role: string; body: string; step_id: number | null; created_at: string };
+export type TSMessageView = { id: number; role: string; body: string; step_id: number | null; created_at: string };
 
 export type BuyerSession = {
   id: number;
@@ -324,7 +351,12 @@ export type BuyerSession = {
   language: string | null;
   plan_generic: boolean | null;
   awaiting_fixed_confirm: boolean;
+  agent_working?: boolean;
   ended: boolean;
+  product_image?: string | null;
+  store_name?: string;
+  order_ref?: string | null;
+  paypal_case_id?: string | null;
   steps: TSStepView[];
   sources: TSSourceView[];
   messages: TSMessageView[];
@@ -353,13 +385,17 @@ function rememberDevice(id: string, key: string) {
 }
 
 /** Buyer page calls: the link token + this browser's device key, never the merchant's session. */
-async function helpReq(sessionId: string, token: string, path = "", init?: RequestInit): Promise<BuyerSession> {
+function helpHeaders(sessionId: string, token: string): Record<string, string> {
   const dev = deviceKey(sessionId);
+  return { "X-Help-Token": token, ...(dev ? { "X-Help-Device": dev } : {}) };
+}
+
+async function helpReq<T = BuyerSession>(sessionId: string, token: string, path = "", init?: RequestInit): Promise<T> {
   let res: Response;
   try {
     res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}${path}`, {
       ...init,
-      headers: { "X-Help-Token": token, ...(dev ? { "X-Help-Device": dev } : {}), ...(init?.headers ?? {}) },
+      headers: { ...helpHeaders(sessionId, token), ...(init?.headers ?? {}) },
     });
   } catch {
     throw new ApiError("We can't reach the server. Check your connection and try again.", 0, null);
@@ -367,7 +403,70 @@ async function helpReq(sessionId: string, token: string, path = "", init?: Reque
   const body = await res.json().catch(() => null);
   if (!res.ok) throw new ApiError(errorText(body?.detail) || "Something went wrong.", res.status, body?.detail);
   if (body?.device_key) rememberDevice(sessionId, body.device_key);
-  return body as BuyerSession;
+  return body as T;
+}
+
+export type StepAnswer = "DONE_FIXED" | "DONE_NOT_FIXED" | "CANT_DO";
+export type ProofUpload = BuyerSession & { proof: { id: number; step_id: number; mime: string; size: number; already_uploaded: boolean } };
+
+/** Upload with progress (fetch can't report upload progress, XMLHttpRequest can). */
+function uploadWithProgress(sessionId: string, token: string, stepId: number, file: File, onProgress?: (pct: number) => void): Promise<ProofUpload> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${API_BASE}/api/help/${encodeURIComponent(sessionId)}/steps/${stepId}/proof`);
+    for (const [k, v] of Object.entries(helpHeaders(sessionId, token))) xhr.setRequestHeader(k, v);
+    xhr.upload.onprogress = (e) => e.lengthComputable && onProgress?.(Math.round((e.loaded / e.total) * 100));
+    xhr.onerror = () => reject(new ApiError("The upload didn't go through. Check your connection and try again.", 0, null));
+    xhr.onload = () => {
+      let body: { detail?: unknown } | null = null;
+      try {
+        body = JSON.parse(xhr.responseText);
+      } catch {
+        /* not JSON */
+      }
+      if (xhr.status >= 200 && xhr.status < 300) resolve(body as unknown as ProofUpload);
+      else reject(new ApiError(errorText(body?.detail) || "The upload failed.", xhr.status, body?.detail));
+    };
+    const form = new FormData();
+    form.append("file", file, file.name || "upload");
+    xhr.send(form);
+  });
+}
+
+export type HelpStreamHandlers = {
+  onMessage: (m: TSMessageView) => void;
+  onState: (s: Partial<BuyerSession>) => void;
+};
+
+/** One connection to the buyer's live stream. fetch() (not EventSource) keeps the token and device key in
+ * headers, out of URLs and server logs. Resolves when the server ends the stream ("bye") or the connection drops;
+ * rejects with ApiError for 4xx (link no longer valid) so the caller stops reconnecting. */
+async function helpStream(sessionId: string, token: string, after: number, h: HelpStreamHandlers, signal: AbortSignal): Promise<void> {
+  const res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}/events?after=${after}`, {
+    headers: { ...helpHeaders(sessionId, token), Accept: "text/event-stream" },
+    signal,
+  });
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(errorText(body?.detail) || "stream refused", res.status, body?.detail);
+  }
+  if (!res.body) throw new ApiError("streaming not supported", 0, null);
+  const { parseSSE } = await import("./help/logic");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buf += decoder.decode(value, { stream: true });
+    const { events, rest } = parseSSE(buf);
+    buf = rest;
+    for (const e of events) {
+      if (e.event === "message") h.onMessage(JSON.parse(e.data));
+      else if (e.event === "state") h.onState(JSON.parse(e.data));
+      else if (e.event === "bye") return;
+    }
+  }
 }
 
 const json = (body: unknown): RequestInit => ({ method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
@@ -386,10 +485,19 @@ export const helpApi = {
     }
     return p;
   },
-  send: (sessionId: string, token: string, body: string, stepId?: number, stepStatus?: TSStepView["status"]) =>
-    helpReq(sessionId, token, "/messages", json({ body, step_id: stepId ?? null, step_status: stepStatus ?? null })),
+  /** 202: the reply arrives on the stream (and in the next GET). */
+  send: (sessionId: string, token: string, body: string) =>
+    helpReq<{ accepted: boolean; agent_working: boolean }>(sessionId, token, "/messages", json({ body })),
+  step: (sessionId: string, token: string, stepId: number, status: StepAnswer, note = "") =>
+    helpReq(sessionId, token, `/steps/${stepId}`, json({ status, note })),
   confirm: (sessionId: string, token: string, fixed: boolean) => helpReq(sessionId, token, "/confirm", json({ fixed })),
   handoff: (sessionId: string, token: string) => helpReq(sessionId, token, "/handoff", { method: "POST" }),
-  uploadProof: (sessionId: string, token: string, stepId: number, file: File) =>
-    helpReq(sessionId, token, `/steps/${stepId}/proof`, { method: "POST", headers: { "Content-Type": file.type || "application/octet-stream" }, body: file }),
+  uploadProof: uploadWithProgress,
+  /** The buyer's own upload as a blob (an <img> can't send the link headers). */
+  proofBlob: async (sessionId: string, token: string, proofId: number): Promise<Blob> => {
+    const res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}/proofs/${proofId}`, { headers: helpHeaders(sessionId, token) });
+    if (!res.ok) throw new ApiError("couldn't load the file", res.status, null);
+    return res.blob();
+  },
+  stream: helpStream,
 };

@@ -287,6 +287,9 @@ class TSProof(SQLModel, table=True):
     checks: Optional[dict] = _json_col()
     vision_verdict: Optional[dict] = _json_col()
     created_at: datetime = Field(default_factory=utcnow)
+    # Phase 9C (nullable for the auto-migration)
+    evidence_path: Optional[str] = None   # copy <= 10 MB that could be forwarded to PayPal as evidence
+    original_mime: Optional[str] = None   # what the buyer uploaded (e.g. image/heic before conversion)
 
 
 class TSSource(SQLModel, table=True):

@@ -19,8 +19,10 @@ from app.models import (AgentStep, Dispute, ResearchCache, TroubleshootingSessio
 from tests.test_store_api import client, engine  # noqa: F401  (fixtures)
 from tests.test_troubleshooting import make_case
 
-PNG = b"\x89PNG\r\n\x1a\n" + b"\x00" * 64
-MP4 = b"\x00\x00\x00\x18ftypmp42" + b"\x00" * 64
+from tests import media
+
+PNG = media.png()
+MP4 = media.mp4(5)
 
 
 # ---- fakes --------------------------------------------------------------------------------------
@@ -587,30 +589,26 @@ def test_buyer_chat_api_end_to_end(client, engine, fake_research, monkeypatch, a
     monkeypatch.setattr("app.agents.llm.structured_call", llm)
 
     r = client.post(f"/api/help/{sid}/messages", json={"body": "The left earbud won't charge"}, headers=h)
-    assert r.status_code == 200, r.text
-    body = r.json()
-    assert len(body["steps"]) == 3 and body["reply"].startswith("Let's try a few steps")
+    assert r.status_code == 202, r.text  # the agent answers in the background (done before TestClient returns)
+    body = client.get(f"/api/help/{sid}", headers=h).json()
+    assert not body["agent_working"]
+    assert len(body["steps"]) == 3 and body["messages"][-1]["body"].startswith("Let's try a few steps")
     assert body["sources"][0]["title"] == "soundpeak.example"
     last = body["steps"][-1]
-    r = client.post(f"/api/help/{sid}/messages", json={"body": "done", "step_id": last["id"],
-                                                        "step_status": "DONE_NOT_FIXED"}, headers=h)
-    assert r.json()["status"] == "AWAITING_PROOF"
-    # proof: type must match the bytes; size limited
+    assert client.post(f"/api/help/{sid}/messages", json={"body": "done", "step_id": last["id"],
+                                                           "step_status": "DONE_NOT_FIXED"}, headers=h).status_code == 202
+    assert client.get(f"/api/help/{sid}", headers=h).json()["status"] == "AWAITING_PROOF"
+    # proof: the type comes from the bytes (see test_proof_uploads.py for the full table)
     up = f"/api/help/{sid}/steps/{last['id']}/proof"
-    assert client.post(up, content=b"not a video", headers={**h, "Content-Type": "video/mp4"}).status_code == 422
-    assert client.post(up, content=b"x", headers={**h, "Content-Type": "application/pdf"}).status_code == 422
-    monkeypatch.setenv("PROOF_MAX_BYTES", "100")
-    get_settings.cache_clear()
-    assert client.post(up, content=PNG + b"\x00" * 200, headers={**h, "Content-Type": "image/png"}).status_code == 413
-    monkeypatch.delenv("PROOF_MAX_BYTES")
-    get_settings.cache_clear()
-    r = client.post(up, content=MP4, headers={**h, "Content-Type": "video/mp4"})
+    assert client.post(up, files={"file": ("v.mp4", b"not a video", "video/mp4")}, headers=h).status_code == 422
+    r = client.post(up, files={"file": ("v.mp4", MP4, "video/mp4")}, headers=h)
     assert r.status_code == 200 and r.json()["steps"][-1]["proofs"] == 1
     # merchant sees transcript, steps, sources and the proof file
     st = client.get("/api/disputes/PP-TS-1/troubleshooting").json()
     assert [m["role"] for m in st["messages"]].count("buyer") == 2 and st["session"]["symptom"]
     pr = client.get(f"/api/disputes/PP-TS-1/troubleshooting/proofs/{st['proofs'][0]['id']}")
-    assert pr.status_code == 200 and pr.content == MP4 and pr.headers["content-type"] == "video/mp4"
+    assert pr.status_code == 200 and pr.headers["content-type"] == "video/mp4"
+    assert len(pr.content) == len(MP4) and b"\xa9xyz" not in pr.content.split(b"free", 1)[0]  # location box neutralised
     assert client.get("/api/disputes/PP-TS-1/troubleshooting/proofs/999").status_code == 404
 
 

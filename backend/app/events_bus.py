@@ -25,6 +25,11 @@ def steps_key(dispute_id: int) -> str:
 DISPUTES_KEY = "disputes"
 
 
+def help_key(session_id: int) -> str:
+    """Buyer troubleshooting page stream (new chat messages, step / status / proof changes)."""
+    return f"help:{session_id}"
+
+
 def _wake(key: str) -> None:
     for ev in list(_waiters.get(key, ())):
         ev.set()
@@ -58,7 +63,7 @@ async def wait(key: str, timeout: float) -> bool:
 
 @event.listens_for(Session, "after_flush")
 def _collect(session, flush_context):  # noqa: ANN001
-    from app.models import AgentStep, Dispute
+    from app.models import AgentStep, Dispute, TroubleshootingSession, TSMessage, TSProof, TSSource, TSStep
 
     keys = session.info.setdefault("ds_notify", set())
     for obj in session.new:
@@ -66,6 +71,11 @@ def _collect(session, flush_context):  # noqa: ANN001
             keys.add(steps_key(obj.dispute_id))
         elif isinstance(obj, Dispute):
             keys.add(DISPUTES_KEY)
+    for obj in list(session.new) + list(session.dirty) + list(session.deleted):
+        if isinstance(obj, (TSMessage, TSStep, TSProof, TSSource)) and obj.session_id:
+            keys.add(help_key(obj.session_id))
+        elif isinstance(obj, TroubleshootingSession) and obj.id:
+            keys.add(help_key(obj.id))
 
 
 @event.listens_for(Session, "after_commit")

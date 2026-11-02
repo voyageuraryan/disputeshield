@@ -9,6 +9,7 @@ import {
   type Evidence,
   type EvidenceSource,
   type TroubleshootingStatus,
+  type TSProofView,
 } from "../api";
 import { ActionChip, addressLines, caseStatus, Chip, day, Due, fightRoute, label, money, useNow, when, type Tone } from "../format";
 import ShippingPanel from "../ShippingPanel";
@@ -113,6 +114,39 @@ const STEP_DONE: Record<string, string> = {
   CANT_DO: "couldn't do it",
 };
 
+/** Checks on a buyer upload (flags for the merchant, never decisions) and the advisory photo check. */
+export function ProofFlags({ p }: { p: TSProofView }) {
+  const c = p.checks ?? {};
+  const v = p.vision_verdict;
+  const warn: string[] = [];
+  if (c.taken_after_dispute === "no") warn.push("taken before the dispute was opened");
+  if (c.reused_from_other_cases?.length) warn.push(`same file as case ${c.reused_from_other_cases.join(", ")}`);
+  if (c.near_duplicates?.length)
+    warn.push(`looks like ${c.near_duplicates.map((d) => (d.step ? `step ${d.step}'s upload` : `an upload in case ${d.case}`)).join(", ")}`);
+  if (c.duplicate_of_steps?.length) warn.push(`same file as step ${c.duplicate_of_steps.join(", ")}`);
+  const info = [
+    c.detected_type && `${c.detected_type}${c.converted ? ` (${c.converted})` : ""}`,
+    c.duration_s != null && `${c.duration_s} s`,
+    c.taken_after_dispute === "yes" ? "taken after the dispute opened" : c.taken_after_dispute === "unknown" ? `capture time unknown${c.capture_time_note ? ` (${c.capture_time_note})` : ""}` : null,
+    c.metadata_removed?.length ? `removed: ${c.metadata_removed.join(", ")}` : null,
+    p.evidence_ready ? "ready to send as evidence (≤ 10 MB)" : "over 10 MB, not ready as evidence",
+  ].filter(Boolean);
+  return (
+    <span className="block text-xs text-slate-600">
+      {warn.length > 0 && <span className="block font-medium text-amber-800">Check: {warn.join("; ")}</span>}
+      {info.join(" · ")}
+      {v?.shows_step && (
+        <span className="block">
+          AI look (advisory only): shows the step = <b>{v.shows_step}</b>. {v.what_is_visible}
+          {v.concerns ? ` Concerns: ${v.concerns}` : ""}
+        </span>
+      )}
+      {v?.skipped && <span className="block">AI look: {v.skipped}</span>}
+      {v?.error && <span className="block">AI look: {v.error}</span>}
+    </span>
+  );
+}
+
 /** What the buyer and the troubleshooting agent did: steps (with proof files), sources, conversation. */
 function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingStatus }) {
   const steps = st.steps ?? [];
@@ -131,12 +165,16 @@ function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingSta
             {steps.map((x) => (
               <li key={x.id}>
                 {x.ordinal}. {x.title} <span className="text-slate-500">({STEP_DONE[x.status] ?? x.status})</span>
+                {x.buyer_note && <span className="block pl-4 text-xs text-slate-600">Buyer's note: {x.buyer_note}</span>}
                 {proofs
                   .filter((p) => p.step_id === x.id)
                   .map((p, n) => (
-                    <a key={p.id} href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="ml-2 text-indigo-700 hover:underline">
-                      {p.mime.startsWith("video") ? "video" : "photo"} {n + 1}
-                    </a>
+                    <div key={p.id} className="ml-4 mt-1">
+                      <a href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="text-indigo-700 hover:underline">
+                        {p.mime.startsWith("video") ? "video" : "photo"} {n + 1}
+                      </a>
+                      <ProofFlags p={p} />
+                    </div>
                   ))}
               </li>
             ))}

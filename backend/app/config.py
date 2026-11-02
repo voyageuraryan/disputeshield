@@ -62,8 +62,18 @@ class Settings(BaseSettings):
     # Base URL for buyer troubleshooting links (defaults to FRONTEND_URL). dev.sh sets it to a public tunnel
     # so a buyer on another device can open the link while the merchant dashboard stays on localhost.
     buyer_portal_url: str = ""
-    # Uploaded buyer proof (photos/videos) for troubleshooting steps.
-    proof_max_bytes: int = 15 * 1024 * 1024
+    # Phase 9C: buyer proof uploads (stored under ARTIFACTS_DIR/ts/{session_id}/). Images are re-encoded to
+    # JPEG/PNG <= 10 MB (PayPal's per-file evidence limit) without GPS; videos are limited by size and length.
+    proof_image_max_bytes: int = 10 * 1024 * 1024
+    proof_video_max_bytes: int = 50 * 1024 * 1024
+    proof_video_max_seconds: int = 30
+    # Advisory Gemini look at each proof photo (shown to the merchant, never decides anything). Off by default:
+    # on Gemini's free tier, inputs may be read by human reviewers and Google asks not to send personal
+    # information, and buyer photos can show people or homes. Turn on with a paid key or the buyer's consent.
+    proof_vision_check: bool = False
+    vision_model: str = ""  # defaults to the first GEMINI_MODEL
+    # Shown in the buyer page header.
+    store_name: str = "Demo store"
 
     @property
     def cors_origin_list(self) -> list[str]:

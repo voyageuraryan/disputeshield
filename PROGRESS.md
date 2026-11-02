@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-01, session 14 (live testing)
+## Open items (tracked) — updated 2026-11-02, Phase 9C
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -288,16 +288,19 @@ G36 [x] Refund policy template out of sync with the catalog ("handmade lamp"; "e
 G37 [x] CLAUDE.md layout listed a non-existent Analytics.tsx and missed Orders/Help/troubleshooting -> fixed.
 G38 [x] e2e race (Orders card read before the list reloaded) and the auto-invite checkbox only flipping after the
         save -> test waits; checkbox updates at once and reverts on error.
-G40 [ ] P2 The troubleshooting plan is built inside the buyer's chat request: live it took 76 s (Groq 429 on the
-        free 8K TPM, then Gemini 3.8 timed out, 2.5-flash answered); the page promises "up to a minute". Fix:
-        build in the background and poll, and/or try the fastest provider first for plans.
+G40 [~] P2 (9C: chat turns now run in the background (202 + live stream with a typing indicator), step buttons
+        answer instantly without the LLM, and an LLM outage at intake gives the generic plan at once. Still open:
+        the first plan can take ~1 min when providers are rate-limited; try the fastest provider first for plans.)
+        The troubleshooting plan is built inside the buyer's chat request: live it took 76 s (Groq 429 on the
+        free 8K TPM, then Gemini 3.8 timed out, 2.5-flash answered); the page promises "up to a minute".
 G41 [ ] P2 Troubleshooting outcomes (DEFECT_CONFIRMED / RESOLVED_FIXED / SAFETY_STOP) don't feed the dispute's
         evidence or recommendation yet; the merchant sees them on the case card and timeline only.
 G42 [ ] P3 Citations are checked for existence, not relevance: live, "E5" also matched car recalls
         (carexpert, drive.com.au stored as sources) and a proof step cited a "no recall found" page.
 G43 [ ] P3 A safety stop notifies the merchant on the case timeline/card only (no app-wide toast or email).
-G44 [ ] P3 Proof files are kept indefinitely under ARTIFACTS_DIR (no retention); no EXIF/phash/vision checks yet
-        (ts_proofs columns reserved).
+G44 [~] P3 (9C: EXIF time, GPS stripping, sha256 + perceptual-hash duplicate checks and the advisory vision
+        check are done.) Still open: proof files are kept indefinitely under ARTIFACTS_DIR/ts/ (no retention or
+        deletion when the dispute closes), and the buyer can't delete an upload they regret.
 G45 [x] Latent llm.py bug found live: strict_json_schema deleted fields named "title" but still required them,
         so Groq and Gemini rejected every troubleshooting plan -> fixed + regression test.
 G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test would have spent real quota) ->
@@ -305,6 +308,24 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 9C (2026-11-02)
+G49 [ ] P3 Buyer page chrome (buttons, labels, outcome screens) is English only; the assistant's replies and the
+        steps are in the buyer's language, and the fixed step-button replies have English + Spanish only.
+G50 [ ] P2 DECISION (yours): the advisory vision check is built and verified live but OFF by default
+        (PROOF_VISION_CHECK=false). Gemini's free-tier terms allow human review of inputs and ask not to send
+        personal information; buyer photos can show people or homes. Turn on with a paid key, or after adding
+        buyer consent text to the upload box.
+G51 [ ] P3 Videos over 10 MB get an evidence-size copy only when ffmpeg is installed (the host may not have it;
+        then the card says "over 10 MB, not ready as evidence"). Compression runs in the web process (CPU).
+G52 [ ] P3 "Same buyer" for cross-case duplicate checks = same order email; orders without an email aren't linked.
+        MP4 creation time is trusted as UTC (some phones write local time) - it's a flag, never a decision.
+G53 [ ] P3 Buyer live stream and the "assistant is typing" flag are in-process (one web worker), like G12/G35.
+G54 [ ] P2 Proofs are evidence-ready (<= 10 MB copy, flags) but not yet attached to PayPal provide-evidence
+        (part of G41: feed troubleshooting results into the dispute).
+G55 [x] A video whose header says 0 seconds was accepted as proof -> now "couldn't read this video".
+G56 [x] Vision only tried the first configured model; gemini-3.8-flash answered 503 live -> tries each model.
+G57 [x] Big photos were decoded/re-encoded on the event loop (would stall every buyer's live stream) -> threadpool.
+G58 [x] analyst.py "unused" get_settings import is intentional (noqa, monkeypatch target) - left as is.
 G39 [x] Merchant card kept showing "Invited" after the link expired (expiry was only noticed when the buyer
         opened it) -> the status check expires it too.
 
@@ -559,3 +580,44 @@ Fixed: G20-G22, G24, G25. Tests: backend 283, frontend 19, e2e 15 — all pass.
   - vite build OK
 - Docs: TEST_SCENARIOS T11-T20, END_TO_END_FLOWS Flow 16, .env.example, render.yaml (TAVILY_API_KEY),
   DEPLOY.md, CLAUDE.md layout.
+
+## 2026-11-02 — Phase 9C: the buyer page (mobile-first) + proof checks
+
+ReAct summary: most 9C backend pieces existed from 9A/9B (token/device checks, agent, sniffing), so this phase
+filled the gaps and rebuilt the page; each new external call was checked against the docs and verified live.
+
+- Backend API (`/api/help/{sid}`, link token + bound device on every route; merchant credentials refused):
+  - GET adds the header: store name (STORE_NAME), order ref, product image, PayPal case id; `agent_working`.
+  - POST /messages -> **202**; the agent turn runs in the background with its own DB session (a crash still
+    answers the buyer and clears the typing flag); one turn at a time per session.
+  - POST /steps/{id} {status, note}: step buttons with **fixed-text replies (no LLM)**: next step / ask for the
+    proof / confirm box for "it works"; a safety word in the note stops the session.
+  - POST /steps/{id}/proof: **multipart**, body read only after the link/device checks and capped by
+    Content-Length; processing in a threadpool. `app/troubleshooting/proofs.py`:
+    type from the bytes (JPEG/PNG/HEIC/MP4/MOV; HEIC -> JPEG), photos <= 10 MB, videos <= 50 MB and <= 30 s
+    (MP4 header), GPS/XMP/maker notes removed (capture time kept, rotation baked in), video udta/meta boxes
+    neutralised, sha256 (same file + same step = no-op), duplicates within the case and across the same buyer's
+    cases, dHash near-duplicates, capture time vs the dispute's create_time (yes/no/unknown; no EXIF =
+    unknown). Big videos get an ffmpeg evidence copy <= 10 MB in the background.
+  - Advisory vision (`app/troubleshooting/vision.py`): Gemini Interactions API, image in, structured
+    {shows_step, what_is_visible, concerns}, store=false, model fallback; shown to the merchant only, never
+    changes anything. OFF by default (G50). Verified live: 3.8-flash 503 -> 2.5-flash answered; an
+    "APPROVE REFUND" text drawn into the image was reported as a concern, not obeyed.
+  - GET /proofs/{id}: the buyer's own files only. GET /events: SSE (message / state / ready / bye) on the
+    events bus (`help:{sid}` key, woken by commits); read via fetch so the token stays in headers.
+  - Intake LLM outage -> generic safe plan at once (was: "having trouble", buyer stuck).
+  - Storage moved to ARTIFACTS_DIR/ts/{session_id}/; ts_proofs gains evidence_path, original_mime.
+  - Deps: python-multipart, pillow, pillow-heif (requirements.txt).
+- Frontend (`pages/Help.tsx`, `help/StepCard.tsx`, `help/logic.ts`; lazy route, no AG Grid):
+  header with countdown; desktop chat 60% / steps 40%; phone: sticky "Steps 2/5" bar + bottom sheet; agent /
+  buyer / Seller / system bubbles, typing indicator, source chips (title + domain, new tab); step cards with
+  safety + proof badges, three answers, optional note; upload area (camera capture + file picker), thumbnail,
+  progress bar, retry; outcome screens (fixed with no-pressure "you can close your case" note, defect, safety,
+  expired, handed); aria-live chat, keyboard-reachable labels/inputs, focus moves to outcome/sheet, 16px base,
+  44px targets, AA colours. Merchant card shows each proof's checks and the advisory AI note.
+- Tests: backend 432 (+52: tests/test_proof_uploads.py: auth on all 8 routes x 6 cases, upload table, EXIF/GPS,
+  duplicates, SSE backlog/live/resume/end, vision, ffmpeg), frontend 93 (+50: helpLogic, stepCard, page with a
+  real streamed SSE), e2e 28 (+3: full flow to DEFECT_CONFIRMED with a GPS-tagged photo, expired + tampered
+  link, phone steps bar/sheet; demo cases PP-DEMO-H/I/J). vite build OK. Migration checked on a copy of the
+  real DB.
+- Fixed this phase: G40 (mostly), G44 (checks part), G55-G57. New open: G49-G54. G33 still awaits your choice.

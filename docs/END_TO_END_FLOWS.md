@@ -280,13 +280,29 @@ Start from Flow 15 step 4 (buyer page open).
    *Expected:* after up to ~1–1.5 min: 3–7 steps, each with a **Source:** link (sites the web search found:
    the maker's support pages when they exist, otherwise similar official guidance). The last step asks for a
    photo/video. If no usable sources or plan: 5 **general safety-checked steps, not specific to your model**.
-2. **Path A (fixed):** press **That fixed it** on a step → **Yes, it works now**.
-   *Expected:* "Fixed"; merchant card **Fixed by troubleshooting**; timeline "Fixed: the buyer confirmed…".
+2. **Path A (fixed):** press **Done, it works now** on a step → **Yes, it works now**.
+   *Expected:* "Great, it's working!"; merchant card **Fixed by troubleshooting**; timeline "Fixed: the buyer confirmed…".
 3. **Path B (defect):** on every step press **Done, still not working**; upload the requested video/photo.
-   *Expected:* "You've tried every step…"; card **Defect confirmed** with the proof link (*video 1*) and the
+   *Expected:* "We've sent your results to the seller"; card **Defect confirmed** with the proof link (*video 1*) and the
    whole conversation. The agents' dispute recommendation is unchanged by this (see PROGRESS G41).
 4. **Path C (safety):** type "it's getting hot to the touch". *Expected:* the fixed safety message, chat closed,
    card **Stopped for safety**, timeline **SAFETY STOP …** — contact the buyer.
 5. **Path D (seller):** **Talk to the seller** → card **Handed to you**.
+
+Result: ______
+
+### Flow 17 — The buyer page on a phone, with a photo as proof (Phase 9C)
+Use a narrow window (or Chrome DevTools → device mode, iPhone size) for the buyer.
+1. Invite the buyer (Flow 15) and open the link. *Expected:* header with the store name, "Help with your order
+   #…", product + model, PayPal case id and **⏱ time left**; the assistant's first question.
+2. Describe the problem. *Expected:* your message appears at once, then "The assistant is typing…", then the
+   steps (no reload). A sticky **Steps 1/5** bar appears; tap it → the checklist slides up from the bottom.
+3. Answer each step with **Done, still not working** (in the sheet). *Expected:* an instant reply each time
+   ("Next, step N: …"); on the proof step "Please add the video/photo for step N…".
+4. On the proof step press **Choose a file** (or **Use camera** on a real phone) and pick a photo.
+   *Expected:* thumbnail + progress bar, then **"We've sent your results to the seller"**.
+5. Merchant: case page → **Buyer troubleshooting** card. *Expected:* **Defect confirmed**; under the step:
+   *photo 1* plus its checks (type, "removed: GPS location" if the photo had location, capture time vs the
+   dispute, duplicates if any) and "AI look: automatic photo check is off" (see PROGRESS G50).
 
 Result: ______

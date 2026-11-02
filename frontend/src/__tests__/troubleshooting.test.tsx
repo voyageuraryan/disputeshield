@@ -9,15 +9,31 @@ import { TroubleshootingCard } from "../pages/CaseDetail";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Reply = { status: number; body: unknown };
+type Reply = { status: number; body?: unknown; stream?: ReadableStream<Uint8Array> };
 let replies: Record<string, Reply[]>;
 let requests: { url: string; init?: RequestInit }[];
 const fetchMock = vi.fn(async (url: string, init?: RequestInit) => {
   requests.push({ url, init });
   const key = `${init?.method ?? "GET"} ${url.split("?")[0]}`;
   const r = replies[key]?.shift() ?? { status: 500, body: { detail: `no reply for ${key}` } };
+  if (r.stream) return new Response(r.stream, { status: 200, headers: { "Content-Type": "text/event-stream" } });
   return new Response(JSON.stringify(r.body), { status: r.status });
 });
+
+/** A server-sent-events response the test can push events into. */
+function sseStream() {
+  let ctl!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({ start: (c) => void (ctl = c) });
+  const enc = new TextEncoder();
+  return {
+    reply: { status: 200, stream } as Reply,
+    send: (event: string, data: unknown, id?: number) =>
+      act(async () => {
+        ctl.enqueue(enc.encode(`${id ? `id: ${id}\n` : ""}event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        await new Promise((r) => setTimeout(r, 10));
+      }),
+  };
+}
 
 let el: HTMLDivElement;
 let root: Root;
@@ -54,7 +70,7 @@ afterEach(() => {
 const flush = () => act(async () => new Promise((r) => setTimeout(r, 0)));
 const button = (text: string) => [...el.querySelectorAll("button")].find((b) => b.textContent?.includes(text)) as HTMLButtonElement;
 
-const OPENER = { role: "agent", body: "Hi! I'm here to help get your Smart LED desk lamp working. What's going wrong with it?", step_id: null, created_at: "2026-11-02T10:00:00Z" };
+const OPENER = { id: 1, role: "agent", body: "Hi! I'm here to help get your Smart LED desk lamp working. What's going wrong with it?", step_id: null, created_at: "2026-11-02T10:00:00Z" };
 const SESSION = {
   id: 5, status: "ACTIVE", product_name: "Smart LED desk lamp", product_model: "Lumina LD-200",
   expires_at: "2026-11-10T10:00:00Z", language: null, plan_generic: null, awaiting_fixed_confirm: false, ended: false,
@@ -64,6 +80,7 @@ const STEP = {
   id: 31, ordinal: 1, title: "Reset the lamp", instruction: "Unplug it for 30 seconds.", why: "Clears faults.",
   safety_level: "safe", requires_proof: true, proof_kind: "video", status: "PENDING", source_ids: [7], proofs: 0,
 };
+const HEADER = { store_name: "Lumina Home", order_ref: "INV-1042", paypal_case_id: "PP-D-77", product_image: "💡", agent_working: false };
 
 async function renderHelp(url: string) {
   window.history.pushState(null, "", url);
@@ -93,6 +110,7 @@ describe("buyer help page", () => {
     expect(sessionStorage.getItem("ds_help_5")).toBe("secret-token"); // a reload still works
     expect(el.textContent).toContain("Let's get your Smart LED desk lamp working");
     expect(el.textContent).toContain("Model Lumina LD-200");
+    expect(el.textContent).toContain("left"); // the countdown
     expect(el.textContent).toContain("What's going wrong with it?"); // the agent's first, open question
     expect(localStorage.getItem("ds_help_dev_5")).toBe("dev-key-1"); // this browser is now the link's device
   });
@@ -121,48 +139,109 @@ describe("buyer chat", () => {
     await flush();
   };
 
-  it("sends messages with the token and device key, and shows steps with sources and proof upload", async () => {
+  it("sends a message (202), shows it at once with the typing indicator, then streams the reply, steps and sources", async () => {
     localStorage.setItem("ds_help_dev_5", "dev-key-1");
-    replies["GET /api/help/5"] = [{ status: 200, body: SESSION }];
-    replies["POST /api/help/5/messages"] = [
-      {
-        status: 200,
-        body: {
-          ...SESSION,
-          steps: [STEP],
-          sources: [{ id: 7, title: "lumina.example", url: "https://support.lumina.example/ld200" }],
-          messages: [OPENER, { role: "buyer", body: "It won't turn on", step_id: null, created_at: "x" }, { role: "agent", body: "Let's try step 1.", step_id: 31, created_at: "x" }],
-          reply: "Let's try step 1.",
-        },
-      },
-    ];
+    const sse = sseStream();
+    replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, ...HEADER } }];
+    replies["GET /api/help/5/events"] = [sse.reply];
+    replies["POST /api/help/5/messages"] = [{ status: 202, body: { accepted: true, agent_working: true } }];
     await renderHelp("/help/5?t=tok");
+    expect(el.querySelector("h1")?.textContent).toBe("Help with your order #INV-1042");
+    expect(el.textContent).toContain("Lumina Home");
+    expect(el.textContent).toContain("PayPal case PP-D-77");
+    const stream = requests.find((q) => q.url.includes("/events"))!;
+    expect(stream.url).toContain("after=1"); // resumes after the newest message it already has
+    expect(stream.url).not.toContain("tok"); // token only in headers, never in the URL
+    expect((stream.init!.headers as Record<string, string>)["X-Help-Device"]).toBe("dev-key-1");
     await typeAndSend("It won't turn on");
     const post = requests.find((q) => q.init?.method === "POST")!;
-    expect((post.init!.headers as Record<string, string>)["X-Help-Device"]).toBe("dev-key-1");
-    expect(JSON.parse(post.init!.body as string)).toEqual({ body: "It won't turn on", step_id: null, step_status: null });
+    expect(JSON.parse(post.init!.body as string)).toEqual({ body: "It won't turn on" });
+    expect(el.textContent).toContain("It won't turn on"); // shown before the server answers
+    expect(el.textContent).toContain("The assistant is typing");
+    // the stream delivers the stored message, the reply and the new state
+    await sse.send("message", { id: 2, role: "buyer", body: "It won't turn on", step_id: null, created_at: "x" }, 2);
+    await sse.send("message", { id: 3, role: "agent", body: "Let's try step 1.", step_id: 31, created_at: "x" }, 3);
+    await sse.send("state", {
+      status: "ACTIVE", ended: false, awaiting_fixed_confirm: false, agent_working: false,
+      steps: [STEP], sources: [{ id: 7, title: "Lumina support", url: "https://support.lumina.example/ld200" }],
+    });
+    expect(el.textContent!.match(/It won't turn on/g)).toHaveLength(1); // the optimistic bubble was replaced
+    expect(el.textContent).not.toContain("The assistant is typing");
     expect(el.textContent).toContain("Let's try step 1.");
-    expect(el.textContent).toContain("1. Reset the lamp");
-    expect((el.querySelector('a[href="https://support.lumina.example/ld200"]') as HTMLAnchorElement).rel).toContain("noopener");
-    expect(el.querySelector('[aria-label="Upload a video for step 1"]')).not.toBeNull();
+    expect(el.textContent).toContain("Reset the lamp");
+    expect(el.textContent).toContain("Steps 1/1");
+    const chip = el.querySelector('[aria-label="Sources"] a') as HTMLAnchorElement; // source chip under the reply
+    expect(chip.href).toBe("https://support.lumina.example/ld200");
+    expect(chip.target).toBe("_blank");
+    expect(chip.rel).toContain("noopener");
+    expect(chip.textContent).toContain("support.lumina.example");
+    expect(el.querySelector('[aria-live="polite"]')).not.toBeNull();
+    await sse.send("message", { id: 4, role: "merchant", body: "Hi, seller here.", step_id: null, created_at: "x" }, 4);
+    const seller = [...el.querySelectorAll("li")].find((li) => li.textContent?.includes("Hi, seller here."))!;
+    expect(seller.textContent).toContain("Seller");
   });
 
-  it("step buttons report a status; 'it works' needs the confirm button", async () => {
+  it("step buttons report a status; 'it works' needs the confirm button; then the thank-you screen", async () => {
     localStorage.setItem("ds_help_dev_5", "d");
     replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, steps: [STEP] } }];
-    replies["POST /api/help/5/messages"] = [{ status: 200, body: { ...SESSION, steps: [{ ...STEP, status: "DONE_FIXED" }], awaiting_fixed_confirm: true } }];
+    replies["POST /api/help/5/steps/31"] = [{ status: 200, body: { ...SESSION, steps: [{ ...STEP, status: "DONE_FIXED" }], awaiting_fixed_confirm: true } }];
     replies["POST /api/help/5/confirm"] = [{ status: 200, body: { ...SESSION, status: "RESOLVED_FIXED", ended: true } }];
     await renderHelp("/help/5?t=tok");
-    await act(async () => button("That fixed it").click());
+    await act(async () => button("Done, it works now").click());
     await flush();
-    const sent = JSON.parse(requests.find((q) => q.url.endsWith("/messages"))!.init!.body as string);
-    expect(sent).toEqual({ body: "Step 1: that fixed it", step_id: 31, step_status: "DONE_FIXED" });
+    expect(JSON.parse(requests.find((q) => q.url.endsWith("/steps/31"))!.init!.body as string)).toEqual({ status: "DONE_FIXED", note: "" });
     expect(el.querySelector('[aria-label="Is it working now?"]')).not.toBeNull();
     await act(async () => button("Yes, it works now").click());
     await flush();
     expect(JSON.parse(requests.at(-1)!.init!.body as string)).toEqual({ fixed: true });
-    expect(el.textContent).toContain("Fixed. Thank you");
+    expect(el.textContent).toContain("Great, it's working!");
+    expect(el.textContent).toContain("Resolution Center"); // how to close the case, without pressure
+    expect(el.textContent).toContain("no rush");
     expect(el.querySelector("#msg")).toBeNull(); // ended: no more chat
+  });
+
+  it.each([
+    ["DEFECT_CONFIRMED", "We've sent your results to the seller"],
+    ["SAFETY_STOP", "Stopped for your safety"],
+    ["HANDED_TO_MERCHANT", "The seller is taking it from here"],
+    ["EXPIRED", "This help page has closed"],
+  ])("outcome screen for %s", async (status, text) => {
+    replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, status, ended: true, steps: [{ ...STEP, status: "DONE_NOT_FIXED" }] } }];
+    await renderHelp("/help/5?t=tok");
+    expect(el.querySelector('[role="status"]')?.textContent).toContain(text);
+    expect(el.querySelector("#msg")).toBeNull();
+    expect(button("Done, still not working")).toBeUndefined();
+    expect(button("Talk to the seller")).toBeUndefined();
+  });
+
+  it("the countdown running out closes the page even before the server says so", async () => {
+    replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, expires_at: "2020-01-01T00:00:00Z" } }];
+    await renderHelp("/help/5?t=tok");
+    expect(el.textContent).toContain("This help page has closed");
+    expect(el.querySelector("#msg")).toBeNull();
+  });
+
+  it("a stream refusal (link no longer valid) replaces the page", async () => {
+    replies["GET /api/help/5"] = [{ status: 200, body: SESSION }];
+    replies["GET /api/help/5/events"] = [{ status: 410, body: { detail: "This troubleshooting link has expired. Please contact the seller." } }];
+    await renderHelp("/help/5?t=tok");
+    await flush();
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain("has expired");
+  });
+
+  it("phones get a sticky 'Steps 1/2' bar that opens the checklist as a bottom sheet", async () => {
+    replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, steps: [STEP, { ...STEP, id: 32, ordinal: 2, title: "Charge it" }] } }];
+    await renderHelp("/help/5?t=tok");
+    const bar = button("Steps 1/2");
+    expect(bar.textContent).toContain("Reset the lamp");
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
+    await act(async () => bar.click());
+    const sheet = el.querySelector('[role="dialog"]') as HTMLElement;
+    expect(sheet.getAttribute("aria-modal")).toBe("true");
+    expect(sheet.textContent).toContain("Charge it");
+    expect(document.activeElement).toBe(sheet); // focus moves into the sheet
+    await act(async () => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" })));
+    expect(el.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("explains a link already open on another device", async () => {
@@ -191,6 +270,8 @@ describe("buyer chat", () => {
     await typeAndSend("hello");
     expect(el.querySelector('[role="alert"]')?.textContent).toContain("very fast");
     expect(el.textContent).toContain("What's going wrong"); // still on the page
+    expect((el.querySelector("#msg") as HTMLTextAreaElement).value).toBe("hello"); // the text isn't lost
+    expect(el.textContent).not.toContain("The assistant is typing");
   });
 });
 

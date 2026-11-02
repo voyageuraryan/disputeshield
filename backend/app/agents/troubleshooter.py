@@ -33,8 +33,10 @@ from app.agents.llm import LLMError, StructuredLLM
 from app.agents.redact import pii_terms, redact_buyer_text
 from app.agents.steps import log_step
 from app.config import get_settings
-from app.models import (TS_OPEN_STATUSES, Order, TroubleshootingSession, TSMessage, TSProof, TSSource, TSStatus,
-                        TSStep, utcnow)
+from app.models import (TS_OPEN_STATUSES, Dispute, Order, TroubleshootingSession, TSMessage, TSProof, TSSource,
+                        TSStatus, TSStep, utcnow)
+from app.troubleshooting import proofs as P
+from app.troubleshooting.proofs import ProofRejected
 from app.agents.web_research import ResearchError, research, save_sources
 
 log = logging.getLogger(__name__)
@@ -304,6 +306,35 @@ DEFECT_REPLY = {
            "He pasado todo al vendedor, que decidirá los siguientes pasos y se pondrá en contacto con usted."),
 }
 
+LLM_DOWN_INTRO = {
+    "en": "I can't look up your exact model right now, so here are general safety-checked steps to start with.",
+    "es": "Ahora no puedo buscar su modelo exacto, así que empecemos con unos pasos generales y seguros.",
+}
+# Phase 9C: replies to the step buttons are fixed text (no LLM call per tap: fast, and nothing to go wrong).
+NEXT_STEP_REPLY = {
+    "en": "Thanks for trying that. Next, step {n}: {title}.",
+    "es": "Gracias por probarlo. Siguiente, paso {n}: {title}.",
+}
+ASK_PROOF_REPLY = {
+    "en": "Thanks. Please add the {kind} for step {n} using the upload box on that step.",
+    "es": "Gracias. Añada la prueba ({kind}) del paso {n} con el recuadro de subida de ese paso.",
+}
+ALL_TRIED_REPLY = {
+    "en": "You've been through all the steps. If you can, add the {kind} for step {n}; if not, tap "
+          "\"Talk to the seller\".",
+    "es": "Ha probado todos los pasos. Si puede, añada la prueba ({kind}) del paso {n}; si no, pulse "
+          "\"Hablar con el vendedor\".",
+}
+GOT_PROOF_REPLY = {
+    "en": "Got it, thanks. When you've finished step {n}, tap one of its buttons.",
+    "es": "Recibido, gracias. Cuando termine el paso {n}, pulse uno de sus botones.",
+}
+CONFIRM_ASK_REPLY = {
+    "en": "That's great! Please confirm below whether it's working now.",
+    "es": "¡Estupendo! Confirme abajo si ya funciona.",
+}
+KIND_ES = {"photo": "foto", "video": "vídeo", "screenshot": "captura de pantalla"}
+
 
 def guard_problems(message: str) -> list[str]:
     return sorted({what for what, rx in GUARD if rx.search(message)})
@@ -426,15 +457,26 @@ async def _translate(plan: TroubleshootingPlan, lang: str, llm: StructuredLLM) -
     return TroubleshootingPlan(intro=out.intro, steps=steps)
 
 
+class _SkipPlan(Exception):
+    pass
+
+
 async def build_plan(db: Session, ts: TroubleshootingSession, symptom: str, *, llm: StructuredLLM | None = None,
-                     http: httpx.AsyncClient | None = None, today: date | None = None) -> TroubleshootingPlan:
+                     http: httpx.AsyncClient | None = None, today: date | None = None,
+                     llm_down: str = "") -> TroubleshootingPlan:
     """Research the exact product, have the LLM write a cited plan, validate it (retry once with the problems),
-    else fall back to the generic safe plan. Steps are stored in ts_steps (in the buyer's language)."""
+    else fall back to the generic safe plan. Steps are stored in ts_steps (in the buyer's language).
+    llm_down: the LLM just failed (intake), so go straight to the generic plan instead of waiting on it again."""
     call = _llm(llm)
     today = today or datetime.now(timezone.utc).date()
     plan: TroubleshootingPlan | None = None
     why_generic = ""
+    if llm_down:
+        why_generic = "the plan writer (LLM) was unavailable"
+        _step(db, ts, "Couldn't write a product-specific plan: LLM error", {"error": llm_down[:500]})
     try:
+        if llm_down:
+            raise _SkipPlan
         notes = await research(ts.product_name, ts.product_model, symptom, db=db, today=today, http=http)
         _step(db, ts, f"Researched \"{ts.product_name} {ts.product_model or ''}: {symptom}\" "
                       f"({notes.provider}{', cached' if notes.cached else ''})",
@@ -471,6 +513,8 @@ async def build_plan(db: Session, ts: TroubleshootingSession, symptom: str, *, l
     except ResearchError as exc:
         _step(db, ts, "Web research found no usable sources", {"error": str(exc)[:500]})
         why_generic = "no usable web sources were found"
+    except _SkipPlan:
+        pass
 
     generic = plan is None
     if generic:
@@ -483,7 +527,7 @@ async def build_plan(db: Session, ts: TroubleshootingSession, symptom: str, *, l
         plan = generic_plan(src.id)
 
     lang = ts.language or "en"
-    if lang != "en":
+    if lang != "en" and not llm_down:
         try:
             plan = await _translate(plan, lang, call)
         except LLMError as exc:
@@ -698,10 +742,11 @@ async def _intake(db: Session, ts: TroubleshootingSession, safe_text: str, terms
     try:
         intake = await call(system=INTAKE_SYSTEM, user=user, output_model=IntakeTurn)
     except LLMError as exc:
-        _step(db, ts, "The troubleshooting assistant couldn't answer (LLM error)", {"error": str(exc)[:300]})
-        msg = _t(TROUBLE_REPLY, ts.language)
-        _say(db, ts, "agent", msg)
-        return TurnResult(message=msg, status=ts.status.value)
+        # 9C: don't leave the buyer stuck: give them the generic safe checklist (labelled as such) right away.
+        _step(db, ts, "The troubleshooting assistant couldn't read the problem (LLM error); using the generic "
+                      "safe plan", {"error": str(exc)[:300]})
+        await build_plan(db, ts, safe_text[:300], llm=call, http=http, llm_down=str(exc))
+        return _first_step_turn(db, ts, _t(LLM_DOWN_INTRO, ts.language))
     lang = clean_language(intake.language)
     if lang:
         ts.language = lang
@@ -718,8 +763,12 @@ async def _intake(db: Session, ts: TroubleshootingSession, safe_text: str, terms
         return TurnResult(message=question, status=ts.status.value)
     symptom = redact_buyer_text(intake.symptom_summary_en.strip() or safe_text, terms)[:300]
     plan = await build_plan(db, ts, symptom, llm=call, http=http)
+    return _first_step_turn(db, ts, plan.intro)
+
+
+def _first_step_turn(db: Session, ts: TroubleshootingSession, intro: str) -> TurnResult:
     first = steps_of(db, ts)[0]
-    msg = f"{plan.intro}\n\n{first.ordinal}. {first.title}: {first.instruction}"
+    msg = f"{intro}\n\n{first.ordinal}. {first.title}: {first.instruction}"
     _say(db, ts, "agent", msg, first.id)
     return TurnResult(message=msg, status=ts.status.value)
 
@@ -757,58 +806,198 @@ def confirm_fixed(db: Session, ts: TroubleshootingSession, fixed: bool) -> str:
 
 # ---- proof upload ------------------------------------------------------------------------------------
 
-PROOF_TYPES = {  # magic-byte sniffing: the declared Content-Type must match the bytes
-    "image/jpeg": (b"\xff\xd8\xff",), "image/png": (b"\x89PNG\r\n\x1a\n",), "image/webp": (b"RIFF",),
-    "image/gif": (b"GIF87a", b"GIF89a"), "video/mp4": (), "video/quicktime": (), "video/webm": (b"\x1a\x45\xdf\xa3",),
-}
-EXT = {"image/jpeg": "jpg", "image/png": "png", "image/webp": "webp", "image/gif": "gif", "video/mp4": "mp4",
-       "video/quicktime": "mov", "video/webm": "webm"}
-
-
-class ProofRejected(ValueError):
+class StepUnknown(LookupError):
     pass
 
 
-def _sniff_ok(mime: str, data: bytes) -> bool:
-    if mime in ("video/mp4", "video/quicktime"):
-        return data[4:8] == b"ftyp"
-    if mime == "image/webp":
-        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
-    return any(data.startswith(m) for m in PROOF_TYPES[mime])
+def _kind(st: TSStep, lang: str | None) -> str:
+    kind = st.proof_kind if st.proof_kind != "none" else "photo"
+    return KIND_ES.get(kind, kind) if (lang or "en").split("-")[0] == "es" else kind
 
 
-def record_proof(db: Session, ts: TroubleshootingSession, step_id: int, data: bytes, mime: str) -> TSProof:
+def _has_proof(db: Session, st: TSStep) -> bool:
+    return db.exec(select(TSProof).where(TSProof.step_id == st.id)).first() is not None
+
+
+def _advance(db: Session, ts: TroubleshootingSession, st: TSStep) -> str | None:
+    """After a step button or an upload: defect check, then point the buyer at what's next (fixed text)."""
+    defect = _check_defect(db, ts)
+    if defect:
+        return defect
+    lang = ts.language
+    if st.status == "DONE_NOT_FIXED" and st.requires_proof and not _has_proof(db, st):
+        ts.status = TSStatus.AWAITING_PROOF
+        db.add(ts)
+        db.commit()
+        msg = _t(ASK_PROOF_REPLY, lang).format(kind=_kind(st, lang), n=st.ordinal)
+        _say(db, ts, "agent", msg, st.id)
+        return msg
+    steps = steps_of(db, ts)
+    nxt = next((s for s in steps if s.status == "PENDING"), None)
+    if nxt:
+        msg = _t(NEXT_STEP_REPLY, lang).format(n=nxt.ordinal, title=nxt.title)
+        _say(db, ts, "agent", msg, nxt.id)
+        return msg
+    missing = next((s for s in steps if s.requires_proof and not _has_proof(db, s)), None)
+    if missing:
+        msg = _t(ALL_TRIED_REPLY, lang).format(kind=_kind(missing, lang), n=missing.ordinal)
+        _say(db, ts, "agent", msg, missing.id)
+        return msg
+    return None
+
+
+STEP_LABELS = {"DONE_FIXED": "Done, it works now", "DONE_NOT_FIXED": "Done, still not working",
+               "CANT_DO": "I can't do this"}
+
+
+def step_button(db: Session, ts: TroubleshootingSession, step_id: int, status: str, note: str = "") -> str | None:
+    """The buyer pressed a step card button. Their press is a fact (no LLM); returns the agent's reply."""
     if ts.status not in TS_OPEN_STATUSES:
         raise SessionEnded(ts.status.value)
     st = db.get(TSStep, step_id)
     if st is None or st.session_id != ts.id:
-        raise ProofRejected("unknown step")
-    mime = (mime or "").split(";")[0].strip().lower()
-    if mime not in PROOF_TYPES:
-        raise ProofRejected("Please upload a photo (JPEG, PNG, WebP, GIF) or a video (MP4, MOV, WebM).")
+        raise StepUnknown(step_id)
+    if status not in STEP_LABELS:
+        raise ValueError(status)
+    note = (note or "").strip()[:500]
+    _say(db, ts, "buyer", f"Step {st.ordinal}: {STEP_LABELS[status]}" + (f". {note}" if note else ""), st.id)
+    if note:
+        guess = detect_language(note)
+        if guess and (ts.language is None or ts.language == "en"):
+            ts.language = guess
+        hit = safety_hit(note)
+        if hit:
+            return _safety_stop(db, ts, f"the buyer mentioned \"{hit}\"", ts.language).message
+    st.status, st.buyer_note, st.completed_at = status, note or None, utcnow()
+    db.add(st)
+    if ts.status == TSStatus.AWAITING_PROOF and status != "DONE_NOT_FIXED":
+        ts.status = TSStatus.ACTIVE
+    if status == "DONE_FIXED":
+        ts.awaiting_fixed_confirm = True  # still only the confirm button resolves it (no mis-tap closes the case)
+    db.add(ts)
+    db.commit()
+    _step(db, ts, f"Buyer: step {st.ordinal} ({st.title}): {STEP_LABELS[status].lower()}",
+          {"step_id": st.id, "status": status, **({"note": note} if note else {})})
+    if status == "DONE_FIXED":
+        msg = _t(CONFIRM_ASK_REPLY, ts.language)
+        _say(db, ts, "agent", msg, st.id)
+        return msg
+    return _advance(db, ts, st)
+
+
+def _buyer_session_ids(db: Session, ts: TroubleshootingSession) -> dict[int, str]:
+    """Other troubleshooting sessions of the same buyer (same order email): {session id: PayPal dispute id}."""
+    order = db.get(Order, ts.order_id) if ts.order_id else None
+    email = (order.buyer_email or "").strip().lower() if order else ""
+    if not email:
+        return {}
+    rows = db.exec(select(TroubleshootingSession, Order, Dispute)
+                   .where(TroubleshootingSession.order_id == Order.id, TroubleshootingSession.dispute_id == Dispute.id,
+                          TroubleshootingSession.id != ts.id)).all()
+    return {r.id: d.paypal_dispute_id for r, o, d in rows if (o.buyer_email or "").strip().lower() == email}
+
+
+@dataclass
+class ProofResult:
+    proof: TSProof
+    already: bool = False   # the same file was already uploaded for this step (a retry): nothing new stored
+    reply: str | None = None
+
+
+def record_proof(db: Session, ts: TroubleshootingSession, step_id: int, data: bytes, declared: str = "") -> ProofResult:
+    """Validate, clean, fingerprint and store one upload (see app/troubleshooting/proofs.py)."""
+    if ts.status not in TS_OPEN_STATUSES:
+        raise SessionEnded(ts.status.value)
+    st = db.get(TSStep, step_id)
+    if st is None or st.session_id != ts.id:
+        raise StepUnknown(step_id)
     if not data:
         raise ProofRejected("The file is empty.")
-    if len(data) > get_settings().proof_max_bytes:
-        raise ProofRejected(f"The file is too large (max {get_settings().proof_max_bytes // (1024 * 1024)} MB).")
-    if not _sniff_ok(mime, data):
-        raise ProofRejected("The file doesn't look like the type it claims to be.")
+    s = get_settings()
+    mime = P.sniff(data)
+    if mime is None:
+        raise ProofRejected("Please upload a photo (JPEG, PNG or HEIC) or a video (MP4 or MOV).")
+    kind = P.kind_of(mime)
+    limit = s.proof_image_max_bytes if kind == "image" else s.proof_video_max_bytes
+    if len(data) > limit:
+        raise ProofRejected(f"This {'photo' if kind == 'image' else 'video'} is too large "
+                            f"(max {limit // (1024 * 1024)} MB).")
     digest = hashlib.sha256(data).hexdigest()
-    folder = Path(get_settings().artifacts_dir) / "troubleshooting" / str(ts.id)
+    mine = list(db.exec(select(TSProof).where(TSProof.session_id == ts.id)).all())
+    for p in mine:
+        if p.sha256 == digest and p.step_id == st.id:
+            return ProofResult(p, already=True)
+
+    checks: dict = {"detected_type": P.LABEL[mime], "declared_type": declared or None,
+                    "declared_matches": (declared or "").split(";")[0].strip().lower() in
+                    ("", mime, "application/octet-stream", "image/heif" if mime == "image/heic" else mime)}
+    if kind == "image":
+        img = P.clean_image(data, mime)
+        out, out_mime, phash, taken, removed = img.data, img.mime, img.phash, img.taken_at, img.removed
+        checks["size_px"] = [img.width, img.height]
+        if mime == "image/heic":
+            checks["converted"] = "HEIC to JPEG"
+    else:
+        info = P.video_info(data)
+        if not info.duration_s or info.duration_s <= 0:
+            raise ProofRejected("We couldn't read this video. Please record it again with your camera app.")
+        if info.duration_s > s.proof_video_max_seconds + 0.5:
+            raise ProofRejected(f"Please keep the video under {s.proof_video_max_seconds} seconds "
+                                f"(this one is {round(info.duration_s)} s).")
+        out, removed = P.strip_video_metadata(data)
+        out_mime, phash, taken = mime, None, info.created
+        checks["duration_s"] = round(info.duration_s, 1)
+    dispute = db.get(Dispute, ts.dispute_id)
+    verdict, why = P.taken_after(taken, P.parse_time((dispute.raw or {}).get("create_time") if dispute else None))
+    checks.update({"size_ok": True, "metadata_removed": removed, "taken_after_dispute": verdict,
+                   "capture_time_note": why,
+                   "capture_time": (taken.isoformat() if taken.tzinfo else taken.isoformat() + " (camera's local "
+                                    "time; time zone unknown)") if taken else None})
+    if taken is not None and taken.tzinfo is None:
+        taken = taken.replace(tzinfo=timezone.utc)  # the DB stores aware times; checks["capture_time"] says it's local
+
+    by_id = {x.id: x for x in steps_of(db, ts)}
+    same_case = sorted({by_id[p.step_id].ordinal for p in mine if p.sha256 == digest and p.step_id in by_id})
+    others = _buyer_session_ids(db, ts)
+    theirs = list(db.exec(select(TSProof).where(TSProof.session_id.in_(list(others))))) if others else []
+    checks["duplicate_of_steps"] = same_case
+    checks["reused_from_other_cases"] = sorted({others[p.session_id] for p in theirs if p.sha256 == digest})
+    near = []
+    if phash:
+        for p in mine + theirs:
+            if p.phash and p.sha256 != digest and P.hamming(p.phash, phash) <= P.NEAR_DUP_BITS:
+                near.append({"proof_id": p.id, "distance": P.hamming(p.phash, phash),
+                             **({"step": by_id[p.step_id].ordinal} if p.session_id == ts.id and p.step_id in by_id
+                                else {"case": others.get(p.session_id)})})
+    checks["near_duplicates"] = near
+
+    folder = Path(s.artifacts_dir) / "ts" / str(ts.id)
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"{digest[:24]}.{EXT[mime]}"
-    path.write_bytes(data)
-    proof = TSProof(session_id=ts.id, step_id=st.id, file_path=str(path), mime=mime, size=len(data), sha256=digest,
-                    checks={"type_matches_content": True, "size_ok": True,
-                            "duplicate": db.exec(select(TSProof).where(TSProof.session_id == ts.id,
-                                                                       TSProof.sha256 == digest)).first() is not None})
+    path = folder / f"{digest[:24]}.{P.EXT[out_mime]}"
+    path.write_bytes(out)
+    small = len(out) <= P.EVIDENCE_MAX
+    checks["evidence_ready"] = small
+    proof = TSProof(session_id=ts.id, step_id=st.id, file_path=str(path), mime=out_mime, size=len(out),
+                    sha256=digest, phash=phash, exif_time=taken, checks=checks, original_mime=mime,
+                    evidence_path=str(path) if small else None)
     db.add(proof)
     if ts.status == TSStatus.AWAITING_PROOF:
         ts.status = TSStatus.ACTIVE
         db.add(ts)
     db.commit()
     db.refresh(proof)
-    _say(db, ts, "system", f"Buyer uploaded a {mime.split('/')[0]} for step {st.ordinal}", st.id)
-    _step(db, ts, f"The buyer uploaded a {mime.split('/')[0]} for step {st.ordinal} ({st.title})",
-          {"proof_id": proof.id, "step_id": st.id, "sha256": digest, "size": len(data)})
-    _check_defect(db, ts)
-    return proof
+    what = "photo" if kind == "image" else "video"
+    _say(db, ts, "system", f"Buyer uploaded a {what} for step {st.ordinal}", st.id)
+    flags = [f for f, on in (("taken before the dispute", verdict == "no"), ("same file as another case",
+             bool(checks["reused_from_other_cases"])), ("looks like another upload", bool(near))) if on]
+    _step(db, ts, f"The buyer uploaded a {what} for step {st.ordinal} ({st.title})"
+                  + (f"; check: {', '.join(flags)}" if flags else ""),
+          {"proof_id": proof.id, "step_id": st.id, "sha256": digest, "size": len(out), "checks": checks})
+    if st.status == "PENDING":
+        defect = _check_defect(db, ts)  # says its own message when it ends the session
+        if defect:
+            return ProofResult(proof, reply=defect)
+        reply = _t(GOT_PROOF_REPLY, ts.language).format(n=st.ordinal)
+        _say(db, ts, "agent", reply, st.id)
+        return ProofResult(proof, reply=reply)
+    return ProofResult(proof, reply=_advance(db, ts, st))
