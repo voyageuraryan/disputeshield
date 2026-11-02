@@ -296,6 +296,26 @@ async def escalate(decision, dispute_id: str, note: str, *, client: PayPalClient
                                                       json={"note": note})
 
 
+MESSAGE_MAX = 2000  # schema "message".content maxLength
+
+
+async def send_message(dispute_id: str, message: str, *, client: PayPalClient | None = None) -> dict:
+    """Post a message to the other party in the dispute (no money moves, so no Decision is needed).
+
+    Checked 2026-11-02 against developer.paypal.com/platforms/disputes/handle-disputes/use-disputes-api
+    ("Send message to other party") and the v1 OpenAPI (operationId disputes.send-message):
+    POST /v1/customer/disputes/{id}/send-message with JSON {"message": "..."}; a multipart request
+    (part "input" = that JSON, plus "file1"...) is only needed to attach documents. Allowed only while
+    dispute_life_cycle_stage is INQUIRY, and only when the dispute has a send_message HATEOAS link.
+    Returns {"links": [...]}. Callers must check allowed_actions() first.
+    """
+    _check_id(dispute_id)
+    if not message or not message.strip() or len(message) > MESSAGE_MAX:
+        raise ValueError(f"message must be 1-{MESSAGE_MAX} characters")
+    return await (client or get_paypal_client()).post(f"{DISPUTES_PATH}/{dispute_id}/send-message",
+                                                      json={"message": message})
+
+
 # ---- sandbox-only simulators (PayPal's side of the case; not merchant money movement) ----
 
 async def sandbox_require_evidence(dispute_id: str, action: str, *, client: PayPalClient | None = None) -> dict:

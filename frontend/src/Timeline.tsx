@@ -10,6 +10,7 @@ const ICONS: Record<string, { label: string; path: string }> = {
   resolution: { label: "Resolution", path: "M7 3h7l5 5v13H7zM14 3v5h5M10 13h6M10 17h6" },
   merchant: { label: "You", path: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0" },
   executor: { label: "PayPal call", path: "M3 11l18-8-8 18-2-8z" },
+  troubleshooter: { label: "Troubleshooter", path: "M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.5 2.5-2.4-.6-.6-2.4z" },
 };
 const FALLBACK = { label: "Agent", path: "M12 12h.01" };
 

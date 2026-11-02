@@ -36,6 +36,7 @@ from app.models import Dispute
 from app.paypal.client import PayPalClient
 from app.paypal.disputes import NotApprovedError
 from app.schemas import CaseFile
+from app.troubleshooting.service import auto_invite
 
 
 class CaseState(TypedDict, total=False):
@@ -59,6 +60,8 @@ def build_graph(engine: Engine, checkpointer: BaseCheckpointSaver | None = None,
         with _session() as s:
             dispute = s.get(Dispute, state["dispute_row_id"])
             case = await investigate(s, dispute, client)
+            # Phase 9A: optional automatic invite to buyer troubleshooting (merchant setting; never fails the run).
+            await auto_invite(s, dispute, client)
         return {"case_file": case.model_dump(mode="json")}
 
     async def analyze_node(state: CaseState) -> CaseState:

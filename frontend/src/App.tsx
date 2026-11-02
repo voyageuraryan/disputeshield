@@ -11,6 +11,7 @@ const Settings = lazy(() => import("./pages/Settings"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
+const Help = lazy(() => import("./pages/Help"));
 
 const Loading = () => <p className="text-sm text-slate-500">Loading…</p>;
 const page = (el: React.ReactNode, auth = true) => <Suspense fallback={<Loading />}>{auth ? <RequireAuth>{el}</RequireAuth> : el}</Suspense>;
@@ -18,6 +19,8 @@ const page = (el: React.ReactNode, auth = true) => <Suspense fallback={<Loading 
 export default function App() {
   return (
     <Routes>
+      {/* Buyer's private troubleshooting page: no merchant layout or login, only the link's token. */}
+      <Route path="/help/:sessionId" element={page(<Help />, false)} />
       <Route element={<Layout />}>
         <Route index element={<Navigate to="/queue" replace />} />
         <Route path="/queue" element={page(<Queue />)} />

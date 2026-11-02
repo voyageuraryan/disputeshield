@@ -50,7 +50,7 @@ def test_queue_columns_sort_filter_search_countdown(stack, page):
     assert page.locator(".ag-header-cell-text").all_inner_texts() == [
         "Dispute", "Reason", "Amount", "Buyer", "Due in", "Recommendation", "Confidence", "Status"]
     rows = page.locator(".ag-grid-scrolling-container .ag-row")
-    assert rows.count() == 5  # A, B, C, R, E
+    assert rows.count() == 6  # A, B, C, D, R, E
     assert "PP-DEMO-A" in page.locator(".ag-row[row-index='0']").inner_text()  # soonest deadline first
     assert page.locator(".ag-grid-scrolling-container .font-semibold.text-red-600").count() == 2  # under 48 h
     page.fill("input[type=search]", "case-b")
@@ -278,7 +278,7 @@ def test_orders_page_record_delivery(stack, page):
     card.get_by_role("button", name="Save delivery").click()
     page.wait_for_selector("text=Delivery recorded for order")
     card = page.locator("section", has_text="9400111899220000000002")
-    assert "recorded by you" in card.inner_text()
+    card.locator("text=recorded by you").wait_for()  # the list reloads after the save message appears
     row = stack.sql("select status, delivery_recorded_by from shipments where tracking_number=?", "9400111899220000000002")
     assert row == [("DELIVERED", "merchant")]
     assert real_errors(page) == []
@@ -301,4 +301,70 @@ def test_case_page_shipping_card(stack, page):
 def test_orders_page_fits_a_phone(stack, phone):
     phone.goto(f"{stack.base}/orders")
     phone.wait_for_selector("text=Order #")
+    assert overflow(phone) == 0
+
+
+# ---- phase 9A: buyer troubleshooting ------------------------------------------------------------
+
+def test_troubleshooting_invite_and_buyer_page(stack, page, browser):
+    page.goto(f"{stack.base}/cases/PP-DEMO-D")  # faulty earbuds, inquiry without PayPal messaging
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    assert "Wireless earbuds (SoundPeak E5)" in card.inner_text()
+    assert card.get_by_role("button", name="Invite via PayPal message").is_disabled()
+    assert "only during an inquiry" in card.inner_text() or "only allows messages" in card.inner_text()
+    card.get_by_role("button", name="Email the link instead").click()
+    link_box = card.get_by_label("Buyer's private link")
+    link_box.wait_for()
+    link = link_box.input_value()
+    assert link.startswith(f"{stack.base}/help/") and "?t=" in link
+    assert "Invited, not opened yet" in card.inner_text()
+
+    buyer = browser.new_context()  # the buyer: another browser, never signed in
+    bp = buyer.new_page()
+    bp.goto(link)
+    bp.wait_for_selector("text=Let's get your Wireless earbuds working")
+    assert "?t=" not in bp.url  # the token is taken out of the address bar
+    assert "Model SoundPeak E5" in bp.inner_text("body")
+    bp.reload()  # still works from this tab's memory
+    bp.wait_for_selector("text=Let's get your Wireless earbuds working")
+    # a tampered link is refused
+    bp.goto(link[:-2] + ("AA" if not link.endswith("AA") else "BB"))
+    bp.wait_for_selector("text=isn't valid")
+    buyer.close()
+
+    page.reload()
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    page.wait_for_selector("text=Buyer opened the page")
+    assert page.locator("text=The buyer opened the troubleshooting page").count() >= 1  # timeline
+    assert real_errors(page) == []
+
+
+def test_troubleshooting_not_offered_for_non_electronics(stack, page):
+    page.goto(f"{stack.base}/cases/PP-DEMO-B")  # phone case: not electronics
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    assert "Not available: the order has no electrical/electronic item" in card.inner_text()
+    assert card.get_by_role("button").count() == 0
+
+
+def test_settings_auto_invite_toggle(stack, page):
+    page.goto(f"{stack.base}/settings")
+    box = page.get_by_label("Invite eligible buyers automatically")
+    box.wait_for()
+    assert not box.is_checked()
+    box.check()
+    page.wait_for_selector("text=Eligible buyers will be invited automatically")
+    page.reload()
+    box = page.get_by_label("Invite eligible buyers automatically")
+    box.wait_for()
+    assert box.is_checked()
+    box.uncheck()  # leave the shared stack as it was
+    page.wait_for_selector("[role=status]:has-text('Off.')")
+
+
+def test_help_page_fits_a_phone(stack, phone):
+    phone.goto(f"{stack.base}/help/1?t=nope")
+    phone.wait_for_selector("[role=alert]")
     assert overflow(phone) == 0

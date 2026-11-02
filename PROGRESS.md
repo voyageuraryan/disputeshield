@@ -262,6 +262,30 @@ G29 [x] Buyers / signed-out visitors saw the Disputes and Settings tabs on the S
         protected). Layout now shows them only to a signed-in merchant (or AUTH_MODE=off); tests in
         frontend/src/__tests__/layout.test.tsx.
 
+### Found in Phase 9A (2026-11-02)
+G30 [ ] P2 Delivery evidence is merchant-entered (self-attested) yet counts as full delivery confirmation. User
+        decision 2026-11-02: keep manual entry for now. Options when revisited: carrier/aggregator tracking feed
+        (EasyPost/Shippo test trackers in sandbox), labels bought in-app, or weight manual entry lower + require a
+        carrier screenshot.
+G31 [ ] P2 (before 9B accepts proofs) The merchant can open the buyer's troubleshooting link: it is in the PayPal
+        thread the merchant can read, in the email-stub response, and in the stored dispute.raw (seller message).
+        Proof uploaded later can't be attributed strictly to the buyer. Fix idea: bind the session to the first
+        device that opens it, or buyer Log in with PayPal.
+G32 [ ] P3 Session status isn't closed when the dispute resolves (the buyer link already answers 410 "case
+        closed"; the merchant card keeps the last status). Close sessions on ingest once 9B defines outcomes.
+G33 [ ] P2 Buyer links use FRONTEND_URL (localhost:5173 in dev): only same-computer testing until the frontend is
+        deployed (Render) or tunnelled; dev.sh tunnels the backend only.
+G34 [ ] P3 Email invite is a dev stub (timeline entry; link shown once to the merchant to pass on).
+G35 [ ] P3 Buyer rate limit is in-memory, per process (resets on restart, not shared across workers). Fine for one
+        Render instance; memory is bounded (refilled buckets are pruned).
+G36 [x] Refund policy template out of sync with the catalog ("handmade lamp"; "every physical order ships tracked"
+        was false for the untracked phone case) -> rewritten for the electronics catalog.
+G37 [x] CLAUDE.md layout listed a non-existent Analytics.tsx and missed Orders/Help/troubleshooting -> fixed.
+G38 [x] e2e race (Orders card read before the list reloaded) and the auto-invite checkbox only flipping after the
+        save -> test waits; checkbox updates at once and reverts on error.
+G39 [x] Merchant card kept showing "Invited" after the link expired (expiry was only noticed when the buyer
+        opened it) -> the status check expires it too.
+
 ### New, found in session 13 (fixed)
 - AuthCallback lost the login result in development (StrictMode double effect) and ignored a new #fragment in the
   same tab -> derived from the router location.
@@ -417,3 +441,46 @@ Fixed: G20-G22, G24, G25. Tests: backend 283, frontend 19, e2e 15 — all pass.
   - kill cloudflared → new URL wired up and backend restarted
   - double-start guard
   - external stop leaves nothing running
+
+## 2026-11-02 — Phase 9A: buyer troubleshooting portal (foundations)
+- Catalog:
+  - `category` is now the store category (electronics / accessory / digital / home). PayPal's item category
+    moved to `paypal_category`.
+  - The lamp is now the "Smart LED desk lamp" (Lumina LD-200, electronics). New: Wireless earbuds $59
+    (SoundPeak E5).
+  - Order lines store category + model (`order_item`). Older orders fall back to the catalog by SKU.
+  - Seed adds demo case D (earbuds, "left earbud won't charge").
+- Tables, auto-migrated: troubleshooting_sessions (one per dispute), ts_steps, ts_messages, ts_proofs, ts_sources.
+  Also new: merchant_settings.auto_invite_troubleshooting (NULL = off).
+- app/troubleshooting:
+  - eligibility.py: pure check. Eligible = SNAD + linked order + electronics item + not resolved.
+    The investigator logs the result as "troubleshooter".
+  - access.py:
+    - a 32-byte token; only its SHA-256 is stored; constant-time compare
+    - expiry = seller_response_due − 48 h, or invited + 5 days
+    - per-session token-bucket rate limit
+  - service.py: invite / resend (rotates the link) / idempotent; auto_invite never fails a run.
+- PayPal send-message:
+  - Checked the OpenAPI and the integration guide. They disagree: JSON {message} vs multipart; the guide's JSON
+    sample is right, with multipart needed only for files.
+  - Content ≤ 2000 characters; allowed at INQUIRY only.
+  - **Verified live 2026-11-02** on PP-R-MJZ-10195778: 200; the message shows as posted_by SELLER.
+- API:
+  - GET /api/disputes/{id}/troubleshooting and POST …/invite (merchant only). The invite returns 409 {reason,
+    email_available} when PayPal disallows messaging, and the email stub returns the link once.
+  - GET /api/help/{sid} (public; link token via ?t= or X-Help-Token). It refuses merchant credentials and
+    answers 404 for an unknown session or a wrong token, 410 for an expired link or a resolved dispute, and
+    429 with Retry-After when rate-limited.
+- UI:
+  - Case page card "Buyer troubleshooting" (invite / email / new link, status chip)
+  - Settings toggle
+  - buyer page /help/:id outside the merchant layout; it moves the token from the URL into sessionStorage
+  - timeline wrench icon for the troubleshooter
+- Tests:
+  - backend 334 (+37)
+  - frontend 36 (+6)
+  - e2e 22 (+4; demo case PP-DEMO-D; FRONTEND_URL set for the e2e stack)
+  - vite build OK
+- Docs: TEST_SCENARIOS section T (T1–T10), END_TO_END_FLOWS Flow 15, refund policy template, CLAUDE.md layout,
+  .env.example.
+- Open: G30–G35 (above), G3, G26, G27.

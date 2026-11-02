@@ -44,10 +44,12 @@ backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, inges
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
 backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py
 backend/app/rules/    evidence_rules.py
-backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py
+backend/app/troubleshooting/  eligibility.py, access.py (link tokens, expiry, rate limit), service.py (invite)
+backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py,
+                      troubleshooting.py (merchant invite + public buyer /api/help routes)
 backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webhook.py, cleanup_orders.py
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
-frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Settings.tsx, Analytics.tsx
+frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
 
 ## Progress
 See PROGRESS.md. Update it at the end of every session.

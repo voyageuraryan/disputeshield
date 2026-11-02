@@ -256,3 +256,20 @@ Result: ______
 4. Carrier **Other…** → type a name (e.g. "India Post") → saved as that carrier.
 
 Result: ______
+
+### Flow 15 — Faulty electronics: invite the buyer to troubleshoot (Phase 9A)
+1. As the buyer, buy the **Wireless earbuds ($59)** (or the Smart LED desk lamp). Add tracking and record delivery
+   if you like (Flow 13); it doesn't change eligibility.
+2. As the buyer, open a dispute: **item doesn't work / not as described**.
+   *Expected:* timeline "Eligible for buyer troubleshooting: Wireless earbuds is an electrical/electronic item";
+   case page card **Buyer troubleshooting** with the model and **Invite via PayPal message**.
+3. Click **Invite via PayPal message**. *Expected:* PayPal shows the seller message with a private link
+   (`…/help/<n>?t=…`) in the buyer's case; card → *Invited, not opened yet*; link works until 48 h before
+   PayPal's response deadline (5 days if PayPal gives none).
+4. Open the link (as the buyer). *Expected:* "Let's get your Wireless earbuds working" + "steps are being prepared"
+   (steps arrive in a later phase). Merchant card → *Buyer opened the page*.
+5. **Send a new link**: the old link stops working, the new one works.
+6. The rest of the case is unchanged: the agents still recommend Fight / Settle / Gather more as before; the
+   troubleshooting session doesn't move money or answer PayPal for you.
+
+Result: ______

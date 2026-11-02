@@ -178,4 +178,101 @@ class MerchantSettings(SQLModel, table=True):
     settle_threshold: Decimal = Field(default=Decimal("25"), max_digits=10, decimal_places=2)
     # The store's refund / return policy as shown to buyers; becomes refund_policy evidence when set.
     refund_policy: Optional[str] = None
+    # Phase 9A: invite eligible buyers to troubleshooting automatically after investigation (off by default).
+    # Nullable so the auto-migration can add it to existing databases; None means off.
+    auto_invite_troubleshooting: Optional[bool] = Field(default=False)
     updated_at: datetime = Field(default_factory=utcnow)
+
+
+# ---- Phase 9A: buyer troubleshooting portal ------------------------------------
+
+class TSStatus(str, Enum):
+    INVITED = "INVITED"                    # link sent, buyer hasn't opened it yet
+    ACTIVE = "ACTIVE"                      # buyer opened the link
+    AWAITING_PROOF = "AWAITING_PROOF"      # a step asks the buyer for a photo/video/screenshot
+    RESOLVED_FIXED = "RESOLVED_FIXED"      # a step fixed the problem
+    DEFECT_CONFIRMED = "DEFECT_CONFIRMED"  # steps done, item still faulty
+    SAFETY_STOP = "SAFETY_STOP"            # stopped for safety (smell, heat, smoke, damage)
+    EXPIRED = "EXPIRED"                    # link past its expiry
+    HANDED_TO_MERCHANT = "HANDED_TO_MERCHANT"
+
+
+TS_OPEN_STATUSES = (TSStatus.INVITED, TSStatus.ACTIVE, TSStatus.AWAITING_PROOF)
+
+
+class TroubleshootingSession(SQLModel, table=True):
+    """A private, token-protected troubleshooting page for one dispute's buyer.
+    Only the SHA-256 of the access token is stored; the token itself exists only in the link."""
+
+    __tablename__ = "troubleshooting_sessions"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dispute_id: int = Field(foreign_key="disputes.id", index=True, unique=True)
+    order_id: Optional[int] = Field(default=None, foreign_key="orders.id")
+    product_name: str
+    product_model: Optional[str] = None
+    status: TSStatus = Field(default=TSStatus.INVITED)
+    token_hash: str = Field(max_length=64)
+    expires_at: datetime
+    invited_at: Optional[datetime] = None
+    invited_via: Optional[str] = None  # paypal_message / email
+    buyer_last_seen_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TSStep(SQLModel, table=True):
+    __tablename__ = "ts_steps"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="troubleshooting_sessions.id", index=True)
+    ordinal: int
+    title: str
+    instruction: str
+    why: Optional[str] = None
+    safety_level: str = "safe"  # safe / caution
+    requires_proof: bool = False
+    proof_kind: str = "none"  # photo / video / screenshot / none
+    source_ids: Optional[list[int]] = _json_col()  # ts_sources rows this step is based on
+    status: str = "PENDING"  # PENDING / DONE_FIXED / DONE_NOT_FIXED / SKIPPED / CANT_DO
+    buyer_note: Optional[str] = None
+    completed_at: Optional[datetime] = None
+
+
+class TSMessage(SQLModel, table=True):
+    __tablename__ = "ts_messages"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="troubleshooting_sessions.id", index=True)
+    role: str  # buyer / agent / merchant / system
+    body: str
+    step_id: Optional[int] = Field(default=None, foreign_key="ts_steps.id")
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TSProof(SQLModel, table=True):
+    __tablename__ = "ts_proofs"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="troubleshooting_sessions.id", index=True)
+    step_id: Optional[int] = Field(default=None, foreign_key="ts_steps.id")
+    file_path: str
+    mime: str
+    size: int
+    sha256: str = Field(max_length=64)
+    phash: Optional[str] = None
+    exif_time: Optional[datetime] = None
+    checks: Optional[dict] = _json_col()
+    vision_verdict: Optional[dict] = _json_col()
+    created_at: datetime = Field(default_factory=utcnow)
+
+
+class TSSource(SQLModel, table=True):
+    __tablename__ = "ts_sources"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    session_id: int = Field(foreign_key="troubleshooting_sessions.id", index=True)
+    url: str
+    title: Optional[str] = None
+    snippet: Optional[str] = None
+    retrieved_at: datetime = Field(default_factory=utcnow)
+    provider: Optional[str] = None

@@ -112,6 +112,7 @@ export default function Settings() {
         )}
       </section>
       {saved && <RefundPolicy initial={saved.refund_policy ?? ""} onSaved={setSaved} />}
+      {saved && <AutoInvite value={saved.auto_invite_troubleshooting} onSaved={setSaved} />}
     </div>
   );
 }
@@ -173,6 +174,50 @@ function RefundPolicy({ initial, onSaved }: { initial: string; onSaved: (s: Merc
           </button>
         </div>
       </div>
+      {status.kind === "ok" && <p className="mt-2 text-sm text-indigo-700" role="status">{status.text}</p>}
+      {status.kind === "error" && <p className="mt-2 text-sm text-red-700" role="alert">Couldn't save: {status.text}</p>}
+    </section>
+  );
+}
+
+function AutoInvite({ value, onSaved }: { value: boolean; onSaved: (s: MerchantSettings) => void }) {
+  const [checked, setChecked] = useState(value); // flips at once; reverts if the save fails
+  const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "error"; text?: string }>({ kind: "idle" });
+  const toggle = async (next: boolean) => {
+    setChecked(next);
+    setStatus({ kind: "saving" });
+    try {
+      const s = await settingsApi.save({ auto_invite_troubleshooting: next });
+      onSaved(s);
+      setChecked(s.auto_invite_troubleshooting);
+      setStatus({ kind: "ok", text: s.auto_invite_troubleshooting ? "On. Eligible buyers will be invited automatically." : "Off." });
+    } catch (e) {
+      setChecked(!next);
+      setStatus({ kind: "error", text: (e as Error).message });
+    }
+  };
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="font-semibold">Buyer troubleshooting</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        When a buyer says an electrical or electronic item isn't working ("not as described"), DisputeShield can send them a
+        private, guided troubleshooting page through the PayPal dispute thread. Many faults are fixed in a few minutes.
+      </p>
+      <label className="mt-3 flex items-start gap-3 text-sm">
+        <input
+          type="checkbox"
+          checked={checked}
+          disabled={status.kind === "saving"}
+          onChange={(e) => toggle(e.target.checked)}
+          className="mt-0.5 h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+        />
+        <span>
+          <span className="font-medium">Invite eligible buyers automatically</span>
+          <span className="block text-xs text-slate-500">
+            Off: you invite them from the case page. PayPal only allows messages while a dispute is an inquiry.
+          </span>
+        </span>
+      </label>
       {status.kind === "ok" && <p className="mt-2 text-sm text-indigo-700" role="status">{status.text}</p>}
       {status.kind === "error" && <p className="mt-2 text-sm text-red-700" role="alert">Couldn't save: {status.text}</p>}
     </section>

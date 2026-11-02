@@ -1,7 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { disputesApi, type Decision, type DisputeDetail, type Evidence, type EvidenceSource } from "../api";
-import { ActionChip, addressLines, caseStatus, Chip, day, Due, fightRoute, label, money, useNow, when } from "../format";
+import {
+  ApiError,
+  disputesApi,
+  troubleshootingApi,
+  type Decision,
+  type DisputeDetail,
+  type Evidence,
+  type EvidenceSource,
+  type TroubleshootingStatus,
+} from "../api";
+import { ActionChip, addressLines, caseStatus, Chip, day, Due, fightRoute, label, money, useNow, when, type Tone } from "../format";
 import ShippingPanel from "../ShippingPanel";
 import Timeline from "../Timeline";
 import { useDisputeEvents } from "../useDisputeEvents";
@@ -79,7 +88,142 @@ function Facts({ detail, now, onDone }: { detail: DisputeDetail; now: number; on
         )}
       </Card>
       {o && <ShippingCard detail={detail} onDone={onDone} />}
+      <TroubleshootingCard detail={detail} />
     </div>
+  );
+}
+
+const TS_STATUS: Record<string, { text: string; tone: Tone }> = {
+  INVITED: { text: "Invited, not opened yet", tone: "accent" },
+  ACTIVE: { text: "Buyer opened the page", tone: "accent" },
+  AWAITING_PROOF: { text: "Waiting for buyer's proof", tone: "accent" },
+  RESOLVED_FIXED: { text: "Fixed by troubleshooting", tone: "solid" },
+  DEFECT_CONFIRMED: { text: "Defect confirmed", tone: "danger" },
+  SAFETY_STOP: { text: "Stopped for safety", tone: "danger" },
+  EXPIRED: { text: "Link expired", tone: "muted" },
+  HANDED_TO_MERCHANT: { text: "Handed to you", tone: "accent" },
+};
+
+/** Phase 9A: invite the buyer of a faulty electronic item to a private troubleshooting page. */
+export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
+  const id = detail.dispute.paypal_dispute_id;
+  const [st, setSt] = useState<TroubleshootingStatus | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ kind: "ok" | "error"; text: string; emailOffer?: boolean } | null>(null);
+  const [link, setLink] = useState<string | null>(null);
+  const steps = detail.timeline.length;
+  const load = useCallback(() => {
+    troubleshootingApi
+      .status(id)
+      .then((s) => (setSt(s), setLoadError(null)))
+      .catch((e: Error) => setLoadError(e.message));
+  }, [id]);
+  useEffect(load, [load, steps]); // the timeline grows when the buyer opens the page or an invite goes out
+
+  const send = async (via: "paypal_message" | "email", resend = false) => {
+    if (resend && !window.confirm("Send the buyer a new link? The old link will stop working.")) return;
+    setBusy(true);
+    setMsg(null);
+    setLink(null);
+    try {
+      const r = await troubleshootingApi.invite(id, via, resend);
+      if (r.already_invited) setMsg({ kind: "ok", text: "The buyer already has a working link. Use “Send a new link” to send another." });
+      else setMsg({ kind: "ok", text: via === "email" ? "Email invite recorded." : "Invite sent in the PayPal dispute thread." });
+      if (r.link) setLink(r.link);
+      load();
+    } catch (e) {
+      const detail = e instanceof ApiError ? (e.detail as { reason?: string; email_available?: boolean } | null) : null;
+      setMsg({ kind: "error", text: detail?.reason ?? (e as Error).message, emailOffer: !!detail?.email_available });
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (loadError) return <Card title="Buyer troubleshooting"><p className="text-sm text-red-700">Couldn't load: {loadError}</p></Card>;
+  if (!st) return null;
+  if (!st.eligible && !st.session) {
+    return (
+      <Card title="Buyer troubleshooting">
+        <p className="text-sm text-slate-500">{st.why.replace("Not eligible for buyer troubleshooting: ", "Not available: ")}.</p>
+      </Card>
+    );
+  }
+  const s = st.session;
+  const open = detail.dispute.status !== "RESOLVED";
+  const btn = "rounded-md px-3 py-1.5 text-sm font-medium disabled:opacity-40";
+  return (
+    <Card title="Buyer troubleshooting" right={s && <Chip text={TS_STATUS[s.status]?.text ?? label(s.status)} tone={TS_STATUS[s.status]?.tone} />}>
+      {!s ? (
+        <p className="text-sm text-slate-700">
+          The buyer says the {st.product_name}
+          {st.product_model ? ` (${st.product_model})` : ""} isn't as described. Invite them to a private, guided troubleshooting page:
+          many faults are fixed in minutes, and if not, the page collects proof of the fault.
+        </p>
+      ) : (
+        <dl>
+          <Field k="Product">
+            {s.product_name}
+            {s.product_model ? ` · ${s.product_model}` : ""}
+          </Field>
+          <Field k="Invited">
+            {when(s.invited_at)} via {s.invited_via === "email" ? "email" : "PayPal message"}
+          </Field>
+          <Field k="Link works until">{when(s.expires_at)}</Field>
+          <Field k="Buyer last seen">{s.buyer_last_seen_at ? when(s.buyer_last_seen_at) : "not yet"}</Field>
+        </dl>
+      )}
+      {open && (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {!s ? (
+            <>
+              <button
+                disabled={busy || !st.can_message}
+                onClick={() => send("paypal_message")}
+                className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
+                title={st.can_message ? undefined : "PayPal only allows messages while the dispute is an inquiry"}
+              >
+                {busy ? "Sending…" : "Invite via PayPal message"}
+              </button>
+              {st.buyer_email_known && (
+                <button disabled={busy} onClick={() => send("email")} className={`${btn} border border-slate-300 hover:bg-slate-50`}>
+                  Email the link instead
+                </button>
+              )}
+            </>
+          ) : (
+            ["INVITED", "ACTIVE", "AWAITING_PROOF", "EXPIRED"].includes(s.status) && (
+              <button
+                disabled={busy}
+                onClick={() => send(st.can_message ? "paypal_message" : "email", true)}
+                className={`${btn} border border-slate-300 hover:bg-slate-50`}
+              >
+                Send a new link{st.can_message ? "" : " by email"}
+              </button>
+            )
+          )}
+        </div>
+      )}
+      {!s && !st.can_message && open && (
+        <p className="mt-2 text-xs text-slate-500">PayPal doesn't allow messages at this stage (only during an inquiry), so the link can only go by email.</p>
+      )}
+      {msg && (
+        <div role={msg.kind === "error" ? "alert" : "status"} className={`mt-3 rounded-md p-2 text-sm ${msg.kind === "error" ? "bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>
+          {msg.text}
+          {msg.emailOffer && (
+            <button disabled={busy} onClick={() => send("email")} className="ml-2 font-medium underline">
+              Email it instead
+            </button>
+          )}
+        </div>
+      )}
+      {link && (
+        <div className="mt-2 rounded-md bg-slate-50 p-2 text-xs text-slate-700">
+          Email sending is a development stub, so nothing was emailed. Give the buyer this private link (it isn't shown again):
+          <input readOnly value={link} onFocus={(e) => e.target.select()} aria-label="Buyer's private link" className="mt-1 w-full rounded border border-slate-300 bg-white p-1 font-mono text-xs" />
+        </div>
+      )}
+    </Card>
   );
 }
 

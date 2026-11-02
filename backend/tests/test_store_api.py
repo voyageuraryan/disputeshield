@@ -45,8 +45,13 @@ def client(engine):
 
 def test_products_and_config(client):
     skus = {p["sku"]: p for p in client.get("/api/store/products").json()}
-    assert set(skus) == {"LAMP-01", "CASE-01", "EBOOK-01", "MUG-01"}
-    assert skus["LAMP-01"]["price"] == "89.00"
+    assert set(skus) == {"LAMP-01", "EARBUDS-01", "CASE-01", "EBOOK-01", "MUG-01"}
+    assert skus["LAMP-01"]["price"] == "89.00" and skus["EARBUDS-01"]["price"] == "59.00"
+    assert {k: (p["category"], p["paypal_category"]) for k, p in skus.items()} == {
+        "LAMP-01": ("electronics", "PHYSICAL_GOODS"), "EARBUDS-01": ("electronics", "PHYSICAL_GOODS"),
+        "CASE-01": ("accessory", "PHYSICAL_GOODS"), "EBOOK-01": ("digital", "DIGITAL_GOODS"),
+        "MUG-01": ("home", "PHYSICAL_GOODS")}
+    assert skus["LAMP-01"]["name"] == "Smart LED desk lamp" and skus["LAMP-01"]["model"] == "Lumina LD-200"
     cfg = client.get("/api/store/config").json()
     assert cfg["client_id"] == "test-client"
     assert "sandbox.paypal.com" in cfg["sdk_url"]
@@ -77,6 +82,9 @@ def test_checkout_flow_create_capture_track(client, engine):
         assert (o.paypal_order_id, o.capture_id, o.buyer_email) == ("5O190127TN364715T", "3C679366HH908993F", "buyer@example.com")
         assert o.shipping_address["postal_code"] == "95131"
         assert o.invoice_id == sent["invoice_id"]
+        # store category + model are kept on the order line; PayPal still gets its own item category
+        assert (o.items[0]["category"], o.items[0]["model"]) == ("electronics", "Lumina LD-200")
+    assert sent["items"][0]["category"] == "PHYSICAL_GOODS"
 
     # Second capture call is answered from our DB, not re-sent to PayPal.
     assert client.post("/api/store/orders/5O190127TN364715T/capture").status_code == 200

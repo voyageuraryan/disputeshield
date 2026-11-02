@@ -14,7 +14,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
 from app.auth import require_merchant
-from app.catalog import PRODUCTS, Product, digital_only
+from app.catalog import PRODUCTS, Product, digital_only, order_item
 from app.config import get_settings
 from app.db import get_session
 from app.api.disputes import OrderOut, order_out
@@ -81,8 +81,7 @@ async def create_store_order(
         raise HTTPException(404, f"unknown sku {body.sku}")
     _require_paypal_configured()
     order = Order(
-        items=[{"sku": product.sku, "name": product.name, "quantity": body.quantity,
-                "unit_amount": str(product.price), "category": product.category}],
+        items=[order_item(product, body.quantity)],
         amount=product.price * body.quantity,
         currency=product.currency,
         product_listing=product.listing,
@@ -98,7 +97,7 @@ async def create_store_order(
             internal_order_id=order.id,
             invoice_id=order.invoice_id,
             currency=product.currency,
-            items=[LineItem(product.name, product.sku, product.price, body.quantity, product.category)],
+            items=[LineItem(product.name, product.sku, product.price, body.quantity, product.paypal_category)],
             request_id=f"ds-create-{order.id}-{nonce}",
             client=paypal,
         )

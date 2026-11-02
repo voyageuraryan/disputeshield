@@ -4,7 +4,9 @@ export type Product = {
   name: string;
   price: string;
   currency: string;
-  category: string;
+  category: string; // electronics / accessory / digital / home
+  paypal_category: string; // PHYSICAL_GOODS / DIGITAL_GOODS
+  model: string | null;
   listing: string;
   image: string;
 };
@@ -13,6 +15,23 @@ export type StoreConfig = { client_id: string; currency: string; sdk_url: string
 
 // Empty in dev (Vite proxies /api); on Render, the backend's public URL (set at build time).
 const API_BASE = (import.meta.env.VITE_API_BASE_URL ?? "").replace(/\/$/, "");
+
+/** An HTTP error from the API. `detail` keeps the server's structured detail (e.g. {reason, email_available}). */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+    public detail: unknown,
+  ) {
+    super(message);
+  }
+}
+
+function errorText(detail: unknown): string {
+  if (typeof detail === "string") return detail;
+  const d = detail as { reason?: string; error?: string } | null;
+  return d?.reason ?? d?.error ?? (d ? JSON.stringify(d) : "request failed");
+}
 
 async function req<T>(path: string, init?: RequestInit): Promise<T> {
   let res: Response;
@@ -37,8 +56,7 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
   if (!res.ok) {
     const detail = body?.detail;
     const debug = detail?.debug_id ? ` (PayPal debug id ${detail.debug_id})` : "";
-    const text = typeof detail === "string" ? detail : detail?.error ?? (detail ? JSON.stringify(detail) : "request failed");
-    throw new Error(`${res.status}: ${text}${debug}`);
+    throw new ApiError(`${res.status}: ${errorText(detail)}${debug}`, res.status, detail);
   }
   return body as T;
 }
@@ -133,7 +151,8 @@ export type Order = {
   buyer_email: string | null;
   amount: string;
   currency: string;
-  items: { sku?: string; name?: string; quantity?: number; unit_amount?: string }[] | null;
+  // category + model are stored at order time (orders from before Phase 9A carry PayPal's category instead)
+  items: { sku?: string; name?: string; quantity?: number; unit_amount?: string; category?: string; model?: string | null }[] | null;
   shipping_address: Record<string, string> | null;
   product_listing: string | null;
   paypal_order_id: string | null;
@@ -184,11 +203,17 @@ export const disputesApi = {
 
 // ---- settings & live events --------------------------------------------------------------
 
-export type MerchantSettings = { settle_threshold: string; refund_policy: string | null; currency: string; updated_at: string };
+export type MerchantSettings = {
+  settle_threshold: string;
+  refund_policy: string | null;
+  auto_invite_troubleshooting: boolean;
+  currency: string;
+  updated_at: string;
+};
 
 export const settingsApi = {
   get: () => req<MerchantSettings>("/api/settings"),
-  save: (patch: { settle_threshold?: string; refund_policy?: string }) =>
+  save: (patch: { settle_threshold?: string; refund_policy?: string; auto_invite_troubleshooting?: boolean }) =>
     req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(patch) }),
 };
 
@@ -221,4 +246,69 @@ export const ordersApi = {
       method: "POST",
       body: JSON.stringify({ delivered_on: deliveredOn, address: address ?? null }),
     }),
+};
+
+// ---- buyer troubleshooting (phase 9A) -----------------------------------------------------------
+
+export type TSSessionBrief = {
+  id: number;
+  status: string;
+  product_name: string;
+  product_model: string | null;
+  expires_at: string;
+  invited_at: string | null;
+  invited_via: "paypal_message" | "email" | null;
+  buyer_last_seen_at: string | null;
+};
+
+export type TroubleshootingStatus = {
+  eligible: boolean;
+  why: string;
+  product_name: string | null;
+  product_model: string | null;
+  can_message: boolean;
+  buyer_email_known: boolean;
+  session: TSSessionBrief | null;
+};
+
+export type InviteResult = {
+  sent: boolean;
+  already_invited: boolean;
+  via: string | null;
+  session: TSSessionBrief;
+  link: string | null; // email stub only
+};
+
+export const troubleshootingApi = {
+  status: (disputeId: string) => req<TroubleshootingStatus>(`/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting`),
+  invite: (disputeId: string, via: "paypal_message" | "email", resend = false) =>
+    req<InviteResult>(`/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/invite`, {
+      method: "POST",
+      body: JSON.stringify({ via, resend }),
+    }),
+};
+
+export type BuyerSession = {
+  id: number;
+  status: string;
+  product_name: string;
+  product_model: string | null;
+  expires_at: string;
+  steps: { id: number; ordinal: number; title: string; instruction: string; why: string | null; safety_level: string; requires_proof: boolean; proof_kind: string; status: string }[];
+  messages: { role: string; body: string; created_at: string }[];
+};
+
+/** Buyer page calls: only the link token, never the merchant's session (the server refuses it). */
+export const helpApi = {
+  get: async (sessionId: string, token: string): Promise<BuyerSession> => {
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}/api/help/${encodeURIComponent(sessionId)}`, { headers: { "X-Help-Token": token } });
+    } catch {
+      throw new ApiError("We can't reach the server. Check your connection and try again.", 0, null);
+    }
+    const body = await res.json().catch(() => null);
+    if (!res.ok) throw new ApiError(errorText(body?.detail) || "Something went wrong.", res.status, body?.detail);
+    return body as BuyerSession;
+  },
 };

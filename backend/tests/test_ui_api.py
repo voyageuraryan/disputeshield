@@ -62,7 +62,7 @@ async def test_evidence_sources_store_records(api, engine, demo):
         seen.add(ref.split(":")[1].split("/")[0])
     assert seen >= {"order", "shipment", "message", "buyer"}
     listing = next(eid for ref, eid in rows.items() if ref.endswith("/listing"))
-    assert "Hand-turned walnut" in api.get(f"/api/evidence/{listing}/source").json()["record"]["product_listing"]
+    assert "Lumina LD-200 smart LED desk lamp" in api.get(f"/api/evidence/{listing}/source").json()["record"]["product_listing"]
     assert api.get("/api/evidence/9999/source").status_code == 404
 
 

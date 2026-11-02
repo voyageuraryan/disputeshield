@@ -27,6 +27,7 @@ from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
 from app.schemas import CaseFile, EvidenceItem
+from app.troubleshooting.eligibility import dispute_eligibility
 
 log = logging.getLogger(__name__)
 AGENT = "investigator"
@@ -130,6 +131,7 @@ class Investigator:
             self._messages(order)
             self._listing(order)
             self._buyer_history(order)
+        self._troubleshooting_eligibility(order)
         self._refund_policy()
         self._paypal_dispute_messages(pp)
         case = build_case_file(self.s, d)
@@ -294,6 +296,11 @@ class Investigator:
         row = self.evidence(type="listing", source="store", source_ref=f"store:order/{order.id}/listing",
                             summary=f"Listing at time of sale: \"{order.product_listing}\"")
         self.step("Found the product listing shown at time of sale", {"evidence_id": row.id})
+
+    def _troubleshooting_eligibility(self, order: Order) -> None:
+        elig = dispute_eligibility(self.d, order)
+        log_step(self.s, self.d.id, "troubleshooter", elig.why,
+                 {"eligible": elig.eligible, "product": elig.product_name, "model": elig.product_model})
 
     def _refund_policy(self) -> None:
         from app.merchant import get_merchant_settings

@@ -27,6 +27,8 @@ MERCHANT_ENDPOINTS = [
     # store back-office: buyer emails and PayPal tracking writes are merchant-only
     ("GET", "/api/store/orders"), ("POST", "/api/store/orders/1/shipments"),
     ("POST", "/api/store/orders/1/shipments/1/delivery"),
+    # phase 9A: troubleshooting status + invite are merchant-only
+    ("GET", "/api/disputes/PP-X/troubleshooting"), ("POST", "/api/disputes/PP-X/troubleshooting/invite"),
 ]
 
 
@@ -238,3 +240,42 @@ def test_paypal_errors(client):
     assert fragment(client.get("/api/auth/paypal/callback?error=access_denied&error_description=User%20cancelled"))[
         "error"] == "User cancelled"
     assert "did not return a login code" in fragment(client.get("/api/auth/paypal/callback"))["error"]
+
+
+def test_buyer_and_merchant_credentials_never_cross(client):
+    """Phase 9A: the buyer's link token opens only the buyer page; the merchant session opens only merchant routes."""
+    from datetime import datetime, timedelta, timezone
+    from decimal import Decimal
+
+    from sqlmodel import Session
+
+    from app.db import get_engine
+    from app.models import Dispute, Order, TroubleshootingSession
+    from app.troubleshooting.access import new_token
+
+    eng = app.dependency_overrides[get_engine]()
+    token, token_hash = new_token()
+    with Session(eng) as s:
+        o = Order(amount=Decimal("89"), currency="USD", items=[{"sku": "LAMP-01", "name": "Smart LED desk lamp"}])
+        s.add(o); s.commit(); s.refresh(o)
+        d = Dispute(paypal_dispute_id="PP-X", order_id=o.id, reason="MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+                    status="OPEN", amount=Decimal("89"), currency="USD")
+        s.add(d); s.commit(); s.refresh(d)
+        row = TroubleshootingSession(dispute_id=d.id, order_id=o.id, product_name="Smart LED desk lamp",
+                                     token_hash=token_hash, expires_at=datetime.now(timezone.utc) + timedelta(days=3))
+        s.add(row); s.commit(); s.refresh(row)
+        sid = row.id
+    # the buyer page needs no merchant login, only the link token
+    assert client.get(f"/api/help/{sid}", params={"t": token}).status_code == 200
+    # a buyer token is useless on merchant routes, however it is presented
+    for kw in ({"headers": {"Authorization": f"Bearer {token}"}}, {"params": {"token": token}},
+               {"headers": {"X-Help-Token": token}}, {"params": {"t": token}}):
+        assert client.get("/api/disputes/PP-X/troubleshooting", **kw).status_code == 401
+        assert client.get("/api/disputes", **kw).status_code == 401
+    # a valid merchant session is refused on the buyer route (it can't stand in for, or ride along with, the token)
+    merchant = new_session({"sub": "u1", "email": "merchant@business.example.com", "name": "Shop Owner"})
+    assert client.get(f"/api/help/{sid}", params={"t": token},
+                      headers={"Authorization": f"Bearer {merchant}"}).status_code == 403
+    assert client.get(f"/api/help/{sid}", params={"token": merchant}).status_code == 403
+    assert client.get("/api/disputes/PP-X/troubleshooting",
+                      headers={"Authorization": f"Bearer {merchant}"}).status_code == 200

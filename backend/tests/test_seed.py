@@ -28,8 +28,11 @@ def _order(s, oid):
 def test_seed_counts_and_no_fake_paypal_data(session):
     seed(session, now=NOW)
     orders = session.exec(select(Order)).all()
-    assert len(orders) == 15
-    assert {o.items[0]["sku"] for o in orders} == {"LAMP-01", "CASE-01", "EBOOK-01", "MUG-01"}
+    assert len(orders) == 16
+    assert {o.items[0]["sku"] for o in orders} == {"LAMP-01", "EARBUDS-01", "CASE-01", "EBOOK-01", "MUG-01"}
+    # category + model are stored with each line at order time
+    assert all(o.items[0]["category"] in ("electronics", "accessory", "digital", "home") for o in orders)
+    assert {o.items[0]["model"] for o in orders if o.items[0]["category"] == "electronics"} == {"Lumina LD-200", "SoundPeak E5"}
     assert all(o.paypal_order_id is None and o.capture_id is None for o in orders)
     assert session.exec(select(Dispute)).all() == []
     assert session.exec(select(Shipment)).all()
@@ -69,7 +72,7 @@ def test_seed_refuses_twice_and_resets(session):
     with pytest.raises(RuntimeError, match="--reset"):
         seed(session, now=NOW)
     seed(session, reset=True, now=NOW)
-    assert len(session.exec(select(Order)).all()) == 15
+    assert len(session.exec(select(Order)).all()) == 16
 
 
 def test_reset_refuses_when_disputes_linked(session):
@@ -79,3 +82,12 @@ def test_reset_refuses_when_disputes_linked(session):
     session.commit()
     with pytest.raises(RuntimeError, match="linked"):
         seed(session, reset=True, now=NOW)
+
+
+def test_case_d_earbuds_electronics(session):
+    ids = seed(session, now=NOW)
+    o, ships, msgs = _order(session, ids["D"])
+    item = o.items[0]
+    assert (item["sku"], item["category"], item["model"]) == ("EARBUDS-01", "electronics", "SoundPeak E5")
+    assert ships[0].status == "DELIVERED"
+    assert any("won't charge" in m.body for m in msgs if m.sender == MessageSender.buyer)

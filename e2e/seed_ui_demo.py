@@ -48,5 +48,12 @@ with Session(engine) as s:
     o = s.exec(select(Order).where(Order.buyer_email == "devon@demo.test")).first()
     s.add(Dispute(paypal_dispute_id="PP-DEMO-E", order_id=o.id, reason=INR, status="OPEN", amount=Decimal("45"),
                   currency="USD", raw={"update_time": now.isoformat()}))
+    # Phase 9A: faulty earbuds, an inquiry with no send_message link (so the invite goes by the email stub;
+    # nothing is ever sent to PayPal from the UI suite).
+    o = s.exec(select(Order).where(Order.buyer_email == "case-d@demo.test")).first()
+    s.add(Dispute(paypal_dispute_id="PP-DEMO-D", order_id=o.id, reason=SNAD, status="WAITING_FOR_SELLER_RESPONSE",
+                  stage="INQUIRY", amount=Decimal("59.00"), currency="USD", seller_response_due=now + timedelta(hours=120),
+                  raw={"update_time": now.isoformat(), "links": links("accept_claim", "escalate")},
+                  agent_status="PROPOSED"))
     s.commit()
 print("seeded")

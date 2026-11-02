@@ -1,4 +1,4 @@
-"""Seed store-side demo data: 15 orders with shipments and buyer/seller messages.
+"""Seed store-side demo data: 16 orders with shipments and buyer/seller messages.
 
 Only store tables (orders, shipments, messages) are written. No PayPal data is
 faked: paypal_order_id / capture_id stay empty, and no disputes are created.
@@ -8,6 +8,7 @@ Demo cases (look them up by buyer_email):
   A) case-a@demo.test  $89 lamp, tracked, delivered to the buyer's address, "got it, thanks"
   B) case-b@demo.test  $12 phone case, no tracking, buyer says item differs from listing
   C) case-c@demo.test  $45 mug, tracked, delivered to a different address
+  D) case-d@demo.test  $59 wireless earbuds (electronics), delivered, buyer says one earbud won't charge
 
 Usage: cd backend && python -m app.scripts.seed [--reset]
 """
@@ -20,7 +21,7 @@ from datetime import datetime, timedelta, timezone
 
 from sqlmodel import Session, delete, select
 
-from app.catalog import PRODUCTS
+from app.catalog import PRODUCTS, order_item
 from app.models import Dispute, Message, MessageSender, Order, Shipment
 
 DEMO_DOMAIN = "demo.test"
@@ -56,6 +57,11 @@ SPEC: list[tuple] = [
      ("UPS", "1Z999AA10123456784", "DELIVERED", 5, "c_wrong"),
      [("seller", "Your mug has shipped with UPS.", 4),
       ("buyer", "Tracking says delivered but nothing arrived at my house.", 24 * 6)]),
+    ("D", "EARBUDS-01", "case-d", "a", 9,
+     ("UPS", "1Z999AA10123456787", "DELIVERED", 3, "a"),
+     [("seller", "Your SoundPeak E5 earbuds have shipped with UPS.", 3),
+      ("buyer", "The left earbud won't charge in the case - the light never comes on. The right one is fine.",
+       24 * 5)]),
     # Filler orders: a realistic mix of happy paths and noise.
     ("", "LAMP-01", "maria", "a", 30, ("FEDEX", "771234567890", "DELIVERED", 3, "same"),
      [("buyer", "Beautiful lamp, love the grain!", 24 * 4)]),
@@ -97,8 +103,7 @@ def seed(session: Session, *, reset: bool = False, now: datetime | None = None) 
         address = ADDR[addr_key] if addr_key else None
         order = Order(
             buyer_email=f"{buyer}@{DEMO_DOMAIN}",
-            items=[{"sku": sku, "name": product.name, "quantity": 1,
-                    "unit_amount": str(product.price), "category": product.category}],
+            items=[order_item(product, 1)],
             amount=product.price,
             currency=product.currency,
             shipping_address=address,

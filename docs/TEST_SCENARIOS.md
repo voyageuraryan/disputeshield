@@ -76,7 +76,8 @@ Notes:
 - **US buyer (store purchases, opening disputes):** `sb-hizpg53637037@personal.example.com`
 - **Indian personal buyer:** negative tests only (PayPal blocks India→India payments)
 - Passwords: `e2e/sandbox-accounts.env`
-- **Prices:** Lamp $89 · Mug $45 · Phone case $12 · Ebook $9 (digital). **Settle threshold** default $25.
+- **Products:** Smart LED desk lamp $89 and Wireless earbuds $59 (**electronics**: troubleshooting-eligible) ·
+  Mug $45 · Phone case $12 · Ebook $9 (digital). **Settle threshold** default $25.
 - **Open a dispute as the buyer:** www.sandbox.paypal.com → log in as US buyer → Activity → the payment →
   **Report a problem**. Close the cookie banner first. A half-finished report shows "Continue Reporting this Issue".
 - **Add tracking / record delivery:** dashboard → **Orders** → the order → **+ Add tracking**; later
@@ -201,6 +202,24 @@ curl -s -X POST localhost:8000/admin/sandbox/disputes/<DISPUTE_ID>/adjudicate -H
 | I1 | Queue at phone width | Cards instead of a table; search works; nothing scrolls sideways. | |
 | I2 | Case page at phone width | **Recommendation first**, then facts, checklist, evidence, **timeline last**. | |
 | I3 | View source / confirm box on phone | Fit the screen; usable with a thumb. | |
+
+## T. Buyer troubleshooting (Phase 9A)
+
+Eligible = **"not as described"** dispute + store order with an **electronics** item (lamp, earbuds) + not resolved.
+The buyer link points at `FRONTEND_URL` (localhost:5173 in dev), so open it on the same computer.
+
+| ID | Steps | Expected | Result / notes |
+|---|---|---|---|
+| T1 | Buy the **Earbuds** (or lamp); as the buyer open a dispute: *item is different / doesn't work* ("not as described") | Case appears. Timeline (wrench icon, *Troubleshooter*): "Eligible for buyer troubleshooting: Wireless earbuds is an electrical/electronic item". Card **Buyer troubleshooting** on the left shows the model **SoundPeak E5** and an invite button. | |
+| T2 | Same case while it's an **inquiry**: **Invite via PayPal message** | Green "Invite sent in the PayPal dispute thread". Card: *Invited, not opened yet*, link works until (deadline − 48 h). Timeline: session created + link sent. In the buyer's PayPal case the message with the link appears. | |
+| T3 | Open the link from the PayPal message (any browser, not signed in) | "Let's get your Wireless earbuds working", model, "steps are being prepared". The address bar drops the `?t=…`; reload still works. Merchant card → *Buyer opened the page*; timeline "The buyer opened the troubleshooting page". | |
+| T4 | Click **Invite** again | "The buyer already has a working link" (no second PayPal message). | |
+| T5 | **Send a new link** → confirm | New PayPal message; the **old link** now says "This troubleshooting link isn't valid". | |
+| T6 | Change one character of the link's `t=` value | "isn't valid" (never shows the session). | |
+| T7 | A dispute where PayPal doesn't allow messages (e.g. chargeback / "PayPal reviewing") | **Invite via PayPal message** greyed out with the reason; **Email the link instead** → dev stub: nothing is emailed, the card shows the private link once to copy. | |
+| T8 | Not eligible: phone case "not as described", or any "not received" case | Card: "Not available: …" with the reason; no buttons. | |
+| T9 | Settings → **Buyer troubleshooting** → tick *Invite eligible buyers automatically*, then repeat T1 with a new dispute | Invite sent by itself right after the investigation (timeline actor "auto"). If PayPal doesn't allow messages: "Auto-invite skipped: …". Untick afterwards if you prefer manual. | |
+| T10 | Open the buyer link after the dispute is resolved | "This case is closed…". | |
 
 ---
 

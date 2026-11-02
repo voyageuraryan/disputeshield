@@ -322,3 +322,22 @@ async def test_investigator_refetches_when_copy_is_stale(pp, engine, order31):
         d = s.get(Dispute, did); d.refreshed_at = datetime.now(timezone.utc); s.add(d); s.commit()
     _, steps = await run_investigation(engine, did, pp)
     assert any(x.startswith("Using the dispute as fetched from PayPal") for x in steps)
+
+
+# ---- phase 9A: troubleshooting eligibility is logged by the investigation -------------
+
+@respx.mock
+async def test_investigation_logs_troubleshooting_eligibility(pp, engine, demo):
+    respx.post(f"{BASE}/v1/oauth2/token").respond(200, json=token_response())
+    snad = "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED"
+    respx.get(f"{DISPUTES}/PP-D-D").respond(200, json=dispute_json("PP-D-D", reason=snad, amount="59.00"))
+    respx.get(f"{DISPUTES}/PP-D-B").respond(200, json=dispute_json("PP-D-B", reason=snad, amount="12.00"))
+    earbuds = make_dispute(engine, demo["D"], "PP-D-D", reason=snad, amount="59.00")
+    case_b = make_dispute(engine, demo["B"], "PP-D-B", reason=snad, amount="12.00")
+    for did in (earbuds, case_b):
+        await run_investigation(engine, did, pp)
+    with Session(engine) as s:
+        logged = {a.dispute_id: a for a in s.exec(select(AgentStep).where(AgentStep.agent == "troubleshooter"))}
+    assert logged[earbuds].action == "Eligible for buyer troubleshooting: Wireless earbuds is an electrical/electronic item"
+    assert logged[earbuds].detail == {"eligible": True, "product": "Wireless earbuds", "model": "SoundPeak E5"}
+    assert logged[case_b].action.startswith("Not eligible for buyer troubleshooting: the order has no electrical")
