@@ -21,6 +21,7 @@ from decimal import Decimal
 
 from sqlmodel import Session, select
 
+from app.tracing import observe
 from app.agents import llm as llm_module
 from app.agents.llm import LLMError, StructuredLLM, structured_call
 from app.agents.redact import pii_terms, redact
@@ -145,6 +146,7 @@ def _supersede_proposals(session: Session, dispute_id: int) -> list[int]:
     return [d.id for d in older]
 
 
+@observe(type="agent")
 async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key: str | None = None,
                   llm: StructuredLLM = structured_call) -> AnalysisResult:
     threshold = settle_threshold(session)  # merchant setting (DB), default from config
@@ -181,6 +183,12 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
                 # Seen live: the LLM chose GATHER_MORE but named nothing missing. For a safety report the next
                 # step is fixed by the rules, so code fills it in rather than failing the case over wording.
                 rec.missing_items = [SAFETY_REVIEW_ITEM]
+            elif (rec.action == "GATHER_MORE" and not rec.missing_items and not checklist.missing
+                  and checklist.red_flags):
+                # Seen in the evals (10A, address mismatch): nothing required is missing, the case is weak because
+                # of a red flag. What's needed is evidence that resolves it: the rule-owned red-flag descriptions.
+                rec.missing_items = [f"evidence that resolves: {red_flag_description(case.reason, c)}"
+                                     for c in checklist.red_flags]
             problems = validate(rec, case, baseline, checklist)
             if not problems:
                 return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold)

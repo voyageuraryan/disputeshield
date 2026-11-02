@@ -32,6 +32,7 @@ from typing import Any, Protocol, TypeVar
 import httpx
 from pydantic import BaseModel, ValidationError
 
+from app.tracing import observe
 from app.config import get_settings
 
 log = logging.getLogger(__name__)
@@ -181,6 +182,7 @@ def providers() -> list[tuple[str, str, Any, str]]:
     return out
 
 
+@observe(type="llm")
 async def structured_call(*, system: str, user: str, output_model: type[T]) -> T:
     chain = providers()
     if not chain:

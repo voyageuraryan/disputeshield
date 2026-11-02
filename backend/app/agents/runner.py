@@ -15,6 +15,7 @@ from app.agents.llm import StructuredLLM
 from app.agents.steps import log_step
 from app.config import get_settings
 from app.models import Dispute
+from app.tracing import observe, update_trace
 from app.paypal.client import PayPalClient
 
 log = logging.getLogger(__name__)
@@ -24,6 +25,17 @@ __all__ = ["run_agents", "resume_run", "log_step"]
 
 def _checkpoint_path(path: str | None) -> str:
     return path or get_settings().checkpoint_db
+
+
+@observe(type="agent")
+async def _invoke(graph, dispute_row_id: int, run_key: str) -> dict[str, Any]:  # noqa: ANN001
+    """One trace per agent run when DEEPEVAL_TRACING=1 (investigate / analyze / resolve spans nest under it).
+    DeepEval's LangGraph CallbackHandler was tried first: with deepeval 4.3.2 + our graph every node start raised
+    TypeError inside the handler and the nodes came out as separate traces (PROGRESS G70), so it isn't used."""
+    result = await graph.ainvoke({"dispute_row_id": dispute_row_id, "run_key": run_key}, thread_config(run_key))
+    update_trace(name=f"agent run {run_key}", input={"dispute_row_id": dispute_row_id, "run_key": run_key},
+                 output="waiting for approval" if _pending(result) is not None else "finished")
+    return result
 
 
 def _pending(result: dict[str, Any]) -> Any:
@@ -47,8 +59,7 @@ async def run_agents(dispute_row_id: int, run_key: str, engine: Engine, *,
     try:
         async with AsyncSqliteSaver.from_conn_string(_checkpoint_path(checkpoint_path)) as saver:
             graph = build_graph(engine, saver, client, llm)
-            result = await graph.ainvoke({"dispute_row_id": dispute_row_id, "run_key": run_key},
-                                         thread_config(run_key))
+            result = await _invoke(graph, dispute_row_id, run_key)
     except Exception as exc:  # background task: record the failure on the timeline, don't crash
         log.exception("agent run %s failed", run_key)
         with Session(engine) as session:

@@ -18,7 +18,10 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 - Frontend dev: cd frontend && npm run dev
 - Seed demo data: cd backend && python -m app.scripts.seed
 - Frontend unit tests: cd frontend && npm test
-- E2E UI tests: see e2e/README.md
+- E2E UI tests: see e2e/README.md (or `make e2e`)
+- LLM evals (REAL models, uses API quota, cached): `make evals` = scripts/run_evals.sh [--refresh] [--only ids]
+  [--no-judge]; report in backend/evals/reports/latest.md. Never part of `pytest -q` (which stays offline).
+  Optional tracing: DEEPEVAL_TRACING=1 (spans via app/tracing.py; local unless a Confident AI key is set).
 
 ## Hard rules
 1. PayPal: sandbox only (api-m.sandbox.paypal.com). Never hardcode secrets;
@@ -52,6 +55,10 @@ backend/app/troubleshooting/  buyer troubleshooting package: eligibility.py, acc
 backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py,
                       troubleshooting.py (merchant invite + public buyer /api/help routes)
 backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webhook.py, cleanup_orders.py
+backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_goldens.py), pipeline.py (golden -> DB ->
+                      real analyst + resolution, rate limits, cache), judge.py (Gemini judge), metrics/, checks.py,
+                      reports/; run with scripts/run_evals.sh (its own pytest.ini)
+backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is

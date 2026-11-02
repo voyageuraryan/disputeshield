@@ -18,6 +18,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, PrivateAttr
 
+from app.tracing import observe
 from app.paypal.client import PayPalClient, get_paypal_client
 
 DISPUTES_PATH = "/v1/customer/disputes"
@@ -127,6 +128,7 @@ class Dispute(_PayPalModel):
         return self._raw or self.model_dump(mode="json")
 
 
+@observe(type="tool")
 async def list_disputes(
     *,
     page: int | None = None,
@@ -159,6 +161,7 @@ async def list_disputes(
     return DisputeList.model_validate(data or {})
 
 
+@observe(type="tool")
 async def get_dispute(dispute_id: str, *, client: PayPalClient | None = None) -> Dispute:
     if not dispute_id or not all(c.isalnum() or c == "-" for c in dispute_id):
         raise ValueError(f"invalid dispute id: {dispute_id!r}")  # spec pattern ^[A-Za-z0-9-]+$

@@ -1,0 +1,151 @@
+{
+  "version": 1,
+  "id": "rec-mjz-inr-inquiry",
+  "title": "Real INR inquiry: shipped, buyer says not received",
+  "source": "recorded_webhooks/20261101T121934",
+  "grid": null,
+  "case_file": {
+    "dispute_id": "PP-R-MJZ-10195778",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    "amount": "45.00",
+    "currency": "USD",
+    "due_date": null,
+    "order_id": 1,
+    "evidence": [
+      {
+        "id": 1,
+        "type": "tracking",
+        "source": "store",
+        "source_ref": "store:tracking/1",
+        "summary": "Shipment 9400111899223344556677 (USPS) for order #1, status SHIPPED (no delivery scan)",
+        "flags": []
+      },
+      {
+        "id": 2,
+        "type": "order",
+        "source": "store",
+        "source_ref": "store:order/1",
+        "summary": "Store order #1 on 10 Oct: 1x Hand-glazed ceramic mug, 45.00 USD; buyer buyer.eval@example.com; ship to 1 Main St, San Jose, CA, 95131",
+        "flags": []
+      },
+      {
+        "id": 3,
+        "type": "buyer_message",
+        "source": "paypal",
+        "source_ref": "paypal:buyer_message/3",
+        "summary": "Buyer wrote on 18 Oct: \"I haven't received the mug please check once\"",
+        "flags": []
+      }
+    ],
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "stage": "INQUIRY",
+    "dispute_state": null,
+    "allowed_actions": [
+      "provide_evidence",
+      "escalate",
+      "accept_claim",
+      "make_offer",
+      "send_message"
+    ],
+    "can_fight": true,
+    "can_settle": true
+  },
+  "paypal_raw": {
+    "dispute_id": "PP-R-MJZ-10195778",
+    "create_time": "2026-11-01T12:15:49.891Z",
+    "update_time": "2026-11-01T12:19:13.874Z",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "dispute_amount": {
+      "currency_code": "USD",
+      "value": "45.00"
+    },
+    "dispute_life_cycle_stage": "INQUIRY",
+    "dispute_channel": "INTERNAL",
+    "seller_response_due_date": "2026-11-21T12:15:49.891Z",
+    "links": [
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778",
+        "rel": "self",
+        "method": "GET"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778/make-offer",
+        "rel": "make_offer",
+        "method": "POST"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778/provide-evidence",
+        "rel": "provide_evidence",
+        "method": "POST"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778/accept-claim",
+        "rel": "accept_claim",
+        "method": "POST"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778/send-message",
+        "rel": "send_message",
+        "method": "POST"
+      },
+      {
+        "href": "https://api.sandbox.paypal.com/v1/customer/disputes/PP-R-MJZ-10195778/escalate",
+        "rel": "escalate",
+        "method": "POST"
+      }
+    ],
+    "messages": [
+      {
+        "posted_by": "BUYER",
+        "time_posted": "2026-11-01T12:15:49.891Z",
+        "content": "I haven't received the mug please check once"
+      }
+    ]
+  },
+  "order": {
+    "buyer_email": "buyer.eval@example.com",
+    "items": [
+      {
+        "sku": "LAMP-01",
+        "name": "Smart LED desk lamp",
+        "quantity": 1,
+        "category": "electronics",
+        "model": "Lumina LD-200",
+        "paypal_category": "PHYSICAL_GOODS"
+      }
+    ],
+    "shipping_address": {
+      "address_line_1": "1 Main St",
+      "admin_area_2": "San Jose",
+      "admin_area_1": "CA",
+      "postal_code": "95131",
+      "country_code": "US"
+    },
+    "invoice_id": "INV-1"
+  },
+  "shipments": [
+    {
+      "carrier": "USPS",
+      "tracking_number": "9400111899223344556677",
+      "status": "DELIVERED"
+    }
+  ],
+  "expected_action": "GATHER_MORE",
+  "acceptable_actions": [
+    "GATHER_MORE",
+    "SETTLE"
+  ],
+  "must_cite_types": [],
+  "must_not_claim": [
+    "was delivered",
+    "has been delivered",
+    "were delivered",
+    "received the item",
+    "received it",
+    "item arrived",
+    "it arrived",
+    "delivered to the buyer"
+  ],
+  "notes": "Only a shipping record; never claim delivery. The buyer's message says it never came and nothing shows delivery, so settling is a defensible one-step move."
+}

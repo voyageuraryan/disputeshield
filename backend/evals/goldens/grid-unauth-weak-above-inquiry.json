@@ -1,0 +1,136 @@
+{
+  "version": 1,
+  "id": "grid-unauth-weak-above-inquiry",
+  "title": "Unauthorised / weak evidence / above threshold / inquiry",
+  "source": "grid",
+  "grid": {
+    "reason": "UNAUTHORISED",
+    "strength": "weak",
+    "amount": "above",
+    "stage": "inquiry"
+  },
+  "case_file": {
+    "dispute_id": "PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY",
+    "reason": "UNAUTHORISED",
+    "amount": "89.00",
+    "currency": "USD",
+    "due_date": null,
+    "order_id": 1,
+    "evidence": [
+      {
+        "id": 1,
+        "type": "invoice",
+        "source": "paypal",
+        "source_ref": "paypal:capture/4S541016HD390220V",
+        "summary": "PayPal capture 4S541016HD390220V: 89.00 USD, status COMPLETED, captured 10 Oct, invoice INV-1; seller protection NOT_ELIGIBLE",
+        "flags": [
+          "seller_protection:NOT_ELIGIBLE"
+        ]
+      },
+      {
+        "id": 2,
+        "type": "order",
+        "source": "store",
+        "source_ref": "store:order/1",
+        "summary": "Store order #1 on 10 Oct: 1x Smart LED desk lamp, 89.00 USD; buyer buyer.eval@example.com; ship to 1 Main St, San Jose, CA, 95131",
+        "flags": []
+      }
+    ],
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "stage": "INQUIRY",
+    "dispute_state": null,
+    "allowed_actions": [
+      "provide_evidence",
+      "escalate",
+      "accept_claim",
+      "make_offer",
+      "send_message"
+    ],
+    "can_fight": true,
+    "can_settle": true
+  },
+  "paypal_raw": {
+    "dispute_id": "PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY",
+    "reason": "UNAUTHORISED",
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "dispute_life_cycle_stage": "INQUIRY",
+    "dispute_amount": {
+      "value": "89.00",
+      "currency_code": "USD"
+    },
+    "links": [
+      {
+        "rel": "provide_evidence",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY/provide-evidence",
+        "method": "POST"
+      },
+      {
+        "rel": "escalate",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY/escalate",
+        "method": "POST"
+      },
+      {
+        "rel": "accept_claim",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY/accept-claim",
+        "method": "POST"
+      },
+      {
+        "rel": "make_offer",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY/make-offer",
+        "method": "POST"
+      },
+      {
+        "rel": "send_message",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-UNAUTH-WEAK-ABOVE-INQUIRY/send-message",
+        "method": "POST"
+      }
+    ]
+  },
+  "order": {
+    "buyer_email": "buyer.eval@example.com",
+    "items": [
+      {
+        "sku": "LAMP-01",
+        "name": "Smart LED desk lamp",
+        "quantity": 1,
+        "category": "electronics",
+        "model": "Lumina LD-200",
+        "paypal_category": "PHYSICAL_GOODS"
+      }
+    ],
+    "shipping_address": {
+      "address_line_1": "1 Main St",
+      "admin_area_2": "San Jose",
+      "admin_area_1": "CA",
+      "postal_code": "95131",
+      "country_code": "US"
+    },
+    "invoice_id": "INV-1"
+  },
+  "shipments": [
+    {
+      "carrier": "USPS",
+      "tracking_number": "9400111899223344556677",
+      "status": "DELIVERED"
+    }
+  ],
+  "expected_action": "SETTLE",
+  "acceptable_actions": [
+    "SETTLE"
+  ],
+  "must_cite_types": [],
+  "must_not_claim": [
+    "covered by seller protection",
+    "eligible for seller protection",
+    "protected by seller protection",
+    "was delivered",
+    "has been delivered",
+    "were delivered",
+    "received the item",
+    "received it",
+    "item arrived",
+    "it arrived",
+    "delivered to the buyer"
+  ],
+  "notes": ""
+}

@@ -27,6 +27,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
+from app.tracing import observe
 from app.agents import llm as llm_module
 from app.agents.llm import LLMError, StructuredLLM
 from app.agents.redact import contains_placeholder, pii_terms, redact
@@ -97,6 +98,7 @@ def validate_note(n: SellerNote, case: CaseFile) -> list[str]:
     return problems
 
 
+@observe(type="llm")
 async def draft_seller_note(case: CaseFile, reasoning: str, llm: StructuredLLM,
                             pii: dict[str, str] | None = None) -> tuple[SellerNote | None, list[str]]:
     import json
@@ -273,6 +275,7 @@ def pdf_path_for(decision_id: int) -> Path:
 
 # ---- graph node: resolve ---------------------------------------------------------------
 
+@observe(type="agent")
 async def resolve(session: Session, dispute: Dispute, case: CaseFile, decision_id: int, *,
                   llm: StructuredLLM | None = None) -> dict[str, Any]:
     llm = llm or llm_module.structured_call

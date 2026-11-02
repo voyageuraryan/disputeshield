@@ -209,11 +209,34 @@ async def test_one_step_down_with_listing_citation_accepted(pp, engine, demo):
 
 
 @respx.mock
-async def test_gather_more_without_missing_items_rejected(pp, engine, demo):
+async def test_gather_more_on_demo_c_red_flag_names_what_to_resolve(pp, engine, demo):
+    """Demo C (address mismatch): nothing required is missing, so code names the red flag to resolve (10A evals)."""
     did, case = await investigated(engine, pp, demo["C"], "PP-D-C", INR, "45.00")
-    result, _, _, _ = await run_analyst(engine, did, case, ScriptedLLM(rec("GATHER_MORE", "low", []),
-                                                                       rec("GATHER_MORE", "low", [])))
-    assert "GATHER_MORE must name the missing items" in result.problems
+    result, _, _, _ = await run_analyst(engine, did, case, ScriptedLLM(rec("GATHER_MORE", "low", [])))
+    assert not result.needs_human
+    assert result.recommendation.missing_items == [
+        "evidence that resolves: Carrier delivered to a different address than the order's shipping address"]
+
+
+async def test_gather_more_without_missing_items_rejected_when_evidence_is_missing(engine):
+    """Required evidence is missing: the LLM must name it (no code fill), else retry, then NEEDS_HUMAN."""
+    from decimal import Decimal as D
+
+    from sqlmodel import Session as S
+
+    from app.agents.analyst import analyze
+    from app.models import Dispute
+    from app.schemas import CaseFile, EvidenceItem
+
+    ev = lambda i, t: EvidenceItem(id=i, type=t, source="store", source_ref=f"store:{t}/{i}", summary=t)  # noqa: E731
+    case = CaseFile(dispute_id="PP-MI", reason="MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED", amount=D("89"),
+                    currency="USD", due_date=None, order_id=None, allowed_actions=["provide_evidence", "accept_claim"],
+                    evidence=[ev(1, "listing"), ev(2, "order"), ev(3, "buyer_message")])  # no refund_policy
+    with S(engine) as s:
+        d = Dispute(paypal_dispute_id="PP-MI", reason=case.reason, status="OPEN", amount=D("89"), currency="USD", raw={})
+        s.add(d); s.commit(); s.refresh(d)
+        result = await analyze(s, d, case, llm=ScriptedLLM(rec("GATHER_MORE", "low", []), rec("GATHER_MORE", "low", [])))
+    assert result.needs_human and "GATHER_MORE must name the missing items" in result.problems
 
 
 @respx.mock
@@ -284,3 +307,31 @@ def test_prompt_only_offers_actions_the_app_can_send():
     from app.agents.analyst import SYSTEM_PROMPT
     assert "escalating the case to a PayPal claim" in SYSTEM_PROMPT
     assert "cannot send partial offers or messages" in SYSTEM_PROMPT
+
+
+async def test_gather_more_on_a_red_flag_gets_the_missing_items_from_the_rules(engine):
+    """Evals (10A): for an address-mismatch case the real LLM chose GATHER_MORE with no missing items -> NEEDS_HUMAN."""
+    from decimal import Decimal as D
+
+    from sqlmodel import Session as S
+
+    from app.agents.analyst import analyze
+    from app.models import Dispute
+    from app.schemas import CaseFile, EvidenceItem, Recommendation
+
+    ev = lambda i, t, f=(): EvidenceItem(id=i, type=t, source="store", source_ref=f"store:{t}/{i}", summary=t,  # noqa: E731
+                                         flags=list(f))
+    case = CaseFile(dispute_id="PP-RF", reason="MERCHANDISE_OR_SERVICE_NOT_RECEIVED", amount=D("89"), currency="USD",
+                    due_date=None, order_id=None, allowed_actions=["provide_evidence", "accept_claim"],
+                    evidence=[ev(1, "tracking", ["delivered"]), ev(2, "delivery_confirmation", ["address_mismatch"]),
+                              ev(3, "order"), ev(4, "invoice", ["protected:ITEM_NOT_RECEIVED"])])
+    with S(engine) as s:
+        d = Dispute(paypal_dispute_id="PP-RF", reason=case.reason, status="OPEN", amount=D("89"), currency="USD", raw={})
+        s.add(d); s.commit(); s.refresh(d)
+
+        async def llm(*, system, user, output_model):
+            return Recommendation(action="GATHER_MORE", confidence="medium", reasoning="Delivered elsewhere; check.",
+                                  cited_evidence_ids=[2], missing_items=[], economic_note="x")
+        r = await analyze(s, d, case, llm=llm)
+    assert not r.needs_human and r.recommendation.missing_items == [
+        "evidence that resolves: Carrier delivered to a different address than the order's shipping address"]

@@ -2,3 +2,5 @@
 pytest==9.2.0
 pytest-asyncio==1.4.1
 respx==0.23.1
+# Phase 10A: eval harness (backend/evals/, scripts/run_evals.sh). Its pytest plugin is disabled for unit tests.
+deepeval==4.3.2

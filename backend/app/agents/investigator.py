@@ -19,6 +19,7 @@ from typing import Any
 
 from sqlmodel import Session, select
 
+from app.tracing import observe
 from app.agents.steps import log_step
 from app.models import Dispute, EvidenceItemRow, EvidenceSource, Message, MessageSender, Order, Shipment
 from app.paypal.client import PayPalClient, PayPalError
@@ -351,5 +352,6 @@ class Investigator:
         self.step(f"Buyer has {len(prior)} prior order(s), {len(disputes)} prior dispute(s)", {"evidence_id": row.id})
 
 
+@observe(type="agent")
 async def investigate(session: Session, dispute: Dispute, client: PayPalClient | None = None) -> CaseFile:
     return await Investigator(session, dispute, client).run()

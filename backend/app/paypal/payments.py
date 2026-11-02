@@ -11,9 +11,11 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.tracing import observe
 from app.paypal.client import PayPalClient, get_paypal_client
 
 
+@observe(type="tool")
 async def get_capture(capture_id: str, *, client: PayPalClient | None = None) -> dict[str, Any]:
     if not capture_id or not capture_id.isalnum():
         raise ValueError(f"invalid capture id: {capture_id!r}")

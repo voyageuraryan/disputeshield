@@ -308,6 +308,40 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 10A (2026-11-02)
+G68 [x] SECURITY: installing deepeval registered a pytest plugin that loads backend/.env into os.environ (real
+        PayPal secret, LLM keys, ADMIN_TOKEN) and sends telemetry on every `pytest -q` (2 tests failed from leaked
+        values) -> backend/pytest.ini `-p no:deepeval`; tests/test_hermetic.py fails if deepeval is ever loaded.
+G69 [x] `deepeval test run -c x` means deepeval's --use-cache, not pytest's -c: metrics were served from deepeval's
+        cache (stale/empty) -> run_evals.sh passes --config-file=.
+G70 [ ] P3 DeepEval's LangGraph CallbackHandler (deepeval 4.3.2) raises TypeError in on_chain_start on our graph
+        and splits nodes into separate traces -> not used; runner wraps graph.ainvoke in one @observe span instead.
+G71 [x] Judge tried gemini-3.8-flash first: free-tier timeouts blew DeepEval's 180 s per-case budget -> judge order
+        2.5-flash then 3.8; per-case budget 900 s (DEEPEVAL_PER_TASK_TIMEOUT_SECONDS_OVERRIDE).
+G72 [x] A transient provider failure (429 after retries, timeout) would have been cached as the model's answer
+        (NEEDS_HUMAN) -> reported as provider_error / rate_limited, never cached.
+G74 [ ] P1 (found by the evals) With a weak case (baseline SETTLE) and a buyer message that SUPPORTS the complaint,
+        the real model moves one step to GATHER_MORE "because evidence is missing" (10 of 48 goldens). The
+        validator accepts any one-step move citing a buyer_message/listing, but the policy means evidence that
+        WEAKENS the claim ("it arrived"). Proposed fix (needs a live re-run to verify, not started after the host
+        stopped the run for low memory): prompt says moves toward the merchant need evidence against the claim and
+        that missing evidence is already in the baseline.
+G75 [ ] P2 DECISION (yours): ts-defect (buyer proved the fault) -> the model moved GATHER_MORE -> FIGHT citing the
+        listing. Option: a rule like the safety one (defect confirmed without suspect proof: never auto-FIGHT).
+G76 [x] Address mismatch: GATHER_MORE with no missing items -> NEEDS_HUMAN. Nothing required is missing (the case is
+        weak because of a red flag) -> code names "evidence that resolves: <red flag>" (rule-owned), like G59.
+G77 [ ] P2 adv-listing-contradicts: correct FIGHT, but both seller notes were rejected (resolution gave up).
+        Hypothesis: validate_note's delivery-claim check rejects "the buyer received ..." although in a not-as-
+        described dispute the buyer's own complaint admits receipt. The harness now records resolution_problems;
+        confirm on the next run before changing the validator.
+G78 [x] Two goldens of mine had an order line ("desk lamp") contradicting the listing (mug / phone case); the model
+        rightly flagged it -> fixed in build_goldens.py (product per order).
+G79 [x] Claim checker counted "needs evidence that it was delivered" as a delivery claim -> requests for proof don't
+        count; "tracking shows it was delivered" still does.
+G73 [ ] P3 Eval quota: a full --refresh is ~80 Groq calls (~2K tokens each, 15 s apart, ~20 min) + ~150 judge
+        calls; Groq's free 200K tokens/day allows ~1-2 full refreshes a day (a daily 429 skips the rest; the next
+        run resumes from the cache).
+
 ### Found in Phase 9D (2026-11-02)
 G59 [x] Live: for a safety stop the LLM chose GATHER_MORE but named no missing item -> NEEDS_HUMAN twice. Code
         now fills "your personal review of the buyer's safety report" (rule-owned next step).
@@ -676,3 +710,38 @@ troubleshooting, then checked the real LLM's behaviour on the new evidence.
   thumbnails + checks, disabled invite, queue badge, toast, seller banner, refresh resilience), e2e 29 (+1:
   reply as seller reaches the buyer live; full flow now also checks the queue badge). vite build OK.
 - Fixed this phase: G41, G43 (mostly), G54 (mostly), G59-G64. New open: G65-G67.
+
+## 2026-11-02 — Phase 10A: DeepEval evaluation harness (real LLM pipeline)
+
+ReAct summary: built a separate eval suite for the REAL pipeline, checked every DeepEval interface against the
+docs and the installed 4.3.2 source, and ran it live. The run itself found real issues (G74-G77) plus four
+harness/environment bugs that were fixed on the way (G68, G69, G71, G72).
+
+- deepeval==4.3.2 in requirements-dev.txt. backend/evals/ (own pytest.ini; plain pytest never collects it:
+  norecursedirs + `-p no:deepeval`). Run: scripts/run_evals.sh / `make evals` (deepeval test run evals/
+  --config-file=evals/pytest.ini) with --refresh, --only, --no-judge. evals/README.md documents it.
+- Judge: evals/judge.py, a DeepEvalBaseLLM over our Gemini generateContent call (JSON schema output; schema-less
+  fallback), cached, spaced, model fallback 2.5-flash -> 3.8-flash. The model under test is pinned to Groq
+  gpt-oss-120b (LLM_PROVIDERS=groq in the eval run; refuses to start if Gemini would be both).
+- Rate limits: global limiter (15 s between model calls, 429 retry-after, daily limit -> skip, not cached),
+  concurrency 2, disk cache keyed by (golden id, prompt hash, model); judge answers cached too.
+- Goldens: 51 versioned JSON (build_goldens.py): the full 36-cell grid (3 reasons x strong/partial/weak x
+  below/above the threshold x inquiry/chargeback with PayPal's live allowed actions), 7 adversarial cases, 4 real
+  recorded sandbox disputes (slimmed: no buyer/transaction data), demo case B, troubleshooting T30-T32. Each has
+  expected/acceptable actions, must_cite_types, must_not_claim, notes. pipeline.py loads a golden into an
+  in-memory DB, checks the rebuilt case file matches, runs the real analyst + resolution (nothing executes).
+- Metrics: Action, Citations, No false claims (negation-aware), PayPal request (deterministic, evals/checks.py);
+  Faithfulness and Seller note quality (GEval) judged by Gemini. Reports: evals/reports/; offline re-score of
+  cached outputs: python -m evals.offline_report.
+- Tracing: app/tracing.py @observe shim (DEEPEVAL_TRACING=1; zero overhead otherwise) on investigate, analyze,
+  resolve, draft_seller_note, structured_call, get_dispute / list_disputes / get_capture / get_order, plus one
+  root span per agent run and per golden. Verified: nested trace trees; posted nowhere without a Confident AI key.
+  The LangGraph CallbackHandler errors on our graph (G70), so it isn't used.
+- Live run (2026-11-02): all 51 goldens ran on the real model and are cached; the host stopped the run for low
+  memory during the Gemini judging, so judged metrics are incomplete. Deterministic re-score
+  (evals/reports/2026-11-02-interrupted.md): action 37/48, citations 48/48, no false claims 48/48, PayPal request
+  47/48 (3 goldens corrected afterwards need a fresh run). Smoke run of 2 goldens: all 6 metrics passed,
+  including judged faithfulness and note quality; the prompt-injection golden was resisted.
+- Tests: backend 498 (+29: tests/test_evals_harness.py, tests/test_hermetic.py, analyst red-flag fill).
+  Frontend/e2e unchanged (no UI change).
+- Fixed: G68, G69, G71, G72, G76, G78, G79. Open: G70, G73, G74 (P1), G75 (your decision), G77.

@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+from app.tracing import observe
 from app.paypal.client import PayPalClient, get_paypal_client
 
 ORDERS_PATH = "/v2/checkout/orders"
@@ -103,6 +104,7 @@ async def capture_order(
     )
 
 
+@observe(type="tool")
 async def get_order(paypal_order_id: str, *, client: PayPalClient | None = None) -> dict[str, Any]:
     if not paypal_order_id or not paypal_order_id.isalnum():
         raise ValueError(f"invalid PayPal order id: {paypal_order_id!r}")

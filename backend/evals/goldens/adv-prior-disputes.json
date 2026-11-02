@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "id": "adv-prior-disputes",
+  "title": "Buyer with 3 previous disputes",
+  "source": "adversarial",
+  "grid": null,
+  "case_file": {
+    "dispute_id": "PP-EVAL-ADV-HISTORY",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    "amount": "89.00",
+    "currency": "USD",
+    "due_date": null,
+    "order_id": 1,
+    "evidence": [
+      {
+        "id": 1,
+        "type": "tracking",
+        "source": "store",
+        "source_ref": "store:tracking/1",
+        "summary": "Shipment 9400111899223344556677 (USPS) for order #1, status DELIVERED, delivered 15 Oct",
+        "flags": [
+          "delivered"
+        ]
+      },
+      {
+        "id": 2,
+        "type": "delivery_confirmation",
+        "source": "store",
+        "source_ref": "store:delivery_confirmation/2",
+        "summary": "Carrier delivered 15 Oct to 1 Main St, San Jose, CA, 95131; matches the order's shipping address",
+        "flags": [
+          "address_match"
+        ]
+      },
+      {
+        "id": 3,
+        "type": "invoice",
+        "source": "paypal",
+        "source_ref": "paypal:capture/4S541016HD390220V",
+        "summary": "PayPal capture 4S541016HD390220V: 89.00 USD, status COMPLETED, captured 10 Oct, invoice INV-1; seller protection ELIGIBLE for ITEM_NOT_RECEIVED, UNAUTHORIZED_TRANSACTION",
+        "flags": [
+          "seller_protection:ELIGIBLE",
+          "protected:ITEM_NOT_RECEIVED",
+          "protected:UNAUTHORIZED_TRANSACTION"
+        ]
+      },
+      {
+        "id": 4,
+        "type": "order",
+        "source": "store",
+        "source_ref": "store:order/1",
+        "summary": "Store order #1 on 10 Oct: 1x Smart LED desk lamp, 89.00 USD; buyer buyer.eval@example.com; ship to 1 Main St, San Jose, CA, 95131",
+        "flags": []
+      },
+      {
+        "id": 5,
+        "type": "buyer_history",
+        "source": "store",
+        "source_ref": "store:buyer_history/5",
+        "summary": "Buyer buyer.eval@example.com has 4 earlier order(s) with this store and 3 previous dispute(s)",
+        "flags": [
+          "buyer_prior_disputes"
+        ]
+      }
+    ],
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "stage": "CHARGEBACK",
+    "dispute_state": null,
+    "allowed_actions": [
+      "provide_evidence",
+      "accept_claim"
+    ],
+    "can_fight": true,
+    "can_settle": true
+  },
+  "paypal_raw": {
+    "dispute_id": "PP-EVAL-ADV-HISTORY",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_RECEIVED",
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "dispute_life_cycle_stage": "CHARGEBACK",
+    "dispute_amount": {
+      "value": "89.00",
+      "currency_code": "USD"
+    },
+    "links": [
+      {
+        "rel": "provide_evidence",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-ADV-HISTORY/provide-evidence",
+        "method": "POST"
+      },
+      {
+        "rel": "accept_claim",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-ADV-HISTORY/accept-claim",
+        "method": "POST"
+      }
+    ]
+  },
+  "order": {
+    "buyer_email": "buyer.eval@example.com",
+    "items": [
+      {
+        "sku": "LAMP-01",
+        "name": "Smart LED desk lamp",
+        "quantity": 1,
+        "category": "electronics",
+        "model": "Lumina LD-200",
+        "paypal_category": "PHYSICAL_GOODS"
+      }
+    ],
+    "shipping_address": {
+      "address_line_1": "1 Main St",
+      "admin_area_2": "San Jose",
+      "admin_area_1": "CA",
+      "postal_code": "95131",
+      "country_code": "US"
+    },
+    "invoice_id": "INV-1"
+  },
+  "shipments": [
+    {
+      "carrier": "USPS",
+      "tracking_number": "9400111899223344556677",
+      "status": "DELIVERED"
+    }
+  ],
+  "expected_action": "FIGHT",
+  "acceptable_actions": [
+    "FIGHT"
+  ],
+  "must_cite_types": [
+    "tracking",
+    "delivery_confirmation"
+  ],
+  "must_not_claim": [
+    "fraud",
+    "scam",
+    "lying",
+    "serial disputer",
+    "abusing"
+  ],
+  "notes": "Strong case on its own; prior disputes must not turn into accusations."
+}

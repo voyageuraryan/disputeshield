@@ -1,0 +1,142 @@
+{
+  "version": 1,
+  "id": "grid-snad-strong-above-chargeback",
+  "title": "Described / strong evidence / above threshold / chargeback",
+  "source": "grid",
+  "grid": {
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    "strength": "strong",
+    "amount": "above",
+    "stage": "chargeback"
+  },
+  "case_file": {
+    "dispute_id": "PP-EVAL-GRID-SNAD-STRONG-ABOVE-CHARGEBACK",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    "amount": "89.00",
+    "currency": "USD",
+    "due_date": null,
+    "order_id": 1,
+    "evidence": [
+      {
+        "id": 1,
+        "type": "listing",
+        "source": "store",
+        "source_ref": "store:order/1/listing",
+        "summary": "Listing at time of sale: \"Smart LED desk lamp, warm white 2700K light, 3 brightness levels, USB-C power\"",
+        "flags": []
+      },
+      {
+        "id": 2,
+        "type": "order",
+        "source": "store",
+        "source_ref": "store:order/1",
+        "summary": "Store order #1 on 10 Oct: 1x Smart LED desk lamp, 89.00 USD; buyer buyer.eval@example.com; ship to 1 Main St, San Jose, CA, 95131",
+        "flags": []
+      },
+      {
+        "id": 3,
+        "type": "refund_policy",
+        "source": "store",
+        "source_ref": "store:settings/refund_policy",
+        "summary": "Store refund policy: \"30-day returns for items not as described; faulty electronics are troubleshot first, then repaired, replaced or refunded.\"",
+        "flags": []
+      },
+      {
+        "id": 4,
+        "type": "tracking",
+        "source": "store",
+        "source_ref": "store:tracking/4",
+        "summary": "Shipment 9400111899223344556677 (USPS) for order #1, status DELIVERED, delivered 15 Oct",
+        "flags": [
+          "delivered"
+        ]
+      },
+      {
+        "id": 5,
+        "type": "delivery_confirmation",
+        "source": "store",
+        "source_ref": "store:delivery_confirmation/5",
+        "summary": "Carrier delivered 15 Oct to 1 Main St, San Jose, CA, 95131; matches the order's shipping address",
+        "flags": [
+          "address_match"
+        ]
+      },
+      {
+        "id": 6,
+        "type": "buyer_message",
+        "source": "store",
+        "source_ref": "store:buyer_message/6",
+        "summary": "Buyer wrote on 18 Oct: \"The light is warmer than I expected.\"",
+        "flags": []
+      }
+    ],
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "stage": "CHARGEBACK",
+    "dispute_state": null,
+    "allowed_actions": [
+      "provide_evidence",
+      "accept_claim"
+    ],
+    "can_fight": true,
+    "can_settle": true
+  },
+  "paypal_raw": {
+    "dispute_id": "PP-EVAL-GRID-SNAD-STRONG-ABOVE-CHARGEBACK",
+    "reason": "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED",
+    "status": "WAITING_FOR_SELLER_RESPONSE",
+    "dispute_life_cycle_stage": "CHARGEBACK",
+    "dispute_amount": {
+      "value": "89.00",
+      "currency_code": "USD"
+    },
+    "links": [
+      {
+        "rel": "provide_evidence",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-SNAD-STRONG-ABOVE-CHARGEBACK/provide-evidence",
+        "method": "POST"
+      },
+      {
+        "rel": "accept_claim",
+        "href": "https://api-m.sandbox.paypal.com/v1/customer/disputes/PP-EVAL-GRID-SNAD-STRONG-ABOVE-CHARGEBACK/accept-claim",
+        "method": "POST"
+      }
+    ]
+  },
+  "order": {
+    "buyer_email": "buyer.eval@example.com",
+    "items": [
+      {
+        "sku": "LAMP-01",
+        "name": "Smart LED desk lamp",
+        "quantity": 1,
+        "category": "electronics",
+        "model": "Lumina LD-200",
+        "paypal_category": "PHYSICAL_GOODS"
+      }
+    ],
+    "shipping_address": {
+      "address_line_1": "1 Main St",
+      "admin_area_2": "San Jose",
+      "admin_area_1": "CA",
+      "postal_code": "95131",
+      "country_code": "US"
+    },
+    "invoice_id": "INV-1"
+  },
+  "shipments": [
+    {
+      "carrier": "USPS",
+      "tracking_number": "9400111899223344556677",
+      "status": "DELIVERED"
+    }
+  ],
+  "expected_action": "FIGHT",
+  "acceptable_actions": [
+    "FIGHT"
+  ],
+  "must_cite_types": [
+    "listing"
+  ],
+  "must_not_claim": [],
+  "notes": "Listing (warm white 2700K) contradicts the complaint (too warm)."
+}
