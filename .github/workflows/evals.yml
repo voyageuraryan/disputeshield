@@ -1,0 +1,68 @@
+# The real-LLM eval suite (backend/evals): costs API calls, so it only runs on demand or nightly.
+# Secrets: GROQ_API_KEY (model under test), GEMINI_API_KEY (judge). Never touches PayPal.
+name: Evals
+
+on:
+  workflow_dispatch:
+    inputs:
+      refresh:
+        description: "Ignore the cache (call the model under test and the judge again)"
+        type: boolean
+        default: false
+      only:
+        description: "Golden ids or prefixes (comma-separated); empty = all"
+        type: string
+        default: ""
+      deep:
+        description: "Goldens for the costly judged metrics: ids/prefixes or 'all'; empty = the sample"
+        type: string
+        default: ""
+  schedule:
+    - cron: "17 3 * * *"   # nightly, 03:17 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install (scripts/run_evals.sh expects backend/.venv)
+        working-directory: backend
+        run: |
+          python -m venv .venv
+          .venv/bin/pip install -r requirements-dev.txt
+      # Cached model + judge answers make re-runs free and let a run that hit a daily quota resume the next night.
+      - uses: actions/cache@v4
+        with:
+          path: backend/evals/.cache
+          key: evals-cache-${{ hashFiles('backend/evals/goldens/*.json', 'backend/app/agents/*.py') }}-${{ github.run_id }}
+          restore-keys: evals-cache-
+      - name: Run evals
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          # inputs go through env, never interpolated into the script (no shell injection)
+          IN_REFRESH: ${{ inputs.refresh }}
+          IN_ONLY: ${{ inputs.only }}
+          IN_DEEP: ${{ inputs.deep }}
+        run: |
+          args=()
+          if [ "$IN_REFRESH" = "true" ]; then args+=(--refresh); fi
+          if [ -n "$IN_ONLY" ]; then args+=(--only "$IN_ONLY"); fi
+          if [ -n "$IN_DEEP" ]; then args+=(--deep "$IN_DEEP"); fi
+          scripts/run_evals.sh "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eval-report-${{ github.run_id }}
+          path: backend/evals/reports/

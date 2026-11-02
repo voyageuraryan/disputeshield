@@ -17,8 +17,7 @@ from evals.cache import ROOT
 from evals.goldens.schema import load_goldens
 from evals.pipeline import load_into_db, prompt_hash
 
-CHECKS = [("Action", checks.check_action), ("Citations", checks.check_citations),
-          ("No false claims", checks.check_claims), ("PayPal request", checks.check_request)]
+CHECKS = list(checks.DETERMINISTIC.items())
 
 
 def main(title: str = "Offline re-score of cached outputs") -> str:

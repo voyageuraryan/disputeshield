@@ -86,34 +86,11 @@ def test_claim_detector(text, phrase, hit):
     assert bool(asserted(text, phrase)) is hit
 
 
-def out(**kw):
-    base = {"action": "FIGHT", "cited_evidence_ids": [1, 2], "cited_types": ["delivery_confirmation", "tracking"],
-            "reasoning": "Delivery confirmed to the shipping address.", "note": "Delivered 15 Oct (USPS).",
-            "note_cited_ids": [1], "note_cited_types": ["tracking"],
-            "request": {"endpoint": "provide-evidence", "attachments": 1, "evidence_type": "PROOF_OF_FULFILLMENT"}}
-    return {**base, **kw}
-
-
-def gold(gid="grid-inr-strong-above-chargeback"):
-    return BY_ID[gid].model_dump(mode="json")
-
-
-def test_checks():
-    g = gold()
-    assert checks.check_action(out(), g)[0] == 1.0
-    assert checks.check_action(out(action="SETTLE"), g)[0] == 0.0
-    assert checks.check_citations(out(), g)[0] == 1.0
-    assert "don't exist" in checks.check_citations(out(cited_evidence_ids=[99]), g)[1]
-    assert "doesn't cite" in checks.check_citations(out(cited_types=["order"], note_cited_types=[]), g)[1]
-    assert checks.check_citations(out(action="SETTLE", cited_types=[], note_cited_types=[]), g)[0] == 1.0  # only for expected
-    assert checks.check_request(out(), g)[0] == 1.0
-    assert "isn't allowed" in checks.check_request(out(request={"endpoint": "escalate", "attachments": 0}), g)[1]
-    assert "without the PDF" in checks.check_request(out(request={"endpoint": "provide-evidence", "attachments": 0}), g)[1]
-    assert checks.check_request(out(action="GATHER_MORE"), g)[0] == 1.0
-    assert checks.check_request(out(resolution_needs_human=True), g)[0] == 0.0
-    partial = gold("grid-inr-partial-above-chargeback")
-    assert checks.check_claims(out(reasoning="It was delivered.", note=""), partial)[0] == 0.0
-    assert checks.check_claims(out(reasoning="Nothing shows it was delivered.", note=""), partial)[0] == 1.0
+def test_checks_table_covers_the_10b_metrics():
+    assert set(checks.DETERMINISTIC) == {"ActionCorrectness", "CitationValidity", "AllowedActionRespected",
+                                         "BaselineDistance", "NoOverclaim", "LengthLimits"}
+    assert "ActionCorrectness" not in checks.STRICT  # gated on its own (>= 90%), see evals/gates.py
+    # known good / bad per check: tests/test_eval_metrics.py
     assert false_claims("fine", []) == {}
 
 
@@ -194,3 +171,65 @@ async def test_run_all_isolates_failures_and_caps_concurrency(tmp_path, monkeypa
     assert len(res) == len(picked) and peak <= 2
     assert {r["error"] for k, r in res.items() if "weak" in k} == {"rate_limited"}
     assert all("action" in r for k, r in res.items() if "weak" not in k)
+
+
+def test_plain_breaks_cycles_and_bounds_size():
+    from evals.pipeline import MAX_STR, plain
+
+    a = {"name": "span"}
+    a["self"] = a  # live objects in span inputs reference each other
+    obj = type("Investigator", (), {})()
+    out = plain({"a": a, "obj": obj, "long": "x" * (MAX_STR + 50), "list": [1, (2, 3)]})
+    assert out["a"]["self"] == "<…>" and out["obj"].startswith("<") and len(out["long"]) == MAX_STR + 1
+    assert out["list"] == [1, [2, 3]]
+    json.dumps(out)
+
+
+async def test_replay_answers_in_order_and_refuses_to_drift():
+    from app.schemas import Recommendation, SellerNote
+    from evals.pipeline import Replay
+
+    rec = {"action": "FIGHT", "confidence": "high", "reasoning": "r", "cited_evidence_ids": [1], "missing_items": [],
+           "economic_note": "e"}
+    r = Replay([{"output": "Recommendation", "result": rec}])
+    assert (await r(system="s", user="u", output_model=Recommendation)).action == "FIGHT" and r.prompts == ["u"]
+    r2 = Replay([{"output": "Recommendation", "result": rec}])
+    with pytest.raises(RuntimeError, match="out of step"):
+        await r2(system="s", user="u", output_model=SellerNote)
+
+
+async def test_without_tracing_want_trace_never_replays(tmp_path):
+    g = BY_ID["grid-inr-strong-above-chargeback"]
+    cache = DiskCache("pipeline", root=tmp_path)
+    await run_golden(g, Limiter(interval=0), cache)
+    again = await run_golden(g, Limiter(interval=0), cache, want_trace=True)
+    assert again["cached"] is True  # served from cache, no replay loop
+
+
+def test_merge_combines_chunked_runs(tmp_path, monkeypatch):
+    from evals import report
+
+    monkeypatch.setattr(report, "REPORTS", tmp_path)
+    (tmp_path / "latest.json").write_text(json.dumps({"rows": [
+        {"id": "grid-inr-strong-above-chargeback", "action": "SETTLE"}, {"id": "gone-golden", "action": "FIGHT"},
+        {"id": "adv-prompt-injection", "action": "FIGHT"}]}))
+    rows = report.merged_rows([{"id": "grid-inr-strong-above-chargeback", "action": "FIGHT"}])
+    assert {r["id"]: r["action"] for r in rows} == {"grid-inr-strong-above-chargeback": "FIGHT",
+                                                    "adv-prompt-injection": "FIGHT"}
+
+
+def test_judge_stops_retrying_a_daily_quota(tmp_path, monkeypatch):
+    import httpx
+    import respx
+
+    from app.agents.llm import GEMINI_URL
+    from evals.judge import GeminiJudge, JudgeError
+
+    with respx.mock:
+        route = respx.post(GEMINI_URL.format(model="m1")).mock(return_value=httpx.Response(
+            429, json={"error": {"message": "You exceeded your current quota, please check your plan"}}))
+        j = GeminiJudge(models=["m1"], cache=DiskCache("j", root=tmp_path), interval=0)
+        for _ in range(2):
+            with pytest.raises(JudgeError, match="daily quota"):
+                j.generate("prompt one" + str(_))
+        assert route.call_count == 1 and j.exhausted == {"m1"}  # no retries, and skipped afterwards

@@ -14,6 +14,10 @@ from pathlib import Path
 
 HERE = Path(__file__).parent
 os.environ["DEEPEVAL_TELEMETRY_OPT_OUT"] = "1"
+os.environ["CONFIDENT_TRACE_VERBOSE"] = "0"
+# Tracing on for the eval run (before the app is imported, so @observe wraps): the agentic metrics read the traces.
+# Traces stay in memory (evals/pipeline.py install_trace_capture); nothing is posted.
+os.environ["DEEPEVAL_TRACING"] = "1"
 os.environ["LLM_PROVIDERS"] = os.getenv("EVALS_MODEL_PROVIDERS", "groq")
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["CHECKPOINT_DB"] = str(HERE / ".cache" / "checkpoints.db")
@@ -37,6 +41,10 @@ def pytest_addoption(parser):
     parser.addoption("--refresh", action="store_true", help="re-run the model under test and the judge (ignore cache)")
     parser.addoption("--only", default="", help="comma-separated golden ids (or id prefixes) to run")
     parser.addoption("--no-judge", action="store_true", help="deterministic metrics only (no Gemini judge calls)")
+    parser.addoption("--merge", action="store_true", help="update the existing latest report's rows for these goldens "
+                                                         "(chunked runs add up to one report)")
+    parser.addoption("--deep", default="", help="goldens for the costly judged metrics (PII, StepEfficiency, "
+                                                "TaskCompletion): comma ids/prefixes or 'all' (default: a sample)")
 
 
 def pytest_configure(config):
@@ -46,6 +54,10 @@ def pytest_configure(config):
         os.environ["EVALS_ONLY"] = config.getoption("--only")
     if config.getoption("--no-judge"):
         os.environ["EVALS_JUDGE"] = "0"
+    if config.getoption("--merge"):
+        os.environ["EVALS_MERGE"] = "1"
+    if config.getoption("--deep"):
+        os.environ["EVALS_DEEP"] = config.getoption("--deep")
     s = get_settings()
     providers = [p.strip() for p in s.llm_providers.split(",") if p.strip()]
     if "gemini" in providers:
@@ -60,9 +72,13 @@ def outputs():
     """Every selected golden through the real pipeline once (cached on disk), before any metric runs."""
     from evals.cache import DiskCache
     from evals.pipeline import run_all
-    from evals.report import selected_goldens
+    from evals.report import deep_goldens, selected_goldens
 
-    return asyncio.run(run_all(selected_goldens(), cache=DiskCache("pipeline")))
+    deep = {g.id for g in deep_goldens()} if os.getenv("EVALS_JUDGE", "1") != "0" else set()
+    return asyncio.run(run_all(selected_goldens(), cache=DiskCache("pipeline"), want_trace=deep))
+
+
+JUDGE_NAME: list[str] = []
 
 
 @pytest.fixture(scope="session")
@@ -71,10 +87,14 @@ def judge():
         return None
     from evals.judge import GeminiJudge
 
-    return GeminiJudge()
+    j = GeminiJudge()
+    JUDGE_NAME.append(j.get_model_name())
+    return j
 
 
 def pytest_sessionfinish(session, exitstatus):
     from evals.report import write_report
 
-    write_report()
+    rep = write_report(JUDGE_NAME[0] if JUDGE_NAME else None)
+    if rep:
+        print(f"\n[evals] report: evals/reports/latest.md  gates: {'PASSED' if rep['gates']['passed'] else 'FAILED'}")

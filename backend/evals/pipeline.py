@@ -104,15 +104,17 @@ class Limiter:
 
 
 class Recorder:
-    """Per-golden LLM wrapper: goes through the shared limiter and remembers what each call returned."""
+    """Per-golden LLM wrapper: goes through the shared limiter and remembers each call (result, prompt, tokens)."""
 
     def __init__(self, limiter: Limiter):
         self.limiter = limiter
         self.calls: list[dict] = []
+        self.prompts: list[str] = []          # what the model under test actually received (PII check)
         self.provider_errors: list[str] = []  # the provider failed (not the model's answer): never cached
 
     async def __call__(self, *, system: str, user: str, output_model: type) -> Any:
         started = time.monotonic()
+        self.prompts.append(user)
         try:
             result = await self.limiter.call(system=system, user=user, output_model=output_model)
         except LLMError as exc:
@@ -120,8 +122,24 @@ class Recorder:
                 self.provider_errors.append(str(exc)[:300])  # HTTP/timeouts; bad output *is* model behaviour
             raise
         self.calls.append({"output": output_model.__name__, "provider": llm_module.last_provider.get(),
-                           "seconds": round(time.monotonic() - started, 1), "result": result.model_dump(mode="json")})
+                           "seconds": round(time.monotonic() - started, 1), "tokens": llm_module.last_usage.get(),
+                           "result": result.model_dump(mode="json")})
         return result
+
+
+class Replay:
+    """Answers with a cached run's recorded results, in order: rebuilds a trace with zero model calls."""
+
+    def __init__(self, calls: list[dict]):
+        self.calls, self.i, self.prompts = calls, 0, []
+
+    async def __call__(self, *, system: str, user: str, output_model: type) -> Any:
+        self.prompts.append(user)
+        call = self.calls[self.i]
+        self.i += 1
+        if call["output"] != output_model.__name__:
+            raise RuntimeError(f"replay out of step: recorded {call['output']}, asked for {output_model.__name__}")
+        return output_model.model_validate(call["result"])
 
 
 def load_into_db(g: Golden):
@@ -168,25 +186,154 @@ def prompt_hash(g: Golden, engine, dispute_id: int) -> str:
     return digest(SYSTEM_PROMPT, user, NOTE_SYSTEM_PROMPT)[:16]
 
 
-async def run_golden(g: Golden, limiter: Limiter, cache: DiskCache | None = None) -> dict:
+# ---- traces (DEEPEVAL_TRACING=1, set by the eval conftest) ------------------------------------------------------
+
+_traces: dict[str, Any] = {}
+
+
+def install_trace_capture() -> bool:
+    """Keep finished traces in memory by name (nothing is posted anywhere). False when tracing is off."""
+    from app import tracing
+
+    if not tracing.ENABLED:
+        return False
+    from deepeval.tracing import trace_manager
+
+    def keep(trace) -> None:  # noqa: ANN001
+        name = getattr(trace, "name", None)
+        if name:
+            _traces[name] = trace
+    trace_manager.post_trace = keep
+    trace_manager.post_trace_api = lambda *a, **k: None
+    return True
+
+
+MAX_STR = 2000
+
+
+def plain(obj: Any, _seen: set | None = None, _depth: int = 0) -> Any:
+    """A trace as plain JSON: span inputs hold live objects (sessions, the investigator) that reference each other,
+    which json.dumps rejects as circular. Cycles and very deep values become a marker; long strings are cut."""
+    seen = _seen if _seen is not None else set()
+    if obj is None or isinstance(obj, (bool, int, float)):
+        return obj
+    if isinstance(obj, str):
+        return obj if len(obj) <= MAX_STR else obj[:MAX_STR] + "…"
+    if _depth > 25 or id(obj) in seen:
+        return "<…>"
+    if isinstance(obj, dict):
+        seen.add(id(obj))
+        out = {str(k): plain(v, seen, _depth + 1) for k, v in obj.items()}
+        seen.discard(id(obj))
+        return out
+    if isinstance(obj, (list, tuple, set)):
+        seen.add(id(obj))
+        out = [plain(v, seen, _depth + 1) for v in obj]
+        seen.discard(id(obj))
+        return out
+    if hasattr(obj, "model_dump"):
+        try:
+            return plain(obj.model_dump(mode="json"), seen, _depth + 1)
+        except Exception:  # noqa: BLE001
+            pass
+    return plain(repr(obj), seen, _depth + 1)
+
+
+async def _take_trace(name: str) -> dict | None:
+    from app import tracing
+
+    if not tracing.ENABLED:
+        return None
+    from deepeval.tracing import trace_manager
+
+    for _ in range(50):  # the trace is handed over when its root span closes
+        if name in _traces:
+            trace = _traces.pop(name)
+            roots = trace.root_spans or []
+            return plain(trace_manager.create_nested_spans_dict(roots[0])) if roots else None
+        await asyncio.sleep(0.02)
+    return None
+
+
+async def shadow_investigation(g: Golden):  # -> FakePayPal (its .requests are the PayPal reads made)
+    """The real investigator on the golden's store data + a fake PayPal client (evals/fake_paypal.py), in its own
+    DB. Only its tool calls are scored (the analyst decides on the golden's fixed case file)."""
+    from app.agents.investigator import investigate
+    from app.models import Order as OrderRow
+    from evals.fake_paypal import FakePayPal, capture_id, paypal_order_id
+
+    engine, did = load_into_db(g)
+    with Session(engine) as s:
+        d = s.get(Dispute, did)
+        d.transaction_id, d.refreshed_at = capture_id(g), None  # stale copy: the investigator fetches it
+        if d.order_id and (oid := paypal_order_id(g)):
+            o = s.get(OrderRow, d.order_id)
+            o.paypal_order_id = oid
+            s.add(o)
+        s.add(d)
+        s.commit()
+        fake = FakePayPal(g)
+        await investigate(s, d, client=fake)
+    return fake
+
+
+@observe(type="agent", name="investigation")
+async def _traced_investigation(g: Golden) -> None:
+    await shadow_investigation(g)
+    update_trace(name=f"investigation {g.id}", tags=["evals", "investigation", g.id])
+
+
+async def tools_called(g: Golden) -> list[str] | None:
+    """Tool span names of a shadow investigation (None when tracing is off)."""
+    from evals.metrics.agentic import tool_spans
+
+    await _traced_investigation(g)
+    trace = await _take_trace(f"investigation {g.id}")
+    return tool_spans(trace) if trace is not None else None
+
+
+# ---- one golden -----------------------------------------------------------------------------------------------------
+
+async def run_golden(g: Golden, limiter: Limiter, cache: DiskCache | None = None, *, want_trace: bool = False) -> dict:
+    """Cached outputs are reused. want_trace: the full-run trace is needed (agentic metrics); a cached run is replayed
+    through the real code (no model calls) when its results were recorded, else it runs for real."""
+    from app import tracing
+
+    want_trace = want_trace and tracing.ENABLED  # without tracing no trace can appear: don't replay for one
     engine, did = load_into_db(g)
     key = f"{g.id}-{prompt_hash(g, engine, did)}-{digest(model_under_test())[:8]}"
-    if cache and (hit := cache.get(key)):
+    hit = cache.get(key) if cache else None
+    if hit and not (want_trace and not hit.get("trace")):
         return {**hit, "cached": True}
-    return await _traced_run(g, engine, did, key, limiter, cache)
+    replay = hit and all("result" in c for c in hit.get("llm_calls") or [])
+    llm: Any = Replay(hit["llm_calls"]) if replay else Recorder(limiter)
+    out = await _traced_run(g, engine, did, key, llm)
+    out["trace"] = await _take_trace(f"golden {g.id}")
+    if replay:  # decisions come from the original run; the replay only adds the trace
+        out = {**hit, "trace": out["trace"], "prompts": hit.get("prompts") or llm.prompts}
+    elif out.get("error"):
+        return out
+    if cache:
+        cache.set(key, {k: v for k, v in out.items() if k != "cached"})
+    return {**out, "cached": bool(replay)}
 
 
-@observe(type="agent")
-async def _traced_run(g: Golden, engine, did: int, key: str, limiter: Limiter, cache: DiskCache | None) -> dict:  # noqa: ANN001
-    """One golden = one trace when DEEPEVAL_TRACING=1 (analyst, resolution and LLM spans nest under it)."""
-    out = await _run(g, engine, did, key, limiter, cache)
-    update_trace(name=f"golden {g.id}", input=g.case_file.model_dump_json(),
+@observe(type="agent", name="dispute run")
+async def _traced_run(g: Golden, engine, did: int, key: str, llm: Any) -> dict:  # noqa: ANN001
+    """One golden = one trace when DEEPEVAL_TRACING=1: shadow investigation, analysis, resolution, LLM calls."""
+    from app import tracing
+
+    if tracing.ENABLED:
+        await shadow_investigation(g)
+    out = await _run(g, engine, did, key, llm)
+    from evals.metrics.agentic import TASK
+
+    update_trace(name=f"golden {g.id}", input=f"TASK: {TASK}\nCASE: {g.case_file.model_dump_json()}",
                  output=f"{out.get('action')}: {out.get('reasoning', '')}", tags=["evals", g.id])
     return out
 
 
-async def _run(g: Golden, engine, did: int, key: str, limiter: Limiter, cache: DiskCache | None) -> dict:  # noqa: ANN001
-    llm = Recorder(limiter)
+async def _run(g: Golden, engine, did: int, key: str, llm: Any) -> dict:  # noqa: ANN001
     started = time.monotonic()
     with Session(engine) as s:
         d = s.get(Dispute, did)
@@ -210,8 +357,8 @@ async def _run(g: Golden, engine, did: int, key: str, limiter: Limiter, cache: D
         if r.decision_id and rec and rec.action in ("FIGHT", "SETTLE"):
             res = await resolve(s, d, case, r.decision_id, llm=llm)
             dec = s.get(Decision, r.decision_id)
-            note_calls = [c["result"] for c in llm.calls if c["output"] == SellerNote.__name__]
-            note_ids = note_calls[-1]["cited_evidence_ids"] if note_calls else []
+            notes = [c["result"] for c in getattr(llm, "calls", []) if c["output"] == SellerNote.__name__]
+            note_ids = notes[-1]["cited_evidence_ids"] if notes else []
             req = dec.action_request or {}
             gave_up = s.exec(select(AgentStep).where(AgentStep.dispute_id == did, AgentStep.agent == "resolution",
                                                      AgentStep.action.like("Needs human review%"))).first()
@@ -223,26 +370,32 @@ async def _run(g: Golden, engine, did: int, key: str, limiter: Limiter, cache: D
         out["attempts"] = 1 + len(s.exec(select(AgentStep).where(AgentStep.dispute_id == did,
                                                                    AgentStep.action.like("Recommendation rejected%")))
                                   .all())
-    if llm.provider_errors:  # a transient provider failure, not the model's behaviour: report, don't cache
+    if getattr(llm, "provider_errors", None):  # a transient provider failure: report, don't cache
         return {"golden_id": g.id, "error": "provider_error", "detail": " | ".join(llm.provider_errors)[:500]}
-    out["llm_calls"] = [{k: v for k, v in c.items() if k != "result"} for c in llm.calls]
-    out["providers"] = sorted({c["provider"] for c in llm.calls if c["provider"]})
+    calls = getattr(llm, "calls", [])
+    out["llm_calls"] = calls  # results kept: a cached run can be replayed to rebuild its trace
+    out["prompts"] = llm.prompts[:1]  # the analyst prompt (PII check); later ones repeat the same case data
+    out["providers"] = sorted({c["provider"] for c in calls if c.get("provider")})
+    out["tokens"] = {k: sum((c.get("tokens") or {}).get(k) or 0 for c in calls) for k in ("input", "output")}
     out["elapsed_s"] = round(time.monotonic() - started, 1)
-    if cache:
-        cache.set(key, out)
-    return {**out, "cached": False}
+    return out
 
 
 async def run_all(goldens: list[Golden], *, cache: DiskCache | None = None, limiter: Limiter | None = None,
-                  concurrency: int = CONCURRENCY, progress=print) -> dict[str, dict]:
+                  concurrency: int = CONCURRENCY, progress=print, want_trace: set[str] | None = None) -> dict[str, dict]:
+    """Every golden through the pipeline (concurrency 2, shared limiter), plus its shadow investigation's tool calls."""
     limiter = limiter or Limiter()
+    install_trace_capture()
     sem = asyncio.Semaphore(concurrency)
     results: dict[str, dict] = {}
 
     async def one(g: Golden) -> None:
         async with sem:
             try:
-                results[g.id] = await run_golden(g, limiter, cache)
+                r = await run_golden(g, limiter, cache, want_trace=g.id in (want_trace or set()))
+                if not r.get("error"):
+                    r["tools_called"] = await tools_called(g)
+                results[g.id] = r
             except RateLimited as exc:
                 results[g.id] = {"golden_id": g.id, "error": "rate_limited", "detail": str(exc)}
             except Exception as exc:  # noqa: BLE001 - one broken golden must not stop the run

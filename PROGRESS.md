@@ -308,6 +308,25 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 10B (2026-11-02/03) — eval limitations are listed in backend/evals/README.md
+G80 [x] DAG judgement nodes had no evaluation_params: the judge saw no text and scored every explanation 0 (live)
+        -> nodes judge the actual output; regression test proves the old code fails it.
+G81 [x] PII metric counted redact.py's [email] / [shipping address] placeholders as leaked PII (live; the prompt had
+        no real email/address) -> DeepEval template subclass tells the judge placeholders are redacted values.
+G82 [x] StepEfficiency called the full investigation "redundant store tools" -> the traced task now states that
+        gathering the whole case file is the job (and run_case always uses the current task text).
+G83 [x] Traces held live objects (sessions, investigator) -> "Circular reference" when caching -> plain() converter.
+G84 [x] The judge kept retrying a DAILY quota 429 for minutes per metric -> fails fast and skips that model.
+G85 [x] SETTLE "notes" (our fixed accept-claim template) were graded as AI writing -> note quality on FIGHT only.
+G86 [ ] P2 The committed report (51 goldens) is incomplete: 38 judged results unmeasured (both free judge quotas,
+        gemini-2.5-flash and 3.5-flash-lite, ran out on 2026-11-02) and it was judged by flash-lite. Next: rerun
+        `scripts/run_evals.sh --merge` after the quota resets (cache resumes), ideally EVALS_JUDGE_MODEL=gemini-2.5-flash.
+G87 [ ] P3 CI isn't active: no git remote yet (your call), and the repo needs GROQ_API_KEY + GEMINI_API_KEY secrets
+        for the nightly evals. The e2e suite isn't in CI.
+G88 [x] Deprecated DeepEval APIs (DAG `children=`, LLMTestCase additional_metadata, LLMTestCaseParams) -> current.
+G89 [ ] P2 (with G75) ts-defect: the model fought a buyer-proven defect and its seller note concedes the fault
+        (note quality 0.3). Decision G75 (never auto-FIGHT a confirmed defect) would remove both.
+
 ### Found in Phase 10A (2026-11-02)
 G68 [x] SECURITY: installing deepeval registered a pytest plugin that loads backend/.env into os.environ (real
         PayPal secret, LLM keys, ADMIN_TOKEN) and sends telemetry on every `pytest -q` (2 tests failed from leaked
@@ -745,3 +764,36 @@ harness/environment bugs that were fixed on the way (G68, G69, G71, G72).
 - Tests: backend 498 (+29: tests/test_evals_harness.py, tests/test_hermetic.py, analyst red-flag fill).
   Frontend/e2e unchanged (no UI change).
 - Fixed: G68, G69, G71, G72, G76, G78, G79. Open: G70, G73, G74 (P1), G75 (your decision), G77.
+
+## 2026-11-02/03 — Phase 10B: metrics, gates, reports, CI
+
+ReAct summary: each metric was checked against the installed deepeval 4.3.2 source before use, unit-tested with a
+known-good and known-bad output, then run live; the live runs found six problems the fake judge couldn't
+(G80-G85), all fixed with regression tests. Limitations are kept in backend/evals/README.md.
+
+- Deterministic (evals/metrics/deterministic.py, logic in evals/checks.py reusing the app's validators:
+  Recommendation.check_citations, can_fight/can_settle, steps_apart + JUSTIFYING_TYPES, validate_note,
+  MAX_REASONING_WORDS / NOTE_MAX_CHARS): ActionCorrectness, CitationValidity, AllowedActionRespected,
+  BaselineDistance, NoOverclaim, LengthLimits.
+- Judged (evals/metrics/judged.py, Gemini judge): Faithfulness (analyst reasoning vs evidence + checklist), GEval
+  Economic reasoning (0.7), GEval Seller note quality (0.7, FIGHT notes), PIILeakage on the prompt actually sent to
+  the model, DAGMetric "Decision explanation" (action -> deciding evidence -> what to collect; fixed scores per path).
+- Agentic (evals/metrics/agentic.py): ToolCorrectness (exact ordered tool list of a shadow investigation with a
+  fake PayPal client; deterministic), StepEfficiency + TaskCompletion on the full traced run (sampled: 8 goldens).
+  Investigator store lookups are tool spans; traces are captured in memory, made JSON-safe, cached; cached runs
+  are replayed through the real code (zero model calls) to rebuild a trace.
+- Gates (evals/gates.py, last test): validity metrics + ToolCorrectness 100% on non-borderline goldens,
+  ActionCorrectness >= 90%, judged/agentic averages >= 0.7, complete run (EVALS_ALLOW_PARTIAL=1 to accept partial).
+- Reports: evals/reports/<date>.{json,md} + latest.* (per-metric, per-reason, confusion matrix, 5 worst with judge
+  reasons, model/provider/judge, latency p50/p95, tokens); --merge builds one report from chunked runs.
+  GET /api/admin/evals/latest (merchant sign-in) serves latest.json for the Trust page.
+- CI: .github/workflows/ci.yml (backend pytest + frontend tests/build on every push), evals.yml (manual dispatch or
+  nightly, secrets GROQ_API_KEY/GEMINI_API_KEY, cache restored, report uploaded; inputs passed via env).
+- Unit tests may now import deepeval safely: tests/conftest.py sets DEEPEVAL_DISABLE_DOTENV + telemetry opt-out
+  first; tests/test_hermetic.py proves importing deepeval from backend/ adds no .env key (subprocess, names only).
+- Live report (committed, evals/reports/2026-11-02.*; judge gemini-3.5-flash-lite): gates PARTIAL/FAILED.
+  Validity metrics 51/51 each, ToolCorrectness 51/51, Faithfulness 0.95, Seller note quality 0.88, Economic
+  reasoning 0.87, PII 1.0 / StepEfficiency 1.0 / TaskCompletion 0.96 (sample); ActionCorrectness 40/51 = 78% (< 90%:
+  the confusion matrix shows SETTLE -> GATHER_MORE 9x = G74); 38 judged results unmeasured (G86).
+- Tests: backend 539 (+41), frontend 103, e2e 29 (re-run, includes the 10A changes). vite build unchanged.
+- Fixed: G80-G85, G88. Open: G74 (P1), G75 (decision), G86, G87, G89, G70, G73, G77.

@@ -1,5 +1,5 @@
-"""One eval per golden: the real analyst + resolution (model under test) judged by deterministic metrics and the
-Gemini judge. Run with scripts/run_evals.sh (deepeval test run), never with plain pytest."""
+"""One eval per golden (the real analyst + resolution, the model under test) scored by the Phase 10B metrics, then
+the run gates (evals/gates.py). Run with scripts/run_evals.sh (deepeval test run), never with plain pytest."""
 
 from __future__ import annotations
 
@@ -7,40 +7,66 @@ import pytest
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 
-from evals.metrics import deterministic_metrics, judged_metrics
-from evals.report import record, selected_goldens
+from evals import gates
+from evals.checks import STRICT
+from evals.metrics import deterministic_metrics
+from evals.metrics.agentic import run_case, step_efficiency, task_completion, tool_case, tool_correctness
+from evals.metrics.judged import judged_cases
+from evals.report import ROWS, deep_goldens, metric_row, record, selected_goldens
 
 GOLDENS = selected_goldens()
+DEEP = {g.id for g in deep_goldens()}
 
 
-def test_case_for(golden, out: dict) -> LLMTestCase:
-    c = golden.case_file
-    context = [f"Dispute {c.dispute_id}: reason {c.reason}, {c.amount} {c.currency}, stage {c.stage}, status "
-               f"{c.status}; PayPal currently allows: {', '.join(c.allowed_actions) or 'nothing'}.",
-               "The merchant's settle threshold is 25 USD.",
-               f"Deterministic checklist: rule score {out.get('rule_score')}, red flags {out.get('red_flags') or 'none'}; "
-               f"baseline {out.get('baseline')} because {out.get('baseline_why')}."]
-    context += [f"Evidence #{e.id} ({e.type}, from {e.source}): {e.summary}" for e in c.evidence]
-    actual = f"Recommendation: {out.get('action')}. {out.get('reasoning', '')}"
-    if out.get("economic_note"):
-        actual += f"\nEconomic note: {out['economic_note']}"
-    if out.get("note"):
-        actual += f"\n\nSeller note to PayPal: {out['note']}"
-    return LLMTestCase(input=context[0], actual_output=actual, expected_output=golden.expected_action,
-                       retrieval_context=context, name=golden.id,
-                       additional_metadata={"output": out, "golden": golden.model_dump(mode="json")})
+def measure(metric, case) -> None:
+    """Measure one metric; a failure to measure (judge quota, timeout) is recorded as an error, not a crash."""
+    try:
+        metric.measure(case)
+    except Exception as exc:  # noqa: BLE001
+        metric.score, metric.success, metric.error = None, None, f"{type(exc).__name__}: {str(exc)[:300]}"
 
 
 @pytest.mark.parametrize("golden", GOLDENS, ids=[g.id for g in GOLDENS])
 def test_golden(golden, outputs, judge):
     out = outputs[golden.id]
-    if out.get("error"):  # rate limit / provider outage: not the model's fault, reported separately
+    if out.get("error"):  # rate limit / provider outage: not the model's fault; the gates count it as incomplete
         record(golden, out, [])
         pytest.skip(f"{out['error']}: {out.get('detail', '')[:200]}")
-    metrics = deterministic_metrics()
-    if judge is not None and out.get("action") != "NEEDS_HUMAN":
-        metrics += judged_metrics(judge, has_note=bool(out.get("note")))
-    try:
-        assert_test(test_case_for(golden, out), metrics, run_async=False)
-    finally:
-        record(golden, out, metrics)
+    gold = golden.model_dump(mode="json")
+    case = LLMTestCase(input=f"Dispute {golden.case_file.dispute_id}", actual_output=f"{out.get('action')}: "
+                       f"{out.get('reasoning') or ''}", name=golden.id, metadata={"output": out, "golden": gold})
+    det = deterministic_metrics()
+    rows = []
+    for m in det:
+        measure(m, case)
+        rows.append(metric_row(m, "deterministic"))
+    if out.get("tools_called") is not None:
+        from evals.judge import NoCallModel
+
+        tc = tool_correctness(judge or NoCallModel())
+        measure(tc, tool_case(golden, out["tools_called"]))
+        rows.append(metric_row(tc, "agentic"))
+    if judge is not None:
+        for metric, mcase in judged_cases(gold, out, judge, deep=golden.id in DEEP):
+            measure(metric, mcase)
+            rows.append(metric_row(metric, "judged"))
+        if golden.id in DEEP and out.get("trace"):
+            for metric in (step_efficiency(judge), task_completion(judge)):
+                measure(metric, run_case(golden, out))
+                rows.append(metric_row(metric, "agentic"))
+    record(golden, out, rows)
+    if len(golden.acceptable_actions) == 1:  # non-borderline: the validity metrics must all pass (gate 1)
+        assert_test(case, [m for m in deterministic_metrics() if m.key in STRICT], run_async=False)
+
+
+def test_gates():
+    """Runs last: the whole-run gates (action accuracy >= 90%, judged averages >= 0.7, complete run)."""
+    if not ROWS:
+        pytest.skip("no goldens ran")
+    import os
+
+    from evals.report import merged_rows
+
+    rows = merged_rows(ROWS) if os.getenv("EVALS_MERGE") == "1" else ROWS  # chunked: gate the whole report
+    result = gates.check(rows)
+    assert result["passed"], "eval gates failed:\n" + "\n".join(result["failures"])

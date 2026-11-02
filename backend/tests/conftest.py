@@ -1,6 +1,10 @@
 import os
 import tempfile
 
+# DeepEval (dev dependency; the eval-metric unit tests import it) autoloads .env files into os.environ on import and
+# sends telemetry: switch both off before anything can import it. Its pytest plugin is disabled in pytest.ini.
+os.environ.update(DEEPEVAL_DISABLE_DOTENV="1", DEEPEVAL_TELEMETRY_OPT_OUT="1", CONFIDENT_TRACE_VERBOSE="0")
+
 # Isolate tests from any real backend/.env and on-disk DB.
 os.environ.update(
     PAYPAL_CLIENT_ID="test-client",

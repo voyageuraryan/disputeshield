@@ -47,6 +47,8 @@ OVERLOAD_WAIT_S = 1.5
 
 # Which provider/model answered the most recent structured_call in this task (for the timeline).
 last_provider: ContextVar[str | None] = ContextVar("last_provider", default=None)
+# Token use of the last successful call, as the provider reported it: {"input": n, "output": n} (evals report it).
+last_usage: ContextVar[dict | None] = ContextVar("last_usage", default=None)
 
 
 class LLMError(Exception):
@@ -123,6 +125,8 @@ async def groq_call(*, system: str, user: str, output_model: type[T], api_key: s
     except httpx.HTTPError as exc:
         raise _http_error("groq", exc) from exc
     data = r.json()
+    u = data.get("usage") or {}
+    last_usage.set({"input": u.get("prompt_tokens"), "output": u.get("completion_tokens")} if u else None)
     choice = (data.get("choices") or [{}])[0]
     if choice.get("finish_reason") == "length":
         raise LLMError("groq: output truncated (finish_reason=length)")
@@ -152,6 +156,8 @@ async def gemini_call(*, system: str, user: str, output_model: type[T], api_key:
     except httpx.HTTPError as exc:
         raise _http_error("gemini", exc) from exc
     data = r.json()
+    u = data.get("usageMetadata") or {}
+    last_usage.set({"input": u.get("promptTokenCount"), "output": u.get("candidatesTokenCount")} if u else None)
     block = (data.get("promptFeedback") or {}).get("blockReason")
     if block:
         raise LLMError(f"gemini: prompt blocked ({block})")

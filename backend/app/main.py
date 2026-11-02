@@ -14,6 +14,7 @@ from app.api.disputes import router as disputes_router
 from app.api.events import router as events_router
 from app.api.settings import router as settings_router
 from app.api.store import router as store_router
+from app.api.evals import router as evals_router
 from app.api.troubleshooting import buyer_router as help_router, merchant_router as troubleshooting_router
 from app.api.webhooks import router as webhooks_router
 from app.config import get_settings
@@ -69,6 +70,7 @@ app.include_router(decisions_router, prefix="/api", include_in_schema=False, dep
 app.include_router(events_router, dependencies=merchant)
 app.include_router(settings_router, dependencies=merchant)
 app.include_router(troubleshooting_router, dependencies=merchant)
+app.include_router(evals_router, dependencies=merchant)  # Phase 10B: latest eval report (Trust page)
 
 
 @app.get("/health")

@@ -6,6 +6,7 @@
 #   scripts/run_evals.sh --refresh       call the model under test and the judge again
 #   scripts/run_evals.sh --only grid-inr,adv-prompt-injection    some goldens (ids or id prefixes)
 #   scripts/run_evals.sh --no-judge      deterministic metrics only (no Gemini calls)
+#   scripts/run_evals.sh --only grid- --merge   chunked runs: update the latest report instead of replacing it
 #   DEEPEVAL_TRACING=1 scripts/run_evals.sh   also trace the pipeline spans (@observe), kept local
 #
 # Report: backend/evals/reports/latest.md (+ latest.json). Unit tests stay `cd backend && pytest -q` (offline).

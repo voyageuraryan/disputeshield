@@ -35,7 +35,7 @@ from evals.cache import DiskCache, digest
 TIMEOUT_S = 45.0
 # Stable model first: live, gemini-3.8-flash often answered 503 / timed out on the free tier (PROGRESS session 8,
 # Phase 9B/9D runs) while 2.5-flash answered; the newer one stays as a fallback.
-DEFAULT_JUDGE_MODELS = "gemini-2.5-flash,gemini-3.8-flash"
+DEFAULT_JUDGE_MODELS = "gemini-2.5-flash,gemini-3.8-flash,gemini-3.5-flash-lite"
 
 
 class JudgeError(RuntimeError):
@@ -56,6 +56,7 @@ class GeminiJudge(DeepEvalBaseLLM):
         self._lock = threading.Lock()
         self._last = 0.0
         self.calls = 0
+        self.exhausted: set[str] = set()  # models whose DAILY quota is used up: skipped for the rest of the run
         super().__init__(model=names[0])
 
     # ---- DeepEvalBaseLLM -----------------------------------------------------------------------------------
@@ -117,6 +118,9 @@ class GeminiJudge(DeepEvalBaseLLM):
         errors = []
         with httpx.Client(timeout=TIMEOUT_S) as http:
             for model in self.models:
+                if model in self.exhausted:
+                    errors.append(f"{model}: daily quota used up")
+                    continue
                 with_schema = True
                 for attempt in range(4):
                     self._space()
@@ -130,11 +134,19 @@ class GeminiJudge(DeepEvalBaseLLM):
                     if r.status_code == 400 and with_schema and schema is not None:
                         with_schema = False  # a schema feature Gemini doesn't support: JSON mode + validation
                         continue
+                    if r.status_code == 429 and "exceeded your current quota" in r.text:
+                        # a DAILY quota: waiting and retrying can't help (seen live: minutes lost per metric)
+                        self.exhausted.add(model)
+                        errors.append(f"{model}: HTTP 429 (daily quota used up)")
+                        break
                     if r.status_code in (429, 503) and attempt < 3:
                         time.sleep(min(float(r.headers.get("retry-after") or 10 * (attempt + 1)), 60))
                         continue
                     if r.status_code != 200:
-                        errors.append(f"{model}: HTTP {r.status_code}")
+                        # the start of Gemini's message says which quota (per minute / per day); no secrets in it
+                        msg = ((r.json() if "json" in r.headers.get("content-type", "") else {}).get("error") or {}
+                               ).get("message", "")
+                        errors.append(f"{model}: HTTP {r.status_code}" + (f" ({msg[:160]})" if msg else ""))
                         break
                     cand = (r.json().get("candidates") or [{}])[0]
                     text = "".join(p.get("text", "") for p in (cand.get("content") or {}).get("parts") or []
@@ -144,3 +156,23 @@ class GeminiJudge(DeepEvalBaseLLM):
                     errors.append(f"{model}: empty answer ({cand.get('finishReason')})")
                     break
         raise JudgeError("judge unavailable: " + " | ".join(errors))
+
+
+class NoCallModel(DeepEvalBaseLLM):
+    """For metrics that need a model object but never call it (ToolCorrectness without available_tools) in
+    --no-judge runs; DeepEval would otherwise default to OpenAI. Raises if anything does call it."""
+
+    def __init__(self):
+        super().__init__(model="no-llm")
+
+    def load_model(self) -> "NoCallModel":
+        return self
+
+    def get_model_name(self) -> str:
+        return "no-llm (deterministic)"
+
+    def generate(self, prompt: str, schema=None):  # noqa: ANN001
+        raise JudgeError("this metric was expected to be deterministic but asked a model")
+
+    async def a_generate(self, prompt: str, schema=None):  # noqa: ANN001
+        return self.generate(prompt, schema)

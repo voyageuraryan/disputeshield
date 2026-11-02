@@ -243,6 +243,7 @@ class Investigator:
 
     # Store lookups
 
+    @observe(type="tool", name="store_order")
     def _order(self, order: Order) -> None:
         items = ", ".join(f"{i.get('quantity', 1)}x {i.get('name')}" for i in order.items or []) or "no items"
         summary = (f"Store order #{order.id} on {_day(order.created_at)}: {items}, {order.amount} {order.currency}; "
@@ -250,6 +251,7 @@ class Investigator:
         row = self.evidence(type="order", source="store", source_ref=f"store:order/{order.id}", summary=summary)
         self.step(f"Found order #{order.id} ({items}, {order.amount} {order.currency})", {"evidence_id": row.id})
 
+    @observe(type="tool", name="store_shipments")
     def _shipment(self, order: Order) -> None:
         ships = self.s.exec(select(Shipment).where(Shipment.order_id == order.id).order_by(Shipment.id)).all()
         if not ships:
@@ -282,6 +284,7 @@ class Investigator:
                 self.step(f"Delivery address {'matches' if same else 'differs from' if same is False else 'unknown vs'} "
                           f"the shipping address", {"evidence_id": row.id, "address_match": same})
 
+    @observe(type="tool", name="store_messages")
     def _messages(self, order: Order) -> None:
         msgs = self.s.exec(select(Message).where(Message.order_id == order.id).order_by(Message.sent_at)).all()
         buyer = [m for m in msgs if m.sender == MessageSender.buyer]
@@ -291,6 +294,7 @@ class Investigator:
         self.step(f"Found {len(buyer)} buyer message(s) and {len(msgs) - len(buyer)} seller message(s)"
                   f" for order #{order.id}", {"message_ids": [m.id for m in msgs]})
 
+    @observe(type="tool", name="store_listing")
     def _listing(self, order: Order) -> None:
         if not order.product_listing:
             self.step(f"No product listing stored for order #{order.id}")
@@ -304,6 +308,7 @@ class Investigator:
         log_step(self.s, self.d.id, "troubleshooter", elig.why,
                  {"eligible": elig.eligible, "product": elig.product_name, "model": elig.product_model})
 
+    @observe(type="tool", name="troubleshooting_record")
     def _troubleshooting_record(self) -> None:
         """Phase 9D: a finished buyer troubleshooting session becomes one evidence item (facts + flags)."""
         from app.troubleshooting.outcome import record, session_of
@@ -324,6 +329,7 @@ class Investigator:
             log_step(self.s, self.d.id, "troubleshooter",
                      "For you to check: " + "; ".join(rec.suspect), {"merchant_only": True, "evidence_id": row.id})
 
+    @observe(type="tool", name="refund_policy")
     def _refund_policy(self) -> None:
         from app.merchant import get_merchant_settings
 
@@ -335,6 +341,7 @@ class Investigator:
                             summary=f"Store refund policy: \"{policy[:600]}\"")
         self.step("Found the store's refund policy", {"evidence_id": row.id})
 
+    @observe(type="tool", name="buyer_history")
     def _buyer_history(self, order: Order) -> None:
         if not order.buyer_email:
             self.step("Buyer email unknown; skipped order history")

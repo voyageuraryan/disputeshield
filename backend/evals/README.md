@@ -17,13 +17,55 @@ scripts/run_evals.sh --no-judge           # deterministic metrics only
   evidence strength x amount vs the 25 USD threshold x stage (inquiry/chargeback with the allowed actions PayPal
   returned live), adversarial cases, real recorded sandbox disputes (slimmed: no buyer/transaction data), demo case
   B and the troubleshooting results. `tests/test_evals_harness.py` checks they match the builder.
-- **Metrics**: Action (expected or acceptable), Citations (real ids; the key evidence types), No false claims
-  (negation-aware), PayPal request (allowed endpoint, PDF attached, note <= 1000 chars) and, judged by Gemini,
-  Faithfulness (reasoning + note vs the evidence) and Seller note quality (GEval with fixed steps).
+- **Metrics** (Phase 10B, `metrics/`; each has a known-good / known-bad unit test in
+  `tests/test_eval_metrics.py`):
+  - deterministic (`metrics/deterministic.py`, logic in `checks.py` reusing the app's validators):
+    ActionCorrectness, CitationValidity, AllowedActionRespected, BaselineDistance, NoOverclaim, LengthLimits;
+  - judged by Gemini (`metrics/judged.py`): Faithfulness (analyst reasoning), Economic reasoning (GEval), Seller
+    note quality (GEval, FIGHT notes only), PII leakage (on the prompt sent to the model), Decision explanation
+    (DAG: states the action -> names the deciding evidence -> for GATHER_MORE names what to collect);
+  - agentic (`metrics/agentic.py`, from traces): ToolCorrectness (deterministic, exact ordered tool list of the
+    shadow investigation), StepEfficiency and TaskCompletion (judge) on the full traced run.
+- **Gates** (`gates.py`, the last test): validity metrics 100% on non-borderline goldens, ActionCorrectness >=
+  90%, judged/agentic averages >= 0.7, and a complete run (else it fails; `EVALS_ALLOW_PARTIAL=1` accepts partial).
+- **Reports**: `reports/<date>.{json,md}` + `latest.*` (served by `GET /api/admin/evals/latest`): gates,
+  per-metric pass rate, per-reason breakdown, confusion matrix, 5 worst cases with judge reasons, model/provider/
+  judge, latency p50/p95, tokens. `python -m evals.offline_report` re-scores cached outputs without any API call.
 - **Quota**: one global limiter (`EVALS_MIN_INTERVAL_S`, default 15 s between model calls), at most 2 goldens at
   a time, 429s wait for retry-after, a daily limit skips the golden (not cached; the next run continues). Judge
   calls are spaced by `EVALS_JUDGE_INTERVAL_S` (7 s). Pipeline outputs and judge answers are cached in
   `.cache/` (git-ignored) by golden, prompt hash and model, so re-runs are free.
 - **Never touches PayPal**: each golden runs in its own in-memory database; resolution builds the PayPal request
   but nothing executes it.
-- **Report**: `reports/latest.md` (+ `latest.json`).
+- **CI**: `.github/workflows/ci.yml` (unit tests on every push) and `evals.yml` (this suite on manual dispatch
+  or nightly, secrets GROQ_API_KEY + GEMINI_API_KEY, cache restored between runs).
+
+## Limitations (keep this list current)
+
+1. **Judge quota.** A full judged run is ~450-500 judge calls; Gemini's free daily quota for gemini-2.5-flash ran
+   out on 2026-11-02 (HTTP 429 "exceeded your current quota"). The judge then falls back through
+   EVALS_JUDGE_MODEL / the default chain (2.5-flash -> 3.8-flash -> 3.5-flash-lite). Answers are cached, so an
+   interrupted run resumes; an incomplete run fails the gates instead of passing.
+2. **Mixed judges.** Mid-run fallback means different goldens can be graded by different judge models. For a
+   comparable report pin one with EVALS_JUDGE_MODEL (the report names the judge). The committed 2026-11-03 report
+   was judged by gemini-3.5-flash-lite (weaker than 2.5-flash): re-judge with 2.5-flash when quota allows.
+3. **Judge quality isn't unit-tested.** tests/test_eval_metrics.py uses a scripted judge: it proves each metric's
+   wiring (inputs, thresholds, scoring direction, DAG paths), not that the real judge judges well. Two wiring bugs
+   only the live run could show were found and now have regression tests (DAG nodes got no text; placeholders
+   counted as PII).
+4. **Shadow investigation.** ToolCorrectness / StepEfficiency / TaskCompletion score a real investigator run on
+   the golden's store data with a fake PayPal client; the analyst decides on the golden's fixed case file (so the
+   decision metrics stay controlled). The investigator's evidence isn't what the analyst sees in the eval.
+5. **Sampled deep metrics.** PII leakage, StepEfficiency and TaskCompletion run on an 8-golden sample by default
+   (quota); `--deep all` runs them everywhere. ToolCorrectness (no judge) runs on every golden.
+6. **Model under test quota.** Groq free tier: 30 RPM, 1K requests/day, 8K tokens/min, 200K tokens/day; a full
+   --refresh (~80 calls) fits about once or twice a day. Calls are spaced 15 s.
+7. **Token use** is only known for runs made since 10B (older cached outputs have none); latency includes the
+   deliberate rate-limit spacing, so it isn't production latency.
+8. **Gates vs known issues.** ActionCorrectness is below the 90% gate because of PROGRESS G74 (the analyst moves
+   away from SETTLE on supportive buyer messages): the gate is doing its job until that is fixed.
+9. **LangGraph CallbackHandler** isn't usable with deepeval 4.3.2 on our graph (G70): our own root spans are used.
+10. **CI needs a GitHub remote + the two secrets**; nothing runs until the repo is pushed (your call). The e2e
+    Playwright suite isn't in CI (it needs browsers and a dev stack).
+11. **Single machine memory.** Long background runs were stopped by the host for low memory (~1 GB free); run in
+    chunks (`--only`) or with more free memory.

@@ -20,7 +20,10 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 - Frontend unit tests: cd frontend && npm test
 - E2E UI tests: see e2e/README.md (or `make e2e`)
 - LLM evals (REAL models, uses API quota, cached): `make evals` = scripts/run_evals.sh [--refresh] [--only ids]
-  [--no-judge]; report in backend/evals/reports/latest.md. Never part of `pytest -q` (which stays offline).
+  [--no-judge] [--deep ids|all]; gates in backend/evals/gates.py; report in backend/evals/reports/latest.md
+  (served at GET /api/admin/evals/latest). Never part of `pytest -q` (which stays offline). Limitations:
+  backend/evals/README.md. Re-score cached outputs offline: cd backend && python -m evals.offline_report
+- CI: .github/workflows/ci.yml (pytest + frontend on push), evals.yml (evals on dispatch / nightly)
   Optional tracing: DEEPEVAL_TRACING=1 (spans via app/tracing.py; local unless a Confident AI key is set).
 
 ## Hard rules
@@ -53,11 +56,13 @@ backend/app/troubleshooting/  buyer troubleshooting package: eligibility.py, acc
                               vision.py (advisory photo check), outcome.py (finished session -> evidence record +
                               flags, idempotent re-analysis, evidence-PDF page)
 backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py,
+                      evals.py (latest eval report for the Trust page),
                       troubleshooting.py (merchant invite + public buyer /api/help routes)
 backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webhook.py, cleanup_orders.py
 backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_goldens.py), pipeline.py (golden -> DB ->
-                      real analyst + resolution, rate limits, cache), judge.py (Gemini judge), metrics/, checks.py,
-                      reports/; run with scripts/run_evals.sh (its own pytest.ini)
+                      real analyst + resolution, rate limits, cache, traces, shadow investigation), judge.py
+                      (Gemini judge), fake_paypal.py, checks.py, metrics/ (deterministic, judged, agentic),
+                      gates.py, report.py, reports/; run with scripts/run_evals.sh (its own pytest.ini)
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
