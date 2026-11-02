@@ -91,6 +91,7 @@ export type DisputeRow = {
   buyer_email: string | null;
   updated_at: string | null;
   latest_decision: DecisionBrief | null;
+  troubleshooting?: string | null; // buyer troubleshooting session status (Phase 9D)
 };
 
 export type Evidence = { id: number; type: string; source: string; source_ref: string; summary: string; flags: string[] };
@@ -255,6 +256,8 @@ export type TSSessionBrief = {
   symptom?: string | null;
   plan_generic?: boolean | null;
   ended_reason?: string | null;
+  finished_at?: string | null;
+  merchant_active?: boolean; // the seller replied in the chat: the assistant is paused
   id: number;
   status: string;
   product_name: string;
@@ -320,6 +323,16 @@ export const troubleshootingApi = {
       body: JSON.stringify({ via, resend }),
     }),
   // <img>/<video>/<a> can't send headers, so the merchant session goes in the query string (like the PDF link).
+  reply: (disputeId: string, body: string) =>
+    req<TroubleshootingStatus>(`/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/messages`, {
+      method: "POST",
+      body: JSON.stringify({ body }),
+    }),
+  resumeAssistant: (disputeId: string) =>
+    req<TroubleshootingStatus>(`/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/assistant`, {
+      method: "POST",
+      body: JSON.stringify({ resume: true }),
+    }),
   proofUrl: (disputeId: string, proofId: number) =>
     `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/proofs/${proofId}?token=${encodeURIComponent(getToken() ?? "")}`,
 };
@@ -352,6 +365,7 @@ export type BuyerSession = {
   plan_generic: boolean | null;
   awaiting_fixed_confirm: boolean;
   agent_working?: boolean;
+  seller_active?: boolean; // the seller is chatting in person (the assistant is paused)
   ended: boolean;
   product_image?: string | null;
   store_name?: string;

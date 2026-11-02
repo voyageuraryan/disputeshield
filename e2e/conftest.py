@@ -45,6 +45,8 @@ class Stack:
                "MERCHANT_LOGIN_EMAILS": "merchant@business.example.com", "FRONTEND_URL": self.base,
                # hermetic: never call the real LLMs / web search from UI tests (backend/.env has real keys)
                "GROQ_API_KEY": "", "GEMINI_API_KEY": "", "TAVILY_API_KEY": "", "ARTIFACTS_DIR": str(tmp / "artifacts"),
+               # a finished buyer session would start an agent run, which fetches the dispute from PayPal
+               "TROUBLESHOOTING_REANALYSE": "false",
                "PAYPAL_CLIENT_ID": "e2e", "PAYPAL_CLIENT_SECRET": "e2e", "PYTHONPATH": str(BACKEND)}
         self.env = env
         self.procs = []

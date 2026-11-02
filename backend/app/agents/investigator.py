@@ -132,6 +132,7 @@ class Investigator:
             self._listing(order)
             self._buyer_history(order)
         self._troubleshooting_eligibility(order)
+        self._troubleshooting_record()
         self._refund_policy()
         self._paypal_dispute_messages(pp)
         case = build_case_file(self.s, d)
@@ -301,6 +302,26 @@ class Investigator:
         elig = dispute_eligibility(self.d, order)
         log_step(self.s, self.d.id, "troubleshooter", elig.why,
                  {"eligible": elig.eligible, "product": elig.product_name, "model": elig.product_model})
+
+    def _troubleshooting_record(self) -> None:
+        """Phase 9D: a finished buyer troubleshooting session becomes one evidence item (facts + flags)."""
+        from app.troubleshooting.outcome import record, session_of
+
+        ts = session_of(self.s, self.d.id)
+        rec = record(self.s, ts) if ts else None
+        if rec is None:
+            if ts is not None:
+                self.step(f"Buyer troubleshooting still in progress ({ts.status.value.lower().replace('_', ' ')}); "
+                          "not used as evidence yet")
+            return
+        row = self.evidence(type="troubleshooting_record", source="buyer_portal", source_ref=f"ts:session/{ts.id}",
+                            summary=rec.summary, flags=rec.flags)
+        outcome_flag = rec.flags[0]
+        self.step(f"Found the buyer's troubleshooting result: {outcome_flag.removeprefix('ts_').replace('_', ' ')}",
+                  {"evidence_id": row.id, "flags": rec.flags})
+        if rec.suspect:  # merchant only: never a penalty, never sent to the LLM
+            log_step(self.s, self.d.id, "troubleshooter",
+                     "For you to check: " + "; ".join(rec.suspect), {"merchant_only": True, "evidence_id": row.id})
 
     def _refund_policy(self) -> None:
         from app.merchant import get_merchant_settings

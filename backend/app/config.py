@@ -74,6 +74,8 @@ class Settings(BaseSettings):
     vision_model: str = ""  # defaults to the first GEMINI_MODEL
     # Shown in the buyer page header.
     store_name: str = "Demo store"
+    # Phase 9D: a finished buyer troubleshooting session starts a new analysis of the dispute.
+    troubleshooting_reanalyse: bool = True
 
     @property
     def cors_origin_list(self) -> list[str]:

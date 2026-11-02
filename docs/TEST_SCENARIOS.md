@@ -238,6 +238,12 @@ The buyer link points at `FRONTEND_URL` (localhost:5173 in dev), so open it on t
 | T26 | Upload the **same** photo twice on the same step; then on another step; then (same buyer) in another case | 1st repeat: nothing new stored. Other step: card says "Check: same file as step N". Other case: "Check: same file as case PP-…". A re-saved/resized copy: "looks like …". | |
 | T27 | Merchant: post nothing; leave the page open while the buyer chats on another device | The buyer's page updates live (no reload) for new replies; a **Seller** bubble appears if a merchant message is stored. | |
 | T28 | Wait until the link's expiry passes with the page open | The countdown runs out → "This help page has closed"; the chat box disappears. | |
+| T29 | Finish a troubleshooting session (any outcome) with the dashboard open on another page | Toast **Buyer finished troubleshooting** (click → the case). Queue: the case shows the same badge. Timeline: "Buyer finished troubleshooting (…): re-analysing the case with the result", then a new recommendation. | |
+| T30 | Outcome **fixed** (T15), then look at the new recommendation | Evidence list has **troubleshooting_record** (source buyer_portal). The rule note says "buyer confirmed the item works after troubleshooting"; usually **Fight**. If you approve Fight, the evidence PDF has a 2nd page "Buyer troubleshooting record". | |
+| T31 | Outcome **defect confirmed** (T14) | Red flag **defect_confirmed** (score −0.3); the recommendation leans to Gather more / Settle. | |
+| T32 | Outcome **safety stop** (T16) | Always **Gather more**, "safety issue: review personally"; never Fight. | |
+| T33 | Upload the same photo on two steps (or an old photo), then finish with defect confirmed | Timeline "For you to check: …"; **no** red flag (the buyer isn't penalised automatically). | |
+| T34 | While the buyer's page is open: case card → **Reply as seller** | The buyer sees a "Seller" bubble at once and "The seller is chatting with you here now"; the assistant stays quiet. **Let the assistant continue** turns it back on (it also resumes by itself 15 min after your last reply). | |
 
 ---
 

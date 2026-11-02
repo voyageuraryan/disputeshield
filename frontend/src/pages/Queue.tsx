@@ -16,7 +16,7 @@ import {
 } from "ag-grid-community";
 import { AgGridReact } from "ag-grid-react";
 import { disputesApi, type DisputeRow } from "../api";
-import { ActionChip, caseStatus, Chip, Due, dueIn, label, money, useNow } from "../format";
+import { ActionChip, caseStatus, Chip, Due, dueIn, label, money, tsBadge, useNow } from "../format";
 import { NEW_DISPUTE_EVENT } from "../NewDisputeAlerts";
 
 // Only the grid features the queue uses (much smaller than AllCommunityModule).
@@ -75,7 +75,7 @@ function useDisputes() {
 
 const matches = (r: DisputeRow, q: string) =>
   !q ||
-  [r.paypal_dispute_id, label(r.reason), r.buyer_email, caseStatus(r).text, r.latest_decision?.recommendation]
+  [r.paypal_dispute_id, label(r.reason), r.buyer_email, caseStatus(r).text, r.latest_decision?.recommendation, tsBadge(r)?.text]
     .filter(Boolean)
     .some((v) => String(v).toLowerCase().includes(q.toLowerCase()));
 
@@ -87,6 +87,7 @@ function PhoneList({ rows, search, now }: { rows: DisputeRow[]; search: string; 
     <ul className="space-y-2">
       {shown.map((r) => {
         const st = caseStatus(r);
+        const ts = tsBadge(r);
         return (
           <li key={r.id}>
             <button
@@ -102,6 +103,7 @@ function PhoneList({ rows, search, now }: { rows: DisputeRow[]; search: string; 
                 {r.latest_decision && <ActionChip action={r.latest_decision.recommendation} />}
                 {r.latest_decision && <Chip text={`${r.latest_decision.confidence} confidence`} />}
                 <Chip text={st.text} tone={st.tone} />
+                {ts && <Chip text={ts.text} tone={ts.tone} title={ts.title} />}
                 {r.seller_response_due && r.status !== "RESOLVED" && (
                   <span className="ml-auto">
                     Due <Due iso={r.seller_response_due} now={now} />
@@ -178,14 +180,20 @@ export default function Queue() {
       {
         headerName: "Status",
         colId: "status",
-        valueGetter: (p) => (p.data ? caseStatus(p.data).text : ""),
+        valueGetter: (p) => (p.data ? [caseStatus(p.data).text, tsBadge(p.data)?.text].filter(Boolean).join(" · ") : ""),
         cellRenderer: (p: { data?: DisputeRow }) => {
           if (!p.data) return null;
           const st = caseStatus(p.data);
-          return <Chip text={st.text} tone={st.tone} />;
+          const ts = tsBadge(p.data);
+          return (
+            <span className="flex items-center gap-1 overflow-hidden">
+              <Chip text={st.text} tone={st.tone} />
+              {ts && <Chip text={ts.text} tone={ts.tone} title={ts.title} />}
+            </span>
+          );
         },
         filter: "agTextColumnFilter",
-        width: 190,
+        width: 330,
       },
     ],
     [],

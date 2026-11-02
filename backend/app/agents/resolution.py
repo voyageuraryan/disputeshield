@@ -2,7 +2,10 @@
 
 resolve()  (graph node "resolve", before the approval interrupt)
   FIGHT   LLM drafts a factual seller note (< 1,000 chars, cites only case evidence ids; retry once,
-          then NEEDS_HUMAN - rule 7). A one-page PDF evidence summary is generated (ReportLab).
+          then NEEDS_HUMAN - rule 7). A PDF evidence summary is generated (ReportLab): page 1 the case,
+          page 2 (Phase 9D, when the buyer finished troubleshooting) the troubleshooting record and up to 3
+          of the buyer's proof photos. PayPal: jpg/png/pdf, < 10 MB per file, <= 50 MB per call
+          (paypal/disputes.py); the PDF is kept under 10 MB (photos are shrunk, else left out).
           Request: provide-evidence (when PayPal allows it) with PROOF_OF_FULFILLMENT + tracking_info,
           else provide-supporting-info (case under PayPal review), both with the PDF attached;
           else, in an inquiry that takes no evidence, escalate (note only) so PayPal reviews it as a claim.
@@ -120,16 +123,49 @@ def settle_note(case: CaseFile) -> str:
             f"{case.dispute_id}. Thank you for your patience.")
 
 
-# ---- PDF evidence summary (ReportLab, one page) ------------------------------------------
+# ---- PDF evidence summary (ReportLab) -------------------------------------------------------
 
-def build_evidence_pdf(path: Path, case: CaseFile, note: str, *, order: Order | None = None) -> Path:
+PDF_IMAGE_SIDE = 1000      # px: proof photos are shrunk for the PDF (stored copies are up to 2560 px)
+PDF_MAX_BYTES = 10 * 1024 * 1024  # PayPal: each file < 10 MB
+
+
+def _pdf_image(path: str, max_w: float, max_h: float):
+    """A shrunk JPEG copy of a proof photo as a ReportLab flowable (None if it can't be read)."""
+    import io
+
+    from PIL import Image as PILImage
+    from reportlab.platypus import Image
+
+    try:
+        with PILImage.open(path) as im:
+            im = im.convert("RGB")
+            im.thumbnail((PDF_IMAGE_SIDE, PDF_IMAGE_SIDE))
+            buf = io.BytesIO()
+            im.save(buf, "JPEG", quality=80)
+            w, h = im.size
+    except Exception:  # noqa: BLE001 - a missing/broken file just isn't included
+        return None
+    buf.seek(0)
+    scale = min(max_w / w, max_h / h, 1.0)
+    return Image(buf, width=w * scale, height=h * scale)
+
+
+def build_evidence_pdf(path: Path, case: CaseFile, note: str, *, order: Order | None = None,
+                       troubleshooting=None) -> Path:  # noqa: ANN001  (outcome.PdfSection | None)
+    pdf = _build_pdf(path, case, note, order, troubleshooting, images=True)
+    if troubleshooting is not None and pdf.stat().st_size >= PDF_MAX_BYTES:
+        pdf = _build_pdf(path, case, note, order, troubleshooting, images=False)  # PayPal: < 10 MB per file
+    return pdf
+
+
+def _build_pdf(path: Path, case: CaseFile, note: str, order: Order | None, ts, *, images: bool) -> Path:  # noqa: ANN001
     from xml.sax.saxutils import escape
 
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import LETTER
     from reportlab.lib.styles import getSampleStyleSheet
     from reportlab.lib.units import inch
-    from reportlab.platypus import KeepInFrame, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+    from reportlab.platypus import KeepInFrame, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
     path.parent.mkdir(parents=True, exist_ok=True)
     styles = getSampleStyleSheet()
@@ -155,8 +191,25 @@ def build_evidence_pdf(path: Path, case: CaseFile, note: str, *, order: Order | 
                f"PayPal and store records.")]
     doc = SimpleDocTemplate(str(path), pagesize=LETTER, leftMargin=0.6 * inch, rightMargin=0.6 * inch,
                             topMargin=0.6 * inch, bottomMargin=0.6 * inch, title=f"Evidence {case.dispute_id}")
-    # KeepInFrame(mode="shrink") guarantees one page: content shrinks rather than overflowing.
-    doc.build([KeepInFrame(doc.width, doc.height, story, mode="shrink")])
+    # KeepInFrame(mode="shrink") guarantees one page per section: content shrinks rather than overflowing.
+    pages = [KeepInFrame(doc.width, doc.height, story, mode="shrink")]
+    if ts is not None:
+        rows = [[p("Step"), p("What the buyer was asked to do"), p("Buyer's answer")]]
+        rows += [[p(o), p(t), p(a)] for o, t, a in ts.steps]
+        steps = Table(rows, colWidths=[0.5 * inch, 4.4 * inch, 2.3 * inch], repeatRows=1)
+        steps.setStyle(TableStyle([("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e8eef7")),
+                                   ("GRID", (0, 0), (-1, -1), 0.25, colors.grey), ("VALIGN", (0, 0), (-1, -1), "TOP")]))
+        second = [Paragraph(escape(ts.title), styles["Title"])] + [p(line) for line in ts.lines] + [Spacer(1, 8), steps]
+        pics = [(img, cap) for path_, cap in (ts.images if images else [])
+                if (img := _pdf_image(path_, doc.width / 2, 3.2 * inch)) is not None]
+        if pics:
+            second += [Spacer(1, 8), Paragraph("Buyer's photos", styles["Heading3"])]
+            for img, cap in pics:
+                second += [img, p(cap), Spacer(1, 6)]
+        elif ts.images and not images:
+            second.append(p("The buyer's photos are left out to keep this file under PayPal's 10 MB limit."))
+        pages += [PageBreak(), KeepInFrame(doc.width, doc.height, second, mode="shrink")]
+    doc.build(pages)
     return path
 
 
@@ -244,9 +297,14 @@ async def resolve(session: Session, dispute: Dispute, case: CaseFile, decision_i
         log_step(session, dispute.id, AGENT, f"Drafted seller note ({len(note.note)} chars)",
                  {"decision_id": decision.id, "note": note.note, "cited_evidence_ids": note.cited_evidence_ids,
                   "llm": llm_module.last_provider.get()})
-        pdf = build_evidence_pdf(pdf_path_for(decision.id), case, note.note, order=order)
-        log_step(session, dispute.id, AGENT, f"Generated one-page evidence summary PDF ({pdf.stat().st_size // 1024} KB)",
-                 {"decision_id": decision.id, "path": str(pdf)})
+        from app.troubleshooting.outcome import pdf_section
+
+        ts = pdf_section(session, dispute.id)
+        pdf = build_evidence_pdf(pdf_path_for(decision.id), case, note.note, order=order, troubleshooting=ts)
+        log_step(session, dispute.id, AGENT,
+                 f"Generated the evidence summary PDF ({pdf.stat().st_size // 1024} KB"
+                 + (f"; with the buyer's troubleshooting record and {len(ts.images)} photo(s)" if ts else "") + ")",
+                 {"decision_id": decision.id, "path": str(pdf), "troubleshooting": bool(ts)})
         text, pdf_path = note.note, str(pdf)
     else:  # SETTLE
         text, pdf_path = settle_note(case), None

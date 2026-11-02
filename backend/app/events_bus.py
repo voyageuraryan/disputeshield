@@ -76,6 +76,8 @@ def _collect(session, flush_context):  # noqa: ANN001
             keys.add(help_key(obj.session_id))
         elif isinstance(obj, TroubleshootingSession) and obj.id:
             keys.add(help_key(obj.id))
+            if obj.finished_at is not None:  # 9D: "buyer finished troubleshooting" toast on the merchant's app
+                keys.add(DISPUTES_KEY)
 
 
 @event.listens_for(Session, "after_commit")

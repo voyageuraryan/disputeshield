@@ -16,7 +16,8 @@ from app.catalog import digital_only
 from app.api.decisions import DecisionOut, _out
 from app.agents.runner import run_agents
 from app.db import get_engine, get_session
-from app.models import AgentStep, Decision, DecisionStatus, Dispute, EvidenceItemRow, Message, Order, Shipment
+from app.models import (AgentStep, Decision, DecisionStatus, Dispute, EvidenceItemRow, Message, Order, Shipment,
+                        TroubleshootingSession)
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
@@ -49,6 +50,7 @@ class DisputeRow(BaseModel):
     buyer_email: str | None
     updated_at: str | None
     latest_decision: DecisionBrief | None
+    troubleshooting: str | None = None  # buyer troubleshooting session status (Phase 9D), if there is one
 
 
 class StepOut(BaseModel):
@@ -126,7 +128,9 @@ def _row(session: Session, d: Dispute) -> DisputeRow:
         agent_status=d.agent_status, order_id=d.order_id, buyer_email=order.buyer_email if order else None,
         updated_at=(d.raw or {}).get("update_time"),
         latest_decision=DecisionBrief(id=dec.id, recommendation=dec.recommendation, confidence=dec.confidence,
-                                      status=dec.status.value) if dec else None)
+                                      status=dec.status.value) if dec else None,
+        troubleshooting=ts.status.value if (ts := session.exec(select(TroubleshootingSession).where(
+            TroubleshootingSession.dispute_id == d.id)).first()) else None)
 
 
 def _find(session: Session, dispute_id: str) -> Dispute:
@@ -270,6 +274,22 @@ async def evidence_source(evidence_id: int, session: Session = Depends(get_sessi
                 return out(f"Orders by {email}", "Store database",
                            [{"id": o.id, "created_at": o.created_at.isoformat(), "amount": str(o.amount),
                              "items": o.items} for o in orders])
+        if kind == "ts" and parts[0] == "session":  # Phase 9D: the buyer troubleshooting record
+            from app.models import TSProof, TSStep
+
+            ts = session.get(TroubleshootingSession, int(parts[1]))
+            if ts is not None and ts.dispute_id == ev.dispute_id:
+                steps = session.exec(select(TSStep).where(TSStep.session_id == ts.id).order_by(TSStep.ordinal)).all()
+                proofs = session.exec(select(TSProof).where(TSProof.session_id == ts.id).order_by(TSProof.id)).all()
+                return out(f"Buyer troubleshooting session #{ts.id}", "Buyer troubleshooting page", {
+                    # never the link token / device hashes
+                    **ts.model_dump(include={"status", "product_name", "product_model", "invited_at", "invited_via",
+                                             "buyer_last_seen_at", "finished_at", "ended_reason", "symptom",
+                                             "language", "plan_generic"}, mode="json"),
+                    "steps": [{"ordinal": s.ordinal, "title": s.title, "status": s.status, "buyer_note": s.buyer_note}
+                              for s in steps],
+                    "proofs": [{"id": p.id, "step_id": p.step_id, "mime": p.mime, "size": p.size,
+                                "checks": p.checks, "advisory_photo_check": p.vision_verdict} for p in proofs]})
         if kind == "paypal":
             if parts[0] == "capture":
                 return out(f"PayPal capture {parts[1]}", "PayPal (live)", await get_capture(parts[1], client=paypal))

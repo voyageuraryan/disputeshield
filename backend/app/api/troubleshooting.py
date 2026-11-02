@@ -4,6 +4,9 @@ merchant_router (mounted behind require_merchant):
   GET  /api/disputes/{id}/troubleshooting                      eligibility, session, steps, transcript, sources
   POST /api/disputes/{id}/troubleshooting/invite               create the session and send the buyer the link
   GET  /api/disputes/{id}/troubleshooting/proofs/{proof_id}    a photo/video the buyer uploaded
+  POST /api/disputes/{id}/troubleshooting/messages             "Reply as seller" into the buyer's chat (the
+                                                               assistant pauses while the seller is active)
+  POST /api/disputes/{id}/troubleshooting/assistant            let the assistant answer again
 buyer_router (public, but every request needs the session's link token; merchant credentials are refused):
   GET  /api/help/{sid}                       the buyer's view; the first open binds the link to that browser
   POST /api/help/{sid}/messages              chat turn: 202, the agent answers in the background (see /events)
@@ -45,6 +48,7 @@ from app.models import (TS_OPEN_STATUSES, Dispute, Order, TroubleshootingSession
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.troubleshooting.access import RateLimiter, is_expired, new_token, rate_limit, token_matches
 from app.troubleshooting.eligibility import dispute_eligibility
+from app.troubleshooting import outcome
 from app.troubleshooting import proofs as P
 from app.troubleshooting import vision
 from app.troubleshooting.service import AGENT, InviteRefused, can_message, invite, session_for
@@ -68,6 +72,7 @@ def expire_if_due(session: Session, row: TroubleshootingSession) -> bool:
         session.add(row)
         session.commit()
         log_step(session, row.dispute_id, AGENT, "The buyer's troubleshooting link expired", {"session_id": row.id})
+        outcome.finished(session, row)
     return row.status == TSStatus.EXPIRED
 
 
@@ -140,6 +145,8 @@ class SessionBrief(BaseModel):
     symptom: str | None = None
     plan_generic: bool | None = None
     ended_reason: str | None = None
+    finished_at: datetime | None = None
+    merchant_active: bool = False  # the seller replied recently: the assistant is paused
 
 
 class ProofView(BaseModel):
@@ -186,7 +193,8 @@ def _brief(row: TroubleshootingSession) -> SessionBrief:
                         product_model=row.product_model, expires_at=row.expires_at, invited_at=row.invited_at,
                         invited_via=row.invited_via, buyer_last_seen_at=row.buyer_last_seen_at,
                         language=row.language, symptom=row.symptom, plan_generic=row.plan_generic,
-                        ended_reason=row.ended_reason)
+                        ended_reason=row.ended_reason, finished_at=row.finished_at,
+                        merchant_active=agent.merchant_active(row))
 
 
 @merchant_router.get("/api/disputes/{dispute_id}/troubleshooting", response_model=TroubleshootingOut)
@@ -229,6 +237,54 @@ async def invite_buyer(dispute_id: str, body: InviteIn | None = None, session: S
                      session=_brief(result.session), link=result.link)
 
 
+class SellerMessageIn(BaseModel):
+    body: str = Field(min_length=1, max_length=MESSAGE_MAX_CHARS)
+
+
+def _open_session(session: Session, dispute_id: str) -> TroubleshootingSession:
+    row = session_for(session, _find(session, dispute_id).id)
+    if row is None:
+        raise HTTPException(404, "There's no troubleshooting session for this case.")
+    expire_if_due(session, row)
+    if row.status not in TS_OPEN_STATUSES:
+        raise HTTPException(409, "The buyer's troubleshooting page has ended, so they can't see new messages there. "
+                                 "Reply in the PayPal case instead.")
+    return row
+
+
+@merchant_router.post("/api/disputes/{dispute_id}/troubleshooting/messages", response_model=TroubleshootingOut)
+def seller_message(dispute_id: str, body: SellerMessageIn, session: Session = Depends(get_session)) -> TroubleshootingOut:
+    """The merchant writes into the buyer's chat (shown as "Seller"). The assistant pauses for
+    MERCHANT_PAUSE after each seller message (safety words from the buyer still stop the session)."""
+    text = body.body.strip()
+    if not text:
+        raise HTTPException(422, "Please type a message.")
+    row = _open_session(session, dispute_id)
+    row.merchant_active_at = datetime.now(timezone.utc)
+    session.add(row)
+    session.add(TSMessage(session_id=row.id, role="merchant", body=text))
+    session.commit()
+    log_step(session, row.dispute_id, AGENT, "You replied to the buyer on the troubleshooting page; the assistant "
+                                             "is paused while you're chatting", {"session_id": row.id})
+    return troubleshooting_status(dispute_id, session)
+
+
+class AssistantIn(BaseModel):
+    resume: bool = True
+
+
+@merchant_router.post("/api/disputes/{dispute_id}/troubleshooting/assistant", response_model=TroubleshootingOut)
+def resume_assistant(dispute_id: str, body: AssistantIn | None = None,
+                     session: Session = Depends(get_session)) -> TroubleshootingOut:
+    row = _open_session(session, dispute_id)
+    if (body or AssistantIn()).resume and row.merchant_active_at is not None:
+        row.merchant_active_at = None
+        session.add(row)
+        session.commit()
+        log_step(session, row.dispute_id, AGENT, "The assistant answers the buyer again", {"session_id": row.id})
+    return troubleshooting_status(dispute_id, session)
+
+
 @merchant_router.get("/api/disputes/{dispute_id}/troubleshooting/proofs/{proof_id}")
 def proof_file(dispute_id: str, proof_id: int, session: Session = Depends(get_session)) -> FileResponse:
     d = _find(session, dispute_id)
@@ -256,6 +312,7 @@ class BuyerSessionOut(BaseModel):
     plan_generic: bool | None
     awaiting_fixed_confirm: bool
     agent_working: bool = False        # typing indicator
+    seller_active: bool = False        # the seller is chatting in person (the assistant is paused)
     ended: bool
     steps: list[StepView]
     sources: list[SourceView]
@@ -330,7 +387,8 @@ def _view(db: Session, row: TroubleshootingSession, **extra) -> BuyerSessionOut:
     return BuyerSessionOut(id=row.id, status=row.status.value, product_name=row.product_name,
                            product_model=row.product_model, expires_at=row.expires_at, language=row.language,
                            plan_generic=row.plan_generic, awaiting_fixed_confirm=bool(row.awaiting_fixed_confirm),
-                           agent_working=row.id in _working, ended=row.status not in TS_OPEN_STATUSES,
+                           agent_working=row.id in _working, seller_active=agent.merchant_active(row),
+                           ended=row.status not in TS_OPEN_STATUSES,
                            steps=_steps(db, row), sources=_sources(db, row),
                            messages=_messages(db, row, include_system=False), **_header(db, row), **extra)
 
@@ -412,9 +470,11 @@ async def buyer_message(body: MessageIn, background: BackgroundTasks,
     sent = len(session.exec(select(TSMessage).where(TSMessage.session_id == row.id, TSMessage.role == "buyer")).all())
     if sent >= MAX_BUYER_MESSAGES:
         raise HTTPException(429, "This chat has reached its message limit. Please tap \"Talk to the seller\".")
-    _set_working(row.id, True)  # set before returning, so a second message can't start a parallel turn
+    paused = agent.merchant_active(row)  # with the seller chatting, the turn only records it (no typing dots)
+    if not paused:
+        _set_working(row.id, True)  # set before returning, so a second message can't start a parallel turn
     background.add_task(_agent_turn, session.get_bind(), row.id, body.body.strip(), body.step_id, body.step_status)
-    return Accepted()
+    return Accepted(agent_working=not paused)
 
 
 class StepIn(BaseModel):
@@ -558,6 +618,7 @@ SSE_MAX_SECONDS = 300
 def _state(db: Session, row: TroubleshootingSession) -> dict:
     return {"status": row.status.value, "ended": row.status not in TS_OPEN_STATUSES,
             "awaiting_fixed_confirm": bool(row.awaiting_fixed_confirm), "agent_working": row.id in _working,
+            "seller_active": agent.merchant_active(row),
             "plan_generic": row.plan_generic, "language": row.language,
             "steps": [s.model_dump() for s in _steps(db, row)],
             "sources": [s.model_dump() for s in _sources(db, row)]}

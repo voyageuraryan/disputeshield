@@ -73,6 +73,20 @@ def mock_investigation_lookups(router) -> None:
 
 
 @pytest.fixture(autouse=True)
+def reruns(monkeypatch):
+    """Phase 9D: a finished troubleshooting session schedules an agent run. Tests record it instead of running
+    the real agents (which would call PayPal), including when the app's lifespan installs the scheduler."""
+    from app.troubleshooting import outcome
+
+    calls: list[tuple[int, str]] = []
+    record = lambda dispute_id, key, engine: calls.append((dispute_id, key))  # noqa: E731
+    monkeypatch.setattr(outcome, "install", lambda loop: outcome.set_scheduler(record))
+    outcome.set_scheduler(record)
+    yield calls
+    outcome.set_scheduler(None)
+
+
+@pytest.fixture(autouse=True)
 def fake_llm(monkeypatch):
     """No test ever calls the real Anthropic API. Tests that care inject their own LLM."""
     from tests.fakes import ObedientLLM

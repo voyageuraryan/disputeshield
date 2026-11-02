@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { authApi, newDisputesUrl } from "./api";
 import { getToken, tokenExpired } from "./auth";
-import { label, money } from "./format";
+import { label, money, TS_FINISHED_TEXT } from "./format";
 import { useToast } from "./Toast";
 
 export const NEW_DISPUTE_EVENT = "disputeshield:new-dispute";
@@ -31,6 +31,16 @@ export default function NewDisputeAlerts() {
       };
       toast({ title: "New dispute", body: `${label(d.reason)} · ${money(d.amount, d.currency)}`, href: `/cases/${d.paypal_dispute_id}` });
       window.dispatchEvent(new CustomEvent(NEW_DISPUTE_EVENT, { detail: d }));
+    });
+    // Phase 9D: a buyer finished the troubleshooting page (the case is re-analysed with the result).
+    es.addEventListener("troubleshooting", (e) => {
+      const t = JSON.parse((e as MessageEvent).data) as { paypal_dispute_id: string; status: string };
+      toast({
+        title: "Buyer finished troubleshooting",
+        body: `${t.paypal_dispute_id} · ${TS_FINISHED_TEXT[t.status] ?? label(t.status)}`,
+        href: `/cases/${t.paypal_dispute_id}`,
+      });
+      window.dispatchEvent(new CustomEvent(NEW_DISPUTE_EVENT, { detail: t })); // the queue refreshes too
     });
     return () => es.close();
   }, [toast, token, mode]);

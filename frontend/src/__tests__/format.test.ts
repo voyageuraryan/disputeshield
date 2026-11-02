@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { caseStatus, dueIn, fightRoute, label, money } from "../format";
+import { caseStatus, dueIn, fightRoute, label, money, tsBadge } from "../format";
 
 const H = 3_600_000;
 const NOW = Date.parse("2026-11-01T12:00:00Z");
@@ -45,5 +45,21 @@ describe("fightRoute", () => {
     expect(fightRoute(["provide_supporting_info", "accept_claim"])).toBe("supporting");
     expect(fightRoute(["accept_claim", "make_offer", "escalate", "send_message"])).toBe("escalate");
     expect(fightRoute(["accept_claim"])).toBeNull();
+  });
+});
+
+describe("buyer troubleshooting badge (queue)", () => {
+  it.each([
+    ["DEFECT_CONFIRMED", "OPEN", "Buyer troubleshooting: defect confirmed", "danger"],
+    ["SAFETY_STOP", "OPEN", "Buyer troubleshooting: stopped for safety", "danger"],
+    ["RESOLVED_FIXED", "OPEN", "Buyer troubleshooting: fixed", "accent"],
+    ["HANDED_TO_MERCHANT", "OPEN", "Buyer troubleshooting: handed to you", "accent"],
+  ])("%s", (ts, status, title, tone) => {
+    expect(tsBadge({ troubleshooting: ts, status })).toEqual({ text: "Buyer finished troubleshooting", title, tone });
+  });
+  it("nothing while running, without a session, or once resolved", () => {
+    expect(tsBadge({ troubleshooting: "ACTIVE", status: "OPEN" })).toBeNull();
+    expect(tsBadge({ troubleshooting: null, status: "OPEN" })).toBeNull();
+    expect(tsBadge({ troubleshooting: "RESOLVED_FIXED", status: "RESOLVED" })).toBeNull();
   });
 });

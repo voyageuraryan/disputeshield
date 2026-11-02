@@ -147,13 +147,39 @@ export function ProofFlags({ p }: { p: TSProofView }) {
   );
 }
 
-/** What the buyer and the troubleshooting agent did: steps (with proof files), sources, conversation. */
-function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingStatus }) {
+/** What the buyer and the troubleshooting agent did: steps (with proof thumbnails, checks and the advisory photo
+ * check), sources, and the whole chat (read-only), plus "Reply as seller" while the buyer's page is open. */
+function TroubleshootingDetails({ id, st, onChange }: { id: string; st: TroubleshootingStatus; onChange: (s: TroubleshootingStatus) => void }) {
   const steps = st.steps ?? [];
   const proofs = st.proofs ?? [];
-  const msgs = (st.messages ?? []).filter((m) => m.role !== "system");
+  const msgs = st.messages ?? [];
   const sources = (st.sources ?? []).filter((x) => !x.url.startsWith("internal:"));
-  if (!steps.length && !msgs.length) return null;
+  const s = st.session!;
+  const live = ["INVITED", "ACTIVE", "AWAITING_PROOF"].includes(s.status);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const chatEnd = useRef<HTMLLIElement>(null);
+  useEffect(() => {
+    chatEnd.current?.scrollIntoView?.({ block: "nearest" });
+  }, [msgs.length]);
+  const call = async (fn: () => Promise<TroubleshootingStatus>) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      onChange(await fn());
+      return true;
+    } catch (e) {
+      setErr((e as Error).message.replace(/^\d+: /, ""));
+      return false;
+    } finally {
+      setBusy(false);
+    }
+  };
+  const send = async () => {
+    const body = text.trim();
+    if (body && (await call(() => troubleshootingApi.reply(id, body)))) setText("");
+  };
   return (
     <div className="mt-3 space-y-3 text-sm">
       {steps.length > 0 && (
@@ -169,11 +195,18 @@ function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingSta
                 {proofs
                   .filter((p) => p.step_id === x.id)
                   .map((p, n) => (
-                    <div key={p.id} className="ml-4 mt-1">
-                      <a href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="text-indigo-700 hover:underline">
-                        {p.mime.startsWith("video") ? "video" : "photo"} {n + 1}
+                    <div key={p.id} className="ml-4 mt-1 flex gap-2">
+                      <a href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="shrink-0 text-indigo-700 hover:underline">
+                        {p.mime.startsWith("image") ? (
+                          <img src={troubleshootingApi.proofUrl(id, p.id)} alt={`Buyer's photo ${n + 1} for step ${x.ordinal}`} className="h-16 w-16 rounded border border-slate-200 object-cover" loading="lazy" />
+                        ) : (
+                          <span className="flex h-16 w-16 items-center justify-center rounded border border-slate-200 bg-slate-50 text-xs">▶ video {n + 1}</span>
+                        )}
                       </a>
-                      <ProofFlags p={p} />
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium">{p.mime.startsWith("video") ? "video" : "photo"} {n + 1}</span>
+                        <ProofFlags p={p} />
+                      </div>
                     </div>
                   ))}
               </li>
@@ -195,18 +228,66 @@ function TroubleshootingDetails({ id, st }: { id: string; st: TroubleshootingSta
         </p>
       )}
       {msgs.length > 0 && (
-        <details>
-          <summary className="cursor-pointer text-xs font-semibold uppercase tracking-wide text-slate-500">
-            Conversation ({msgs.length})
-          </summary>
-          <ul className="mt-1 max-h-64 space-y-1 overflow-y-auto">
-            {msgs.map((m, i) => (
-              <li key={i} className="whitespace-pre-line">
-                <span className="font-medium">{m.role === "buyer" ? "Buyer" : m.role === "merchant" ? "You" : "Assistant"}:</span> {m.body}
-              </li>
-            ))}
-          </ul>
-        </details>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Conversation ({msgs.filter((m) => m.role !== "system").length})</p>
+          <ol aria-label="Conversation with the buyer" className="mt-1 max-h-80 space-y-1.5 overflow-y-auto rounded-md border border-slate-100 bg-slate-50 p-2">
+            {msgs.map((m, i) =>
+              m.role === "system" ? (
+                <li key={m.id ?? i} className="text-center text-xs italic text-slate-500">{m.body}</li>
+              ) : (
+                <li key={m.id ?? i} className="whitespace-pre-line">
+                  <span className={`font-medium ${m.role === "merchant" ? "text-amber-800" : m.role === "buyer" ? "text-indigo-800" : ""}`}>
+                    {m.role === "buyer" ? "Buyer" : m.role === "merchant" ? "You (seller)" : "Assistant"}:
+                  </span>{" "}
+                  {m.body}
+                </li>
+              ),
+            )}
+            <li ref={chatEnd} aria-hidden className="h-px" />
+          </ol>
+        </div>
+      )}
+      {live ? (
+        <div>
+          {s.merchant_active && (
+            <p role="status" className="mb-1 text-xs text-amber-800">
+              The assistant is paused while you're chatting (for 15 minutes after your last reply).{" "}
+              <button disabled={busy} onClick={() => call(() => troubleshootingApi.resumeAssistant(id))} className="font-medium underline">
+                Let the assistant continue
+              </button>
+            </p>
+          )}
+          <form
+            className="flex gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              send();
+            }}
+          >
+            <label htmlFor="seller-reply" className="sr-only">
+              Reply as seller
+            </label>
+            <textarea
+              id="seller-reply"
+              rows={2}
+              maxLength={1500}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              placeholder="Reply as seller (the buyer sees it on their page as “Seller”)"
+              className="min-w-0 flex-1 rounded-md border border-slate-300 p-2 text-sm"
+            />
+            <button type="submit" disabled={busy || !text.trim()} className="self-end rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white disabled:opacity-40">
+              Reply as seller
+            </button>
+          </form>
+        </div>
+      ) : (
+        <p className="text-xs text-slate-500">The buyer's page has ended, so replies there aren't possible; reply in the PayPal case.</p>
+      )}
+      {err && (
+        <p role="alert" className="rounded-md bg-amber-50 p-2 text-amber-900">
+          {err}
+        </p>
       )}
     </div>
   );
@@ -227,6 +308,13 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
       .catch((e: Error) => setLoadError(e.message));
   }, [id]);
   useEffect(load, [load, steps]); // the timeline grows when the buyer opens the page or an invite goes out
+  // While the buyer's page is open, chat messages don't touch the timeline: refresh the panel every few seconds.
+  const running = !!st?.session && ["INVITED", "ACTIVE", "AWAITING_PROOF"].includes(st.session.status);
+  useEffect(() => {
+    if (!running) return;
+    const t = setInterval(load, 8000);
+    return () => clearInterval(t);
+  }, [running, load]);
 
   const send = async (via: "paypal_message" | "email", resend = false) => {
     if (resend && !window.confirm("Send the buyer a new link? The old link will stop working.")) return;
@@ -250,9 +338,13 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
   if (loadError) return <Card title="Buyer troubleshooting"><p className="text-sm text-red-700">Couldn't load: {loadError}</p></Card>;
   if (!st) return null;
   if (!st.eligible && !st.session) {
+    const why = st.why.replace("Not eligible for buyer troubleshooting: ", "Not available: ");
     return (
       <Card title="Buyer troubleshooting">
-        <p className="text-sm text-slate-500">{st.why.replace("Not eligible for buyer troubleshooting: ", "Not available: ")}.</p>
+        <p id="ts-why" className="text-sm text-slate-500">{why}.</p>
+        <button disabled aria-describedby="ts-why" title={why} className="mt-2 rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white opacity-40">
+          Invite via PayPal message
+        </button>
       </Card>
     );
   }
@@ -283,13 +375,14 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
           {s.ended_reason && <Field k="Ended">{s.ended_reason}</Field>}
         </dl>
       )}
-      {s && <TroubleshootingDetails id={id} st={st} />}
+      {s && <TroubleshootingDetails id={id} st={st} onChange={setSt} />}
       {open && (
         <div className="mt-3 flex flex-wrap gap-2">
           {!s ? (
             <>
               <button
                 disabled={busy || !st.can_message}
+                aria-describedby={st.can_message ? undefined : "ts-no-message"}
                 onClick={() => send("paypal_message")}
                 className={`${btn} bg-indigo-600 text-white hover:bg-indigo-700`}
                 title={st.can_message ? undefined : "PayPal only allows messages while the dispute is an inquiry"}
@@ -316,7 +409,7 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
         </div>
       )}
       {!s && !st.can_message && open && (
-        <p className="mt-2 text-xs text-slate-500">PayPal doesn't allow messages at this stage (only during an inquiry), so the link can only go by email.</p>
+        <p id="ts-no-message" className="mt-2 text-xs text-slate-500">PayPal doesn't allow messages at this stage (only during an inquiry), so the link can only go by email.</p>
       )}
       {msg && (
         <div role={msg.kind === "error" ? "alert" : "status"} className={`mt-3 rounded-md p-2 text-sm ${msg.kind === "error" ? "bg-amber-50 text-amber-900" : "bg-emerald-50 text-emerald-800"}`}>

@@ -293,11 +293,11 @@ G40 [~] P2 (9C: chat turns now run in the background (202 + live stream with a t
         the first plan can take ~1 min when providers are rate-limited; try the fastest provider first for plans.)
         The troubleshooting plan is built inside the buyer's chat request: live it took 76 s (Groq 429 on the
         free 8K TPM, then Gemini 3.8 timed out, 2.5-flash answered); the page promises "up to a minute".
-G41 [ ] P2 Troubleshooting outcomes (DEFECT_CONFIRMED / RESOLVED_FIXED / SAFETY_STOP) don't feed the dispute's
-        evidence or recommendation yet; the merchant sees them on the case card and timeline only.
+G41 [x] (9D) Troubleshooting outcomes feed the dispute: troubleshooting_record evidence + rules + re-analysis.
 G42 [ ] P3 Citations are checked for existence, not relevance: live, "E5" also matched car recalls
         (carexpert, drive.com.au stored as sources) and a proof step cited a "no recall found" page.
-G43 [ ] P3 A safety stop notifies the merchant on the case timeline/card only (no app-wide toast or email).
+G43 [~] P3 (9D: app-wide toast "Buyer finished troubleshooting" + queue badge + re-analysis to GATHER_MORE with
+        "safety issue: review personally".) Still no email/push when the app isn't open.
 G44 [~] P3 (9C: EXIF time, GPS stripping, sha256 + perceptual-hash duplicate checks and the advisory vision
         check are done.) Still open: proof files are kept indefinitely under ARTIFACTS_DIR/ts/ (no retention or
         deletion when the dispute closes), and the buyer can't delete an upload they regret.
@@ -308,6 +308,25 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 9D (2026-11-02)
+G59 [x] Live: for a safety stop the LLM chose GATHER_MORE but named no missing item -> NEEDS_HUMAN twice. Code
+        now fills "your personal review of the buyer's safety report" (rule-owned next step).
+G60 [x] Live: the LLM wrote "PayPal requires a personal safety review" -> prompt says it is DisputeShield's rule.
+G61 [x] A background refresh failing once (5xx/offline) replaced the whole buyer page with an error -> only the
+        first load or a link refusal (403/404/410) does.
+G62 [x] The buyer page showed "typing…" forever when the seller was chatting (no assistant turn starts) -> the
+        202 reply says whether a turn started.
+G63 [x] Queue status cell used colDef.autoHeight, which needs an unregistered AG Grid module (console error) ->
+        chips side by side, wider column.
+G64 [x] "View source" didn't know ts:session/... refs -> shows the session (status, steps, proofs, checks; never
+        the link token or device hashes).
+G65 [ ] P3 "Reply as seller" works only while the buyer's page is open; after "Talk to the seller" (page ended)
+        the merchant replies in the PayPal case. Reopening the page for a seller-only chat is a possible later step.
+G66 [ ] P3 Re-analysis after troubleshooting is skipped while a decision is being sent (APPROVED); the next PayPal
+        update re-analyses with the result (its run key includes it).
+G67 [ ] P3 Merchant panel refreshes every 8 s while the buyer's page is open (polling; buyer chat messages don't
+        create timeline rows, so the case page's SSE doesn't carry them).
+
 ### Found in Phase 9C (2026-11-02)
 G49 [ ] P3 Buyer page chrome (buttons, labels, outcome screens) is English only; the assistant's replies and the
         steps are in the buyer's language, and the fixed step-button replies have English + Spanish only.
@@ -320,8 +339,8 @@ G51 [ ] P3 Videos over 10 MB get an evidence-size copy only when ffmpeg is insta
 G52 [ ] P3 "Same buyer" for cross-case duplicate checks = same order email; orders without an email aren't linked.
         MP4 creation time is trusted as UTC (some phones write local time) - it's a flag, never a decision.
 G53 [ ] P3 Buyer live stream and the "assistant is typing" flag are in-process (one web worker), like G12/G35.
-G54 [ ] P2 Proofs are evidence-ready (<= 10 MB copy, flags) but not yet attached to PayPal provide-evidence
-        (part of G41: feed troubleshooting results into the dispute).
+G54 [~] P2 (9D: the FIGHT evidence PDF gets a troubleshooting page + up to 3 clean proof photos.) Videos are
+        never sent (PayPal accepts jpg/png/pdf only); suspect photos are left out on purpose.
 G55 [x] A video whose header says 0 seconds was accepted as proof -> now "couldn't read this video".
 G56 [x] Vision only tried the first configured model; gemini-3.8-flash answered 503 live -> tries each model.
 G57 [x] Big photos were decoded/re-encoded on the event loop (would stall every buyer's live stream) -> threadpool.
@@ -621,3 +640,39 @@ filled the gaps and rebuilt the page; each new external call was checked against
   link, phone steps bar/sheet; demo cases PP-DEMO-H/I/J). vite build OK. Migration checked on a copy of the
   real DB.
 - Fixed this phase: G40 (mostly), G44 (checks part), G55-G57. New open: G49-G54. G33 still awaits your choice.
+
+## 2026-11-02 — Phase 9D: troubleshooting results drive the dispute decision
+
+ReAct summary: 9A-9C produced results nobody used (G41). 9D wires them through the existing pipeline
+(investigator -> rules -> analyst -> resolution PDF) without changing anything for disputes that never had
+troubleshooting, then checked the real LLM's behaviour on the new evidence.
+
+- Evidence: when a session ends, the Investigator adds one `troubleshooting_record` (source `buyer_portal`,
+  `ts:session/{id}`): summary (outcome, invite/opened, steps answered, proofs, advisory photo concerns) and
+  flags ts_fixed / ts_defect_confirmed / ts_not_attempted / ts_partial / ts_safety_stop (+ ts_proof_suspect:
+  exact duplicate, photo taken before the dispute, or photo check "no"). Logic: app/troubleshooting/outcome.py.
+- Rules (SNAD, deterministic): the record is an *optional* supporting item (counts only when present, so other
+  SNAD scores are unchanged); ts_fixed -> note "buyer confirmed the item works after troubleshooting";
+  ts_defect_confirmed without suspect -> red flag defect_confirmed -0.3; ts_not_attempted -> supporting, noted,
+  no penalty; ts_safety_stop -> baseline always GATHER_MORE "safety issue: review personally" and the analyst
+  rejects any other action; ts_proof_suspect -> no penalty, merchant-only note (stripped from the LLM prompt).
+- New analysis: a session reaching a final status (any path: buttons, defect, safety, handoff, decline, expiry)
+  sets finished_at and claims one run whose key includes the troubleshooting status (ingest.material_state);
+  disputes without a finished session keep byte-identical run keys. Webhook/poll seeing the same PayPal state
+  later claim nothing. Scheduled on the app loop (outcome.install); TROUBLESHOOTING_REANALYSE=false turns it
+  off (the e2e stack, which must never reach PayPal).
+- Merchant panel (CaseDetail): status, invite (disabled with the reason when not eligible / no PayPal
+  messaging), the whole chat (read-only, open), steps with photo thumbnails + check results + advisory photo
+  check, **Reply as seller** (buyer sees "Seller" live; the assistant pauses 15 min after each seller message
+  or until "Let the assistant continue"; safety words still stop), refreshes every 8 s while running.
+  Queue: "Buyer finished troubleshooting" badge; app-wide toast from the existing events stream.
+- Evidence PDF (FIGHT): page 2 = troubleshooting record + up to 3 clean proof photos (shrunk; video never;
+  suspect photos left out); rebuilt without photos if it would reach PayPal's 10 MB per-file limit.
+- Live check (scratch DB, real LLM, no PayPal writes): fixed -> FIGHT high, provide-evidence prepared, 2-page
+  PDF; defect -> red flag, baseline GATHER_MORE, LLM moved one step to SETTLE citing the record and listing;
+  safety -> NEEDS_HUMAN (G59) -> fixed -> GATHER_MORE proposed. One run took >60 s (Groq 429, Gemini timeout),
+  so the investigator re-fetched the made-up dispute from the sandbox (read-only GET, 404).
+- Tests: backend 469 (+37: tests/test_troubleshooting_outcome.py), frontend 103 (+10: panel reply/pause,
+  thumbnails + checks, disabled invite, queue badge, toast, seller banner, refresh resilience), e2e 29 (+1:
+  reply as seller reaches the buyer live; full flow now also checks the queue badge). vite build OK.
+- Fixed this phase: G41, G43 (mostly), G54 (mostly), G59-G64. New open: G65-G67.

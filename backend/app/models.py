@@ -86,6 +86,7 @@ class Dispute(SQLModel, table=True):
 class EvidenceSource(str, Enum):
     paypal = "paypal"
     store = "store"
+    buyer_portal = "buyer_portal"  # Phase 9D: the buyer troubleshooting page
 
 
 class EvidenceItemRow(SQLModel, table=True):
@@ -226,6 +227,9 @@ class TroubleshootingSession(SQLModel, table=True):
     plan_generic: Optional[bool] = None       # True = generic safe plan (not product-specific)
     device_hash: Optional[str] = None         # SHA-256 of the device key of the first browser that opened it
     ended_reason: Optional[str] = None
+    # Phase 9D
+    finished_at: Optional[datetime] = None        # when it reached a final status (toast, re-analysis)
+    merchant_active_at: Optional[datetime] = None  # seller replied in the chat: the assistant pauses for a while
 
 
 class ResearchCache(SQLModel, table=True):

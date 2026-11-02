@@ -86,6 +86,24 @@ export function caseStatus(r: Pick<DisputeRow, "status" | "agent_status" | "late
   return { text: label(r.status), tone: "muted" };
 }
 
+/** Phase 9D: the buyer's troubleshooting session has ended (queue badge + toast). */
+export const TS_FINISHED_TEXT: Record<string, string> = {
+  RESOLVED_FIXED: "fixed",
+  DEFECT_CONFIRMED: "defect confirmed",
+  SAFETY_STOP: "stopped for safety",
+  EXPIRED: "ended without a result",
+  HANDED_TO_MERCHANT: "handed to you",
+};
+export function tsBadge(r: Pick<DisputeRow, "troubleshooting" | "status">): { text: string; title: string; tone: Tone } | null {
+  const outcome = r.troubleshooting ? TS_FINISHED_TEXT[r.troubleshooting] : undefined;
+  if (!outcome || r.status === "RESOLVED") return null;
+  return {
+    text: "Buyer finished troubleshooting",
+    title: `Buyer troubleshooting: ${outcome}`,
+    tone: r.troubleshooting === "SAFETY_STOP" || r.troubleshooting === "DEFECT_CONFIRMED" ? "danger" : "accent",
+  };
+}
+
 export type Tone = "accent" | "muted" | "danger" | "solid";
 
 const TONES: Record<Tone, string> = {

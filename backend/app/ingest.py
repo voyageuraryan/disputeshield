@@ -101,13 +101,15 @@ def close_pending_decisions(session: Session, dispute: Dispute, why: str) -> lis
     return [d.id for d in pending]
 
 
-def material_state(pp: PayPalDispute) -> dict:
-    """What PayPal changed that matters to the merchant. update_time alone is not enough:
+def material_state(pp: PayPalDispute, ts_status: str | None = None) -> dict:
+    """What changed that matters to the merchant. update_time alone is not enough:
     PayPal bumps it (and fires CUSTOMER.DISPUTE.UPDATED) when *we* respond, which must not
-    start a new analysis and put the case back to "awaiting your approval"."""
+    start a new analysis and put the case back to "awaiting your approval".
+    ts_status: the buyer troubleshooting session's FINAL status (Phase 9D), new material for the analysis.
+    Added only when there is one, so run keys of disputes without a finished session are unchanged."""
     raw = pp.raw or {}
     due = pp.seller_response_due_date
-    return {
+    state = {
         "status": pp.status, "stage": pp.dispute_life_cycle_stage, "reason": pp.reason,
         "state": raw.get("dispute_state"),
         "amount": str(pp.dispute_amount.value) if pp.dispute_amount else None,
@@ -115,11 +117,14 @@ def material_state(pp: PayPalDispute) -> dict:
         "actions": allowed_actions(raw),
         "messages": len(raw.get("messages") or []),
     }
+    if ts_status:
+        state["troubleshooting"] = ts_status
+    return state
 
 
-def run_key(pp: PayPalDispute) -> str:
+def run_key(pp: PayPalDispute, ts_status: str | None = None) -> str:
     """One agent run per material version of the dispute (stable across PayPal's own re-saves)."""
-    m = material_state(pp)
+    m = material_state(pp, ts_status)
     version = "|".join(f"{k}={','.join(v) if isinstance(v, list) else v}" for k, v in m.items())
     return f"run:{pp.dispute_id}:{hashlib.sha1(version.encode()).hexdigest()[:16]}"
 
@@ -169,7 +174,10 @@ async def ingest_dispute(
     prev_status, prev_stage = (before.status, before.stage) if before else (None, None)
     row = upsert_dispute(session, pp)
     claimed = None
-    key = run_key(pp)
+    from app.troubleshooting.outcome import is_final, session_of
+
+    ts = session_of(session, row.id)
+    key = run_key(pp, ts.status.value if is_final(ts) else None)
     if claim(session, key, "agent_run", row.id, {"status": pp.status}):
         claimed = key
         if responded_since_last_run(session, row.id) and not seller_turn_again(prev_status, prev_stage, pp):

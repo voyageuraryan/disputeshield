@@ -28,6 +28,9 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     s = get_settings()
+    from app.troubleshooting import outcome
+
+    outcome.install(asyncio.get_running_loop())  # 9D: a finished buyer session starts a new analysis
     poller = None
     if s.poll_disputes and s.paypal_client_id and s.paypal_client_secret.get_secret_value():
         from app.scripts.poll_disputes import poll_forever
@@ -40,6 +43,7 @@ async def lifespan(app: FastAPI):
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await poller
+    outcome.set_scheduler(None)
     await close_paypal_client()
 
 

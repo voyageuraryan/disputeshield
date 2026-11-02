@@ -306,3 +306,17 @@ Use a narrow window (or Chrome DevTools → device mode, iPhone size) for the bu
    dispute, duplicates if any) and "AI look: automatic photo check is off" (see PROGRESS G50).
 
 Result: ______
+
+### Flow 18 — Troubleshooting results change the recommendation (Phase 9D)
+1. Run Flow 16 path A (fixed) on one case and path B (defect) on another; keep the queue open in another tab.
+   *Expected:* a toast **Buyer finished troubleshooting** for each; the queue shows the badge.
+2. Open each case. *Expected:* timeline "Buyer finished troubleshooting (…): re-analysing…", then a new
+   recommendation; the evidence list has a **troubleshooting_record** item ("View source" shows the session).
+   Fixed: the rule note "buyer confirmed the item works after troubleshooting". Defect: red flag
+   **defect_confirmed**.
+3. On a third case, while the buyer's page is open: **Reply as seller** → the buyer sees it live; the buyer's
+   next message gets no assistant reply until you press **Let the assistant continue**.
+4. Approve **Fight** on the fixed case (only if you mean to send it to PayPal). *Expected:* the evidence PDF
+   (link on the decision) has a 2nd page with the troubleshooting record.
+
+Result: ______

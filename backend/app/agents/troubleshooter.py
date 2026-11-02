@@ -20,7 +20,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Literal
 
@@ -35,6 +35,7 @@ from app.agents.steps import log_step
 from app.config import get_settings
 from app.models import (TS_OPEN_STATUSES, Dispute, Order, TroubleshootingSession, TSMessage, TSProof, TSSource,
                         TSStatus, TSStep, utcnow)
+from app.troubleshooting import outcome
 from app.troubleshooting import proofs as P
 from app.troubleshooting.proofs import ProofRejected
 from app.agents.web_research import ResearchError, research, save_sources
@@ -415,6 +416,19 @@ def _end(db: Session, ts: TroubleshootingSession, status: TSStatus, why: str, de
     db.add(ts)
     db.commit()
     _step(db, ts, why, {"outcome": status.value, **(detail or {})})
+    outcome.finished(db, ts)  # 9D: evidence for the dispute + one new analysis
+
+
+MERCHANT_PAUSE = timedelta(minutes=15)
+
+
+def merchant_active(ts: TroubleshootingSession, now: datetime | None = None) -> bool:
+    """The seller replied in the chat recently: the assistant stays quiet so they don't talk over each other."""
+    at = ts.merchant_active_at
+    if at is None:
+        return False
+    at = at if at.tzinfo else at.replace(tzinfo=timezone.utc)
+    return (now or datetime.now(timezone.utc)) - at < MERCHANT_PAUSE
 
 
 def ensure_opening(db: Session, ts: TroubleshootingSession) -> None:
@@ -663,6 +677,8 @@ async def agent_reply(db: Session, ts: TroubleshootingSession, buyer_message: st
     hit = safety_hit(buyer_message)
     if hit:
         return _safety_stop(db, ts, f"the buyer mentioned \"{hit}\"", ts.language)
+    if merchant_active(ts):  # the seller is answering in person; the safety check above still applies
+        return TurnResult(message="", status=ts.status.value, step_updates=applied)
 
     safe_text = redact_buyer_text(buyer_message, terms)
     steps = steps_of(db, ts)

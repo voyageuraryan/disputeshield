@@ -48,6 +48,8 @@ JUSTIFYING_TYPES = {"buyer_message", "listing"}  # unstructured evidence that ca
 NEEDS_HUMAN = "NEEDS_HUMAN"
 PROPOSED = "PROPOSED"
 
+SAFETY_REVIEW_ITEM = "your personal review of the buyer's safety report"
+
 SYSTEM_PROMPT = f"""You are the analyst for DisputeShield, which helps small merchants respond to PayPal disputes.
 You receive a case file (evidence gathered from PayPal and the merchant's store), a deterministic
 evidence checklist, and a baseline recommendation computed by fixed rules. Write the recommendation.
@@ -59,6 +61,10 @@ How the decision works (the rules already applied it; you explain it):
   evidence justifies it - a buyer message (for example "it arrived") or a listing that contradicts or
   supports the complaint - and you must cite that evidence item's id. Otherwise keep the baseline.
 - Only choose an action PayPal currently allows (see allowed_actions); GATHER_MORE is always possible.
+- A troubleshooting_record is the result of the buyer's guided troubleshooting page (steps tried, outcome,
+  proofs). If the checklist says safety_review, the answer is GATHER_MORE: a person must review it; put
+  "{SAFETY_REVIEW_ITEM}" in missing_items. That is DisputeShield's own safety rule, not a PayPal requirement:
+  never say PayPal requires it.
 - What DisputeShield can send: FIGHT = evidence, supporting info, or (in an inquiry where PayPal takes no
   evidence yet) escalating the case to a PayPal claim with the seller note; SETTLE = accept the claim, which
   refunds the buyer in full. It cannot send partial offers or messages to the buyer, so never suggest them.
@@ -83,10 +89,16 @@ class AnalysisResult:
     problems: list[str]
 
 
+MERCHANT_ONLY_FLAGS = {"ts_proof_suspect"}  # suspect buyer proofs: shown to the merchant, never to the LLM
+
+
 def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline, threshold: Decimal) -> str:
+    case_json = case.model_dump(mode="json")
+    for e in case_json["evidence"]:
+        e["flags"] = [f for f in e["flags"] if f not in MERCHANT_ONLY_FLAGS]
     payload = {
-        "case_file": case.model_dump(mode="json"),
-        "checklist": {**checklist.model_dump(mode="json"),
+        "case_file": case_json,
+        "checklist": {**checklist.model_dump(mode="json", exclude={"merchant_notes"}),
                       "red_flag_details": [red_flag_description(case.reason, c) for c in checklist.red_flags]},
         "baseline": {"action": baseline.action, "why": baseline.why},
         "merchant_settle_threshold": f"{threshold} {case.currency}",
@@ -96,9 +108,13 @@ def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
             + json.dumps(payload, indent=2, sort_keys=True, default=str))
 
 
-def validate(rec: Recommendation, case: CaseFile, baseline: Baseline) -> list[str]:
+def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
+             checklist: ChecklistResult | None = None) -> list[str]:
     """Every problem with an LLM recommendation; empty list means it is acceptable."""
     problems: list[str] = []
+    if checklist is not None and checklist.safety_review and rec.action != "GATHER_MORE":
+        problems.append(f"the buyer reported a safety problem: the recommendation must be GATHER_MORE (a person "
+                        f"reviews it), not {rec.action}")
     try:
         rec.validate_against(case)  # cited ids exist + action allowed by PayPal
     except ValueError as exc:
@@ -138,6 +154,8 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
              + (f", missing {', '.join(checklist.missing)}" if checklist.missing else ", nothing required missing")
              + (f", red flags: {', '.join(checklist.red_flags)}" if checklist.red_flags else ""),
              checklist.model_dump(mode="json"))
+    for note in checklist.merchant_notes:  # merchant only: on the timeline, never in the LLM prompt
+        log_step(session, dispute.id, AGENT, f"For you to check: {note}", {"merchant_only": True})
 
     if not checklist.reason_supported:
         return _needs_human(session, dispute, checklist, None,
@@ -159,7 +177,11 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
         except LLMError as exc:
             problems = [f"LLM call failed: {exc}"]
         else:
-            problems = validate(rec, case, baseline)
+            if checklist.safety_review and rec.action == "GATHER_MORE" and not rec.missing_items:
+                # Seen live: the LLM chose GATHER_MORE but named nothing missing. For a safety report the next
+                # step is fixed by the rules, so code fills it in rather than failing the case over wording.
+                rec.missing_items = [SAFETY_REVIEW_ITEM]
+            problems = validate(rec, case, baseline, checklist)
             if not problems:
                 return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold)
         log_step(session, dispute.id, AGENT, f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS})",

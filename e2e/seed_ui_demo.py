@@ -63,10 +63,10 @@ with Session(engine) as s:
                       seller_response_due=now + timedelta(hours=120),
                       raw={"update_time": now.isoformat(), "links": links("accept_claim")}, agent_status="PROPOSED"))
     # Phase 9C: more faulty lamps (own orders): H for the full buyer flow to DEFECT_CONFIRMED, I for an
-    # expired/tampered link, J for the phone layout.
+    # expired/tampered link, J for the phone layout, K for "Reply as seller" (9D).
     from app.catalog import PRODUCTS, order_item
     for pid, email in (("PP-DEMO-H", "hana@demo.test"), ("PP-DEMO-I", "ivan@demo.test"),
-                       ("PP-DEMO-J", "jo@demo.test")):
+                       ("PP-DEMO-J", "jo@demo.test"), ("PP-DEMO-K", "kai@demo.test")):
         o = Order(buyer_email=email, invoice_id=f"INV-{pid[-1]}-9C", amount=Decimal("89.00"), currency="USD",
                   items=[order_item(PRODUCTS["LAMP-01"], 1)])
         s.add(o); s.commit(); s.refresh(o)

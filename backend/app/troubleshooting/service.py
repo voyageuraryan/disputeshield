@@ -104,6 +104,7 @@ async def invite(s: Session, dispute: Dispute, *, via: str = "paypal_message", r
     row.token_hash, row.expires_at, row.status = token_hash, expires_at, TSStatus.INVITED
     row.device_hash = None  # a new link may be opened on a new device (it binds to the first one again)
     row.ended_reason = None
+    row.finished_at = None
     s.add(row)
     s.flush()  # need the id for the link; nothing is committed until the invite is sent
     link = build_link(row.id, token)
@@ -143,6 +144,7 @@ def close_for_resolved_dispute(s: Session, dispute: Dispute) -> None:
     row = session_for(s, dispute.id)
     if row and row.status in TS_OPEN_STATUSES:
         row.status, row.ended_reason, row.awaiting_fixed_confirm = TSStatus.EXPIRED, "dispute resolved", False
+        row.finished_at = datetime.now(timezone.utc)
         s.add(row)
         s.add(AgentStep(dispute_id=dispute.id, agent=AGENT, action="Troubleshooting closed: the dispute is resolved",
                         detail={"session_id": row.id}))

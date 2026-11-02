@@ -130,15 +130,22 @@ export default function Help() {
   const [sheet, setSheet] = useState(false);
   const now = useNow(30000);
 
+  const loaded = useRef(false);
   const load = useCallback(() => {
     if (!token) return;
     helpApi
       .get(sessionId, token)
       .then((d) => {
+        loaded.current = true;
         setData((cur) => (cur ? { ...d, messages: mergeMessages(cur.messages, d.messages) } : d));
         setError(null);
       })
-      .catch((e: Error) => setError({ status: e instanceof ApiError ? e.status : 0, text: e.message }));
+      .catch((e: Error) => {
+        const status = e instanceof ApiError ? e.status : 0;
+        // A background refresh that fails for a moment (5xx, offline) must not replace a working page; only
+        // the first load or a refusal of the link itself (403/404/410) does.
+        if (!loaded.current || FATAL.includes(status)) setError({ status, text: e.message });
+      });
   }, [sessionId, token]);
 
   useEffect(() => {
@@ -200,11 +207,13 @@ export default function Help() {
     const body = text.trim();
     if (!body || working) return;
     const pending: TSMessageView = { id: -Date.now(), role: "buyer", body, step_id: null, created_at: new Date().toISOString() };
-    setData((d) => (d ? { ...d, agent_working: true, messages: [...d.messages, pending] } : d));
+    setData((d) => (d ? { ...d, agent_working: !d.seller_active, messages: [...d.messages, pending] } : d));
     setText("");
     setNotice(null);
     try {
-      await helpApi.send(sessionId, token, body);
+      const r = await helpApi.send(sessionId, token, body);
+      // the server says whether an assistant turn started (not while the seller is chatting)
+      setData((d) => (d ? { ...d, agent_working: r.agent_working } : d));
       if (!live) load();
     } catch (e) {
       setData((d) => (d ? { ...d, agent_working: false, messages: d.messages.filter((m) => m.id !== pending.id) } : d));
@@ -269,6 +278,11 @@ export default function Help() {
       <main className="mx-auto max-w-6xl px-4 py-4 lg:grid lg:grid-cols-5 lg:gap-6 lg:py-6">
         <section aria-label="Chat" className="flex min-w-0 flex-col lg:col-span-3">
           {outcome && <OutcomeCard outcome={outcome} />}
+          {open && data.seller_active && (
+            <p role="status" className="mb-3 rounded-xl border border-amber-300 bg-amber-50 p-3 text-amber-950">
+              💬 The seller is chatting with you here now. The assistant is paused while they reply.
+            </p>
+          )}
           {open && data.awaiting_fixed_confirm && (
             <div role="group" aria-label="Is it working now?" className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 p-4">
               <p className="font-medium text-emerald-950">Is your {data.product_name} working now?</p>

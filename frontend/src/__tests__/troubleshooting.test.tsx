@@ -329,19 +329,78 @@ describe("case page troubleshooting card", () => {
     expect(el.textContent).toContain("Defect confirmed");
     expect(el.textContent).toContain("Left earbud won't charge");
     expect(el.textContent).toContain("1. Reset the lamp (done, not fixed)");
-    expect((el.querySelector('a[href*="/troubleshooting/proofs/3"]') as HTMLAnchorElement).textContent).toBe("video 1");
+    expect((el.querySelector('a[href*="/troubleshooting/proofs/3"]') as HTMLAnchorElement).textContent).toBe("▶ video 1");
     expect(el.textContent).toContain("Conversation (2)");
+    expect(el.querySelector('[aria-label="Conversation with the buyer"]')?.textContent).toContain("left one is dead"); // open, not collapsed
     expect(el.textContent).toContain("soundpeak.example");
+    expect(el.textContent).toContain("The buyer's page has ended"); // no seller reply on a finished page
+    expect(el.querySelector("#seller-reply")).toBeNull();
   });
 
-  it("explains why a case isn't eligible and offers no buttons", async () => {
+  it("shows photo thumbnails with their checks and the advisory photo check", async () => {
+    replies["GET /api/disputes/PP-1/troubleshooting"] = [
+      {
+        status: 200,
+        body: {
+          ...ELIGIBLE,
+          session: { ...BRIEF, status: "DEFECT_CONFIRMED" },
+          steps: [{ ...STEP, status: "DONE_NOT_FIXED", proofs: 1 }],
+          messages: [],
+          proofs: [{
+            id: 4, step_id: 31, mime: "image/jpeg", size: 10, created_at: "x", evidence_ready: true,
+            checks: { detected_type: "HEIC", converted: "HEIC to JPEG", taken_after_dispute: "no", metadata_removed: ["GPS location"], reused_from_other_cases: ["PP-9"] },
+            vision_verdict: { shows_step: "no", what_is_visible: "A desk lamp, light on.", concerns: "" },
+          }],
+        },
+      },
+    ];
+    await act(async () => root.render(<TroubleshootingCard detail={detail()} />));
+    await flush();
+    const img = el.querySelector('img[alt="Buyer\'s photo 1 for step 1"]') as HTMLImageElement;
+    expect(img.src).toContain("/troubleshooting/proofs/4");
+    expect(el.textContent).toContain("Check: taken before the dispute was opened; same file as case PP-9");
+    expect(el.textContent).toContain("removed: GPS location");
+    expect(el.textContent).toContain("AI look (advisory only): shows the step = no");
+  });
+
+  it("reply as seller: sends into the buyer chat, shows the pause, and can let the assistant continue", async () => {
+    const running = { ...ELIGIBLE, session: { ...BRIEF, status: "ACTIVE" }, steps: [STEP], messages: [OPENER] };
+    replies["GET /api/disputes/PP-1/troubleshooting"] = [{ status: 200, body: running }];
+    replies["POST /api/disputes/PP-1/troubleshooting/messages"] = [{
+      status: 200,
+      body: { ...running, session: { ...running.session, merchant_active: true }, messages: [OPENER, { id: 2, role: "merchant", body: "Try another bulb", step_id: null, created_at: "x" }] },
+    }];
+    replies["POST /api/disputes/PP-1/troubleshooting/assistant"] = [{ status: 200, body: running }];
+    await act(async () => root.render(<TroubleshootingCard detail={detail()} />));
+    await flush();
+    const box = el.querySelector("#seller-reply") as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "Try another bulb");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => button("Reply as seller").click());
+    await flush();
+    expect(JSON.parse(requests.find((q) => q.url.endsWith("/troubleshooting/messages"))!.init!.body as string)).toEqual({ body: "Try another bulb" });
+    expect(el.textContent).toContain("You (seller):");
+    expect(el.textContent).toContain("The assistant is paused while you're chatting");
+    expect(box.value).toBe("");
+    await act(async () => button("Let the assistant continue").click());
+    await flush();
+    expect(requests.at(-1)!.url).toContain("/troubleshooting/assistant");
+    expect(el.textContent).not.toContain("The assistant is paused");
+  });
+
+  it("explains why a case isn't eligible: the invite button is disabled, with the reason", async () => {
     replies["GET /api/disputes/PP-1/troubleshooting"] = [
       { status: 200, body: { ...ELIGIBLE, eligible: false, why: "Not eligible for buyer troubleshooting: the order has no electrical/electronic item" } },
     ];
     await act(async () => root.render(<TroubleshootingCard detail={detail()} />));
     await flush();
     expect(el.textContent).toContain("Not available: the order has no electrical/electronic item.");
-    expect(el.querySelectorAll("button")).toHaveLength(0);
+    const invite = button("Invite via PayPal message");
+    expect(invite.disabled).toBe(true);
+    expect(invite.getAttribute("aria-describedby")).toBe("ts-why");
+    expect(el.querySelectorAll("button:not([disabled])")).toHaveLength(0);
   });
 
   it("disables the PayPal invite when messaging isn't allowed and hides actions once resolved", async () => {
@@ -356,6 +415,43 @@ describe("case page troubleshooting card", () => {
     await act(async () => root.render(<TroubleshootingCard detail={detail("RESOLVED")} />));
     await flush();
     expect(button("Send a new link")).toBeUndefined();
+  });
+});
+
+describe("buyer page while the seller chats", () => {
+  it("says the seller is chatting; a message then shows no typing indicator", async () => {
+    replies["GET /api/help/5"] = [{ status: 200, body: { ...SESSION, seller_active: true } }];
+    replies["POST /api/help/5/messages"] = [{ status: 202, body: { accepted: true, agent_working: false } }];
+    await renderHelp("/help/5?t=tok");
+    expect(el.textContent).toContain("The seller is chatting with you here now");
+    const box = el.querySelector("#msg") as HTMLTextAreaElement;
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, "still dark");
+      box.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => (el.querySelector("form") as HTMLFormElement).requestSubmit());
+    await flush();
+    expect(el.textContent).toContain("still dark");
+    expect(el.textContent).not.toContain("The assistant is typing");
+  });
+
+  it("a background refresh that fails for a moment keeps the page; a refused link replaces it", async () => {
+    replies["GET /api/help/5"] = [{ status: 200, body: SESSION }, { status: 503, body: { detail: "busy" } }, { status: 410, body: { detail: "This troubleshooting link has expired." } }];
+    replies["POST /api/help/5/messages"] = [{ status: 202, body: { accepted: true, agent_working: false } }, { status: 202, body: { accepted: true, agent_working: false } }];
+    await renderHelp("/help/5?t=tok");
+    const sendText = async (text: string) => {
+      const box = el.querySelector("#msg") as HTMLTextAreaElement;
+      await act(async () => {
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(box, text);
+        box.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(async () => (el.querySelector("form") as HTMLFormElement).requestSubmit());
+      await flush();
+    };
+    await sendText("one"); // no live stream in this test, so the page refreshes: 503
+    expect(el.querySelector("#msg")).not.toBeNull();
+    await sendText("two"); // refresh: 410
+    expect(el.querySelector('[role="alert"]')?.textContent).toContain("expired");
   });
 });
 

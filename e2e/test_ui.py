@@ -50,7 +50,7 @@ def test_queue_columns_sort_filter_search_countdown(stack, page):
     assert page.locator(".ag-header-cell-text").all_inner_texts() == [
         "Dispute", "Reason", "Amount", "Buyer", "Due in", "Recommendation", "Confidence", "Status"]
     rows = page.locator(".ag-grid-scrolling-container .ag-row")
-    assert rows.count() == 11  # A, B, C, D, F, G, H, I, J, R, E
+    assert rows.count() == 12  # A, B, C, D, F, G, H, I, J, K, R, E
     assert "PP-DEMO-A" in page.locator(".ag-row[row-index='0']").inner_text()  # soonest deadline first
     assert page.locator(".ag-grid-scrolling-container .font-semibold.text-red-600").count() == 2  # under 48 h
     page.fill("input[type=search]", "case-b")
@@ -346,7 +346,7 @@ def test_troubleshooting_not_offered_for_non_electronics(stack, page):
     card = page.locator("section", has_text="Buyer troubleshooting")
     card.wait_for()
     assert "Not available: the order has no electrical/electronic item" in card.inner_text()
-    assert card.get_by_role("button").count() == 0
+    assert card.get_by_role("button", name="Invite via PayPal message").is_disabled()  # with the reason above
 
 
 def test_settings_auto_invite_toggle(stack, page):
@@ -423,8 +423,7 @@ def test_buyer_chat_assistant_down_then_talk_to_seller(stack, page, browser):
     card = page.locator("section", has_text="Buyer troubleshooting")
     card.wait_for()
     page.wait_for_selector("text=Handed to you")
-    card.locator("summary", has_text="Conversation").click()
-    assert "It doesn't turn on at all" in card.inner_text()
+    assert "It doesn't turn on at all" in card.get_by_label("Conversation with the buyer").inner_text()  # 9D: always open
 
 
 def test_help_chat_fits_a_phone(stack, phone, browser):
@@ -478,6 +477,11 @@ def test_buyer_full_flow_to_defect_confirmed(stack, page, browser):
     page.wait_for_selector("text=Defect confirmed")
     assert "removed: GPS location" in card.inner_text()
     assert "AI look: automatic photo check is off" in card.inner_text()
+    assert card.locator("img[alt^=\"Buyer's photo\"]").count() == 1  # thumbnail
+    assert "The buyer's page has ended" in card.inner_text()
+    # 9D: the queue shows that the buyer finished troubleshooting
+    page.goto(f"{stack.base}/queue")
+    page.wait_for_selector(".ag-row:has-text('PP-DEMO-H') :text('Buyer finished troubleshooting')")
     assert real_errors(page) == []
 
 
@@ -517,3 +521,34 @@ def test_buyer_page_on_a_phone_has_steps_bar_and_sheet(stack, page, browser):
     bp.keyboard.press("Escape")
     sheet.wait_for(state="detached")
     phone.close()
+
+
+# ---- phase 9D: the merchant replies in the buyer's chat ------------------------------------------------------
+
+def test_reply_as_seller_reaches_the_buyer_live(stack, page, browser):
+    link = emailed_link(stack, page, "PP-DEMO-K")
+    buyer = browser.new_context()
+    bp = buyer.new_page()
+    bp.goto(link)
+    bp.wait_for_selector("text=What's going wrong with it?")
+    page.reload()
+    card = page.locator("section", has_text="Buyer troubleshooting")
+    card.wait_for()
+    assert "What's going wrong with it?" in card.get_by_label("Conversation with the buyer").inner_text()
+    card.get_by_label("Reply as seller").fill("Hi, it's the seller. Is the bulb screwed in fully?")
+    card.get_by_role("button", name="Reply as seller").click()
+    card.locator("[role=status]", has_text="The assistant is paused while you're chatting").wait_for()
+    # the buyer sees it live (no reload), labelled "Seller", with the paused note
+    bp.wait_for_selector("text=Is the bulb screwed in fully?")
+    bp.wait_for_selector("text=The seller is chatting with you here now")
+    assert "Seller" in bp.locator("li", has_text="Is the bulb screwed in fully?").last.inner_text()
+    bp.fill("#msg", "Yes it is, still dark")
+    bp.get_by_role("button", name="Send").click()
+    bp.wait_for_selector("li:has-text('Yes it is, still dark')")
+    assert bp.locator("text=The assistant is typing").count() == 0  # paused: no assistant turn
+    card.get_by_role("button", name="Let the assistant continue").click()
+    card.locator("[role=status]", has_text="The assistant is paused").wait_for(state="detached")
+    card.get_by_label("Conversation with the buyer").get_by_text("Yes it is, still dark").wait_for(timeout=15000)
+    # (the panel refreshes by itself every few seconds while the buyer's page is open)
+    buyer.close()
+    assert real_errors(page) == []

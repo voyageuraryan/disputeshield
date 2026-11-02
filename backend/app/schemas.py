@@ -15,13 +15,14 @@ EvidenceType = Literal[
     "buyer_message",
     "refund_policy",
     "buyer_history",
+    "troubleshooting_record",  # Phase 9D: result of the buyer troubleshooting page
 ]
 
 
 class EvidenceItem(BaseModel):
     id: int
     type: EvidenceType
-    source: Literal["paypal", "store"]
+    source: Literal["paypal", "store", "buyer_portal"]
     source_ref: str  # e.g. "paypal:tracker/ABC123" or "store:order/42"
     summary: str
     flags: list[str] = []  # structured facts for the rules, e.g. "address_mismatch"
@@ -65,6 +66,11 @@ class ChecklistResult(BaseModel):
     rule_score: float = Field(ge=0, le=1)  # deterministic
     red_flags: list[str] = []      # e.g. "address_mismatch"; each one lowers rule_score
     reason_supported: bool = True  # False -> no rule for this PayPal reason; a human decides
+    # Phase 9D (troubleshooting): plain-English facts for the baseline's "why" (also shown to the LLM) ...
+    notes: list[str] = []
+    # ... facts for the merchant only (never sent to the LLM, never a penalty), e.g. suspect proof checks
+    merchant_notes: list[str] = []
+    safety_review: bool = False    # the buyer reported a safety problem: always GATHER_MORE, a person reviews
 
 
 class Recommendation(BaseModel):

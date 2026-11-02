@@ -14,6 +14,7 @@ GET /disputes/{id}/events (and /api/disputes/{id}/events for the Vite proxy)
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import time
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
@@ -23,7 +24,7 @@ from sqlmodel import Session, select
 
 from app.db import get_engine
 from app.events_bus import DISPUTES_KEY, steps_key, wait
-from app.models import AgentStep, Dispute
+from app.models import AgentStep, Dispute, TroubleshootingSession, TSStatus
 
 router = APIRouter(tags=["events"])
 
@@ -94,18 +95,33 @@ def _dispute_event(d: Dispute) -> str:
     return f"id: {d.id}\nevent: dispute\ndata: {json.dumps(data)}\n\n"
 
 
+def _ts_event(ts: TroubleshootingSession, pid: str) -> str:
+    from app.troubleshooting.outcome import TOAST_TEXT
+
+    data = {"session_id": ts.id, "paypal_dispute_id": pid, "status": ts.status.value,
+            "text": TOAST_TEXT.get(TSStatus(ts.status), ts.status.value)}
+    return f"event: troubleshooting\ndata: {json.dumps(data)}\n\n"
+
+
+def _aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
 @router.get("/api/events/disputes")
 async def new_dispute_events(request: Request, engine: Engine = Depends(get_engine),
                              max_seconds: float = Query(default=MAX_SECONDS, gt=0, le=MAX_SECONDS),
                              last_event_id: str | None = Header(default=None)) -> StreamingResponse:
     """Disputes that arrive while the merchant has the app open. No backlog on first connect (only
-    `ready` with the current newest id); after a reconnect, Last-Event-ID replays anything missed."""
+    `ready` with the current newest id); after a reconnect, Last-Event-ID replays anything missed.
+    Phase 9D: also `event: troubleshooting` when a buyer finishes troubleshooting while the app is open
+    (no id, so it doesn't move Last-Event-ID; one missed during a reconnect gap only misses its toast)."""
     with Session(engine) as s:
         newest = s.exec(select(Dispute.id).order_by(Dispute.id.desc())).first() or 0
     cursor = int(last_event_id) if last_event_id and last_event_id.isdigit() else newest
+    ts_since = datetime.now(timezone.utc)
 
     async def stream():
-        nonlocal cursor
+        nonlocal cursor, ts_since
         started = last_beat = time.monotonic()
         yield "retry: 3000\n\n"
         yield f"event: ready\ndata: {json.dumps({'last_id': cursor})}\n\n"
@@ -117,6 +133,15 @@ async def new_dispute_events(request: Request, engine: Engine = Depends(get_engi
             for d in rows:
                 cursor = d.id
                 yield _dispute_event(d)
+            with Session(engine) as s:
+                done = s.exec(select(TroubleshootingSession, Dispute)
+                              .where(TroubleshootingSession.dispute_id == Dispute.id,
+                                     TroubleshootingSession.finished_at.is_not(None))).all()
+            fresh = sorted(((ts, d) for ts, d in done if _aware(ts.finished_at) > ts_since
+                            and ts.ended_reason != "dispute resolved"), key=lambda x: _aware(x[0].finished_at))
+            for ts, d in fresh:
+                ts_since = _aware(ts.finished_at)
+                yield _ts_event(ts, d.paypal_dispute_id)
             now = time.monotonic()
             if now - started >= max_seconds:
                 yield "event: bye\ndata: {}\n\n"

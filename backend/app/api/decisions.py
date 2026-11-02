@@ -133,7 +133,10 @@ def _request_for(session: Session, d: Decision, dispute: Dispute, action: str, n
     pdf = None
     if action == "FIGHT":
         order = session.get(Order, case.order_id) if case.order_id else None
-        pdf = str(build_evidence_pdf(pdf_path_for(d.id), case, note, order=order))
+        from app.troubleshooting.outcome import pdf_section
+
+        pdf = str(build_evidence_pdf(pdf_path_for(d.id), case, note, order=order,
+                                     troubleshooting=pdf_section(session, dispute.id)))
     try:
         return build_action_request(session, dispute, case, action, note, pdf)
     except ValueError as exc:
