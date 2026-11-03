@@ -189,10 +189,16 @@ def reanalyze(dispute_id: str, background: BackgroundTasks, session: Session = D
                                                   Decision.status == DecisionStatus.APPROVED)).first()
     if pending:
         raise HTTPException(409, f"decision #{pending.id} is being sent to PayPal; wait for it to finish")
+    from app.agents import runner
+
+    # Phase 11: one run at a time (double clicks, a webhook run already going): claimed before it's scheduled
+    if runner.in_progress(session, d.id) or not runner.claim(d.id):
+        raise HTTPException(409, "The agents are already analysing this case; wait for that run to finish.")
     key = f"run:{d.paypal_dispute_id}:manual:{datetime.now(timezone.utc).isoformat()}"
     session.add(AgentStep(dispute_id=d.id, agent="merchant", action="Asked the agents to re-analyse the case"))
     session.commit()
-    background.add_task(run_agents, d.id, key, engine)
+    # fresh: everything is fetched from PayPal now, even if a webhook fetched it seconds ago
+    background.add_task(run_agents, d.id, key, engine, fresh=True, claimed=True)
     return ReanalyzeOut(queued=True, run_key=key)
 
 

@@ -30,10 +30,13 @@ const CODES: Record<string, string> = {
   run_started: "Agent run started",
   run_pending: "Run paused (agents not built yet at the time)",
   run_skipped: "Run skipped: the dispute is already resolved",
+  run_finished: "Agent run finished",
   run_failed: "Agent run failed",
 };
 const say = (s: Step) => {
   if (s.action === "run_failed" && s.detail && typeof s.detail.error === "string") return `Agent run failed: ${s.detail.error}`;
+  if (s.action === "run_skipped" && s.detail && typeof s.detail.reason === "string" && s.detail.reason !== "dispute resolved")
+    return `Run skipped: ${s.detail.reason}`;
   return CODES[s.action] ?? s.action;
 };
 

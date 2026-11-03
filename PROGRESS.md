@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-02, Phase 9C
+## Open items (tracked) — updated 2026-11-03, Phase 11
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -308,6 +308,24 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 11 (2026-11-03)
+G97 [x] P1 The investigator didn't catch httpx transport errors (timeout / connection reset): one PayPal timeout
+        crashed the whole run (run_failed). Now caught; timeouts, 5xx and 429 count as transient (last good copy kept,
+        flagged stale), 4xx as "gone".
+G98 [ ] P2 Runs that aren't manual (webhook, poll, troubleshooting re-analysis) arriving while another run for the
+        same dispute is going are skipped ("Run skipped: another run for this dispute is in progress" on the
+        timeline), not queued. A buyer finishing troubleshooting during a manual re-analyse is picked up only at the
+        next event / re-analyse. Fix option: a per-dispute "rerun pending" flag that starts one follow-up run.
+G99 [ ] P3 One-run-at-a-time is an in-process set plus the run_started marker on the timeline: two processes could both
+        pass the check in the same instant, and a crashed run blocks re-analyse for up to 15 min (STARTED_STALE).
+        Fine for the single Render instance; use a DB lock row if it's ever scaled out.
+G100 [ ] P2 The Phase 11 prompt change (freshness rule + "Data freshness" line) invalidates the eval cache: the next
+        `make evals` re-runs all 51 analyst goldens against real models (Groq quota). Run it together with the G74
+        final check. (The freshness line has only the relative age, so the cache key stays stable between runs.)
+G101 [x] Stale-required check: a required type that also has a fresh item (store tracking while PayPal's tracker
+        copy is stale) counts as covered; only types we have solely as stale copies block FIGHT.
+G102 [x] PayPal buyer messages re-read from the stored dispute copy after a failed refresh are flagged stale too.
+
 ### Per-role Gemini keys (2026-11-03)
 G95 [x] Dedicated Gemini keys per role, as the user asked (RESEARCH_ / EVALS_JUDGE_ / EVALS_SIMULATOR_GEMINI_API_KEY in
         backend/.env, git-ignored; unset -> GEMINI_API_KEY; never fails over to another role's key).
@@ -864,3 +882,29 @@ for the Gemini + Groq quotas (G92).
   3.5-flash-lite answers but grounded search (research fixture) also 429. G74 final check, G92 and G86 wait.
 - Fixed offline: G93 (fixed replies in 6 languages, regional fallback), G44 (retention + buyer delete, with UI).
 - Tests: backend 579, frontend 106, e2e 29.
+
+## 2026-11-03 — Phase 11: fresh data, run-scoped evidence
+
+- Run-scoped evidence: evidence_items gained last_seen_run, last_seen_at, active (NULL = pre-Phase 11, treated as
+  active). Every investigation stamps what it saw; items not seen become inactive (kept for history, not in the case
+  file), with a timeline step listing them. If a source failed transiently (timeout / 5xx / 429) its items stay,
+  flagged stale:<last good fetch>; the flag is replaced (not stacked) and cleared on the next good fetch.
+  build_case_file returns active items only, plus data_as_of (dispute fetch time) and stale_sources.
+- Fresh mode: run_agents(..., fresh=True) for manual re-analyse (also what the Settings threshold banner uses); skips
+  the 60 s "fetched moments ago" reuse.
+- Full refresh: the investigator applies the fetched dispute through ingest.upsert_dispute (status, stage, reason,
+  amount, due date, transaction id, raw) and re-matches the order when it was unmatched ("Matched the dispute to
+  store order #N on this refresh").
+- Freshness on decisions: decisions.data_as_of + stale_sources; the analyst prompt has a "Data freshness" line and
+  rule; the validator rejects FIGHT when required evidence is only stale (GATHER_MORE gets "a fresh copy of the …"
+  as missing items). CaseDetail shows "Based on data fetched X min ago" and an amber banner naming stale sources.
+- One run at a time: re-analyse answers 409 while a run is going (in-process claim + a run_started without an end
+  marker in agent_steps, 15 min expiry); other triggers log run_skipped. Runs now end with run_finished.
+- Tests: tests/test_freshness.py (14): tracker removed -> inactive + score drops, message deleted -> gone, capture
+  fetch fails -> kept + stale + FIGHT rejected (unauthorised), fresh re-analyse GETs even 5 s after a fetch,
+  unmatched dispute matched after the order exists, due date / stage change propagate, double re-analyse -> one
+  run, stale run_started blocks then expires, concurrent run skipped, stale PayPal messages. Frontend:
+  freshness.test.tsx (9). Goldens regenerated (CaseFile fields).
+- Regression: backend 594 passed, frontend 115 passed + tsc + build, e2e 29 passed.
+- New items: G97-G102 (see open items). Eval cache invalidated by the prompt change (G100).
+

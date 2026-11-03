@@ -67,6 +67,8 @@
     "allowed_actions": [
       "provide_supporting_info"
     ],
+    "data_as_of": null,
+    "stale_sources": [],
     "can_fight": true,
     "can_settle": false
   },

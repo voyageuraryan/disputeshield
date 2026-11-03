@@ -126,7 +126,8 @@ def test_dispute_created_full_flow(client, engine, paid_order):
         keys = {e.key for e in s.exec(select(ProcessedEvent)).all()}
         run = {k for k in keys if k.startswith("run:PP-D-27803:")}
         assert keys == {f"evt:{EVENT['id']}"} | run and len(run) == 1  # one run per material version
-    assert steps(engine) == [("orchestrator", "run_started"), ("orchestrator", "Waiting for merchant approval")]
+    assert steps(engine) == [("orchestrator", "run_started"), ("orchestrator", "Waiting for merchant approval"),
+                             ("orchestrator", "run_finished")]
 
 
 def test_redelivered_event_is_a_noop(client, engine, paid_order):

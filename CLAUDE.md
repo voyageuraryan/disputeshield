@@ -39,7 +39,8 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
    evidence a dispute reason requires; the LLM reads text and explains.
 5. No money-moving PayPal call (provide-evidence, accept-claim, make-offer)
    runs without an approved Decision row. Enforce this in code, not just UI.
-6. Every agent step is logged to the agent_steps table (powers the timeline).
+6. Every agent step is logged to the agent_steps table (powers the timeline). Runs end with run_finished /
+   run_failed / run_skipped; one run per dispute at a time (re-analyse 409s while one is going).
 7. LLM outputs use structured output parsed into Pydantic models. On parse
    failure, retry once, then mark the case NEEDS_HUMAN.
 8. Keep changes small; write or update tests with each change; run pytest
@@ -71,6 +72,11 @@ frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is
                       pages/Help.tsx at /help/:sessionId (public, link token); the merchant's panel is
                       TroubleshootingCard in pages/CaseDetail.tsx
+
+## Evidence freshness (Phase 11)
+Evidence rows are run-scoped (last_seen_run, active): the case file holds only items the latest run saw; a
+source that failed transiently keeps its items flagged `stale:<iso>`, and FIGHT is refused when required
+evidence is only stale. Manual re-analyse runs fresh=True (always re-fetches from PayPal).
 
 ## Progress
 See PROGRESS.md. Update it at the end of every session.

@@ -41,6 +41,10 @@ class CaseFile(BaseModel):
     stage: str | None = None           # INQUIRY / CHARGEBACK / PRE_ARBITRATION / ARBITRATION
     dispute_state: str | None = None   # e.g. UNDER_PAYPAL_REVIEW, REQUIRED_ACTION
     allowed_actions: list[str] = []    # from PayPal's HATEOAS links, e.g. ["accept_claim", "provide_supporting_info"]
+    # Phase 11: freshness. data_as_of = when the PayPal dispute copy was fetched; stale_sources = sources that failed
+    # to load in this run (their previous items are kept, flagged "stale:<time of last success>").
+    data_as_of: datetime | None = None
+    stale_sources: list[str] = []
 
     @computed_field
     @property

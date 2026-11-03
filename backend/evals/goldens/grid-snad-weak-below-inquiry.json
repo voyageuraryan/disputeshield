@@ -43,6 +43,8 @@
       "make_offer",
       "send_message"
     ],
+    "data_as_of": null,
+    "stale_sources": [],
     "can_fight": true,
     "can_settle": true
   },

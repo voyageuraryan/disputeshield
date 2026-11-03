@@ -15,6 +15,7 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime, timezone
 import logging
 from dataclasses import dataclass
 from decimal import Decimal
@@ -30,6 +31,7 @@ from app.config import get_settings  # noqa: F401
 from app.merchant import settle_threshold
 from app.models import Decision, DecisionStatus, Dispute
 from app.rules.evidence_rules import (
+    RULES,
     FIGHT_AT,
     SETTLE_BELOW,
     Baseline,
@@ -38,7 +40,7 @@ from app.rules.evidence_rules import (
     red_flag_description,
     steps_apart,
 )
-from app.schemas import CaseFile, ChecklistResult, Recommendation
+from app.schemas import CaseFile, ChecklistResult, EvidenceItem, Recommendation
 
 log = logging.getLogger(__name__)
 AGENT = "analyst"
@@ -78,6 +80,9 @@ How the decision works (the rules already applied it; you explain it):
   proofs). If the checklist says safety_review, the answer is GATHER_MORE: a person must review it; put
   "{SAFETY_REVIEW_ITEM}" in missing_items. That is DisputeShield's own safety rule, not a PayPal requirement:
   never say PayPal requires it.
+- Data freshness: the case file says when the PayPal data was fetched and which sources couldn't be refreshed
+  this run (their items are the last good copy, flagged "stale:<time>"). Never FIGHT on stale required
+  evidence: recommend GATHER_MORE and name the source to refresh in missing_items.
 - What DisputeShield can send: FIGHT = evidence, supporting info, or (in an inquiry where PayPal takes no
   evidence yet) escalating the case to a PayPal claim with the seller note; SETTLE = accept the claim, which
   refunds the buyer in full. It cannot send partial offers or messages to the buyer, so never suggest them.
@@ -110,6 +115,7 @@ def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
     for e in case_json["evidence"]:
         e["flags"] = [f for f in e["flags"] if f not in MERCHANT_ONLY_FLAGS]
     payload = {
+        "data_freshness": freshness(case),
         "case_file": case_json,
         "checklist": {**checklist.model_dump(mode="json", exclude={"merchant_notes"}),
                       "red_flag_details": [red_flag_description(case.reason, c) for c in checklist.red_flags]},
@@ -121,10 +127,39 @@ def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
             + json.dumps(payload, indent=2, sort_keys=True, default=str))
 
 
+def freshness(case: CaseFile, now: datetime | None = None) -> str:
+    """'Data freshness: ...' line for the prompt (and the timeline)."""
+    if case.data_as_of is None:
+        when = "PayPal data: fetch time unknown"
+    else:
+        at = case.data_as_of if case.data_as_of.tzinfo else case.data_as_of.replace(tzinfo=timezone.utc)
+        mins = max(0, int(((now or datetime.now(timezone.utc)) - at).total_seconds() // 60))
+        # relative age only: an absolute clock time would change the prompt (and the eval cache key) every run
+        when = f"PayPal data fetched {mins} min ago"
+    stale = (f"; STALE (couldn't refresh this run, last good copy used): {', '.join(case.stale_sources)}"
+             if case.stale_sources else "; all sources refreshed this run")
+    return f"Data freshness: {when}{stale}."
+
+
+def stale_required(case: CaseFile) -> list[EvidenceItem]:
+    """Required evidence (for this reason) we only have as a stale copy (its lookup failed this run). A required
+    type that also has a fresh item (e.g. store tracking when PayPal's tracker copy is stale) is still covered."""
+    rule = RULES.get(case.reason)
+    required = set(rule.required) if rule else set()
+    stale = lambda e: any(f.startswith("stale:") for f in e.flags)  # noqa: E731
+    fresh_types = {e.type for e in case.evidence if not stale(e)}
+    return [e for e in case.evidence if e.type in required and e.type not in fresh_types and stale(e)]
+
+
 def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
              checklist: ChecklistResult | None = None) -> list[str]:
     """Every problem with an LLM recommendation; empty list means it is acceptable."""
     problems: list[str] = []
+    stale = stale_required(case)
+    if rec.action == "FIGHT" and stale:
+        problems.append("required evidence is stale (couldn't be refreshed from PayPal this run): "
+                        + ", ".join(f"#{e.id} {e.type}" for e in stale)
+                        + "; don't FIGHT on stale data: recommend GATHER_MORE and name what to refresh")
     if checklist is not None and checklist.safety_review and rec.action != "GATHER_MORE":
         problems.append(f"the buyer reported a safety problem: the recommendation must be GATHER_MORE (a person "
                         f"reviews it), not {rec.action}")
@@ -135,7 +170,8 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
     by_id = {e.id: e for e in case.evidence}
     if steps_apart(rec.action, baseline.action) > 1:
         problems.append(f"{rec.action} is more than one step from the baseline {baseline.action}")
-    elif rec.action != baseline.action:
+    elif rec.action != baseline.action and not (stale and rec.action == "GATHER_MORE" and baseline.action == "FIGHT"):
+        # (stepping down from FIGHT because required evidence is stale is justified by the staleness itself)
         cited_types = {by_id[i].type for i in rec.cited_evidence_ids if i in by_id}
         if not cited_types & JUSTIFYING_TYPES:
             available = sorted({e.type for e in case.evidence} & JUSTIFYING_TYPES)
@@ -198,6 +234,10 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
                 # Seen live: the LLM chose GATHER_MORE but named nothing missing. For a safety report the next
                 # step is fixed by the rules, so code fills it in rather than failing the case over wording.
                 rec.missing_items = [SAFETY_REVIEW_ITEM]
+            elif rec.action == "GATHER_MORE" and not rec.missing_items and stale_required(case):
+                # Phase 11: what's needed is a fresh copy of the stale sources (rule-owned, like G59/G76)
+                rec.missing_items = [f"a fresh copy of the {e.type} (last good copy is stale)"
+                                     for e in stale_required(case)]
             elif (rec.action == "GATHER_MORE" and not rec.missing_items and not checklist.missing
                   and checklist.red_flags):
                 # Seen in the evals (10A, address mismatch): nothing required is missing, the case is weak because
@@ -218,7 +258,8 @@ def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: Chec
     decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
                         reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
                         economic_note=rec.economic_note, missing_items=rec.missing_items,
-                        analysed_threshold=threshold,
+                        analysed_threshold=threshold, data_as_of=case.data_as_of,
+                        stale_sources=case.stale_sources or [],
                         status=DecisionStatus.PROPOSED, run_key=run_key)
     dispute.agent_status = PROPOSED
     session.add_all([decision, dispute])

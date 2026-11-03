@@ -78,6 +78,8 @@ class DecisionOut(BaseModel):
     economic_note: str | None
     missing_items: list[str] | None
     analysed_threshold: Decimal | None
+    data_as_of: datetime | None = None       # Phase 11: when the PayPal data behind it was fetched
+    stale_sources: list[str] | None = None   # sources that couldn't be refreshed (last good copy used)
     can_retry: bool
 
 

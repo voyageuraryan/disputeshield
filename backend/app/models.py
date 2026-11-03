@@ -102,6 +102,11 @@ class EvidenceItemRow(SQLModel, table=True):
     file_path: Optional[str] = None
     # Structured facts for the rules, e.g. ["address_mismatch"], ["protected:ITEM_NOT_RECEIVED"].
     flags: Optional[list[str]] = _json_col()
+    # Phase 11 (nullable for the auto-migration): run-scoped evidence. Items an investigation didn't see again become
+    # inactive (kept for history); None = written before Phase 11, treated as active.
+    last_seen_run: Optional[str] = None
+    last_seen_at: Optional[datetime] = None
+    active: Optional[bool] = True
 
 
 class AgentStep(SQLModel, table=True):
@@ -147,6 +152,9 @@ class Decision(SQLModel, table=True):
     economic_note: Optional[str] = None             # analyst: amount vs effort vs win odds
     missing_items: Optional[list[str]] = _json_col()  # analyst: evidence still needed
     analysed_threshold: Optional[Decimal] = Field(default=None, max_digits=10, decimal_places=2)  # settle threshold used
+    # Phase 11: how fresh the data behind this decision was
+    data_as_of: Optional[datetime] = None            # when the PayPal dispute copy used was fetched
+    stale_sources: Optional[list[str]] = _json_col()  # sources that failed to load this run (previous data used)
 
 
 class ProcessedEvent(SQLModel, table=True):

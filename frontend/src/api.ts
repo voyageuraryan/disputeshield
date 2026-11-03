@@ -131,6 +131,8 @@ export type Decision = {
   economic_note: string | null;
   missing_items: string[] | null;
   analysed_threshold: string | null;
+  data_as_of?: string | null;
+  stale_sources?: string[] | null;
   can_retry: boolean;
 };
 

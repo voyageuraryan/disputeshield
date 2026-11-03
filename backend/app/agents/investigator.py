@@ -14,9 +14,11 @@ worth is the rules' and analyst's job.
 from __future__ import annotations
 
 import logging
+import uuid
 from datetime import datetime, timezone
 from typing import Any
 
+import httpx
 from sqlmodel import Session, select
 
 from app.tracing import observe
@@ -71,23 +73,52 @@ def _money(m: dict | None) -> str:
 # ---- evidence writing --------------------------------------------------------
 
 def _upsert_evidence(session: Session, dispute: Dispute, *, type: str, source: str, source_ref: str,
-                     summary: str, flags: list[str] | None = None) -> EvidenceItemRow:
+                     summary: str, flags: list[str] | None = None, run_key: str | None = None) -> EvidenceItemRow:
     row = session.exec(select(EvidenceItemRow).where(
         EvidenceItemRow.dispute_id == dispute.id, EvidenceItemRow.source_ref == source_ref)).first()
     if row is None:
         row = EvidenceItemRow(dispute_id=dispute.id, type=type, source=EvidenceSource(source),
                               source_ref=source_ref, summary=summary, flags=flags or [])
     else:
-        row.type, row.summary, row.flags = type, summary, flags or []
+        row.type, row.summary, row.flags = type, summary, flags or []  # fresh flags: no "stale:" left over
+    row.last_seen_run, row.last_seen_at, row.active = run_key, datetime.now(timezone.utc), True
     session.add(row)
     session.commit()
     session.refresh(row)
     return row
 
 
+STALE = "stale:"
+
+
+def source_of(source_ref: str) -> str:
+    """The lookup an evidence item comes from (a failed lookup keeps its own items, flagged stale)."""
+    if source_ref.startswith("paypal:capture/"):
+        return "paypal:capture"
+    if source_ref.startswith("paypal:order/") and "/tracker/" in source_ref:
+        return "paypal:trackers"
+    if source_ref.startswith("paypal:dispute/"):
+        return "paypal:dispute"
+    return source_ref.split("/", 1)[0]
+
+
+def is_stale(item) -> bool:  # noqa: ANN001  (EvidenceItem or EvidenceItemRow)
+    return any(f.startswith(STALE) for f in item.flags or [])
+
+
+def transient(exc: Exception) -> bool:
+    """A lookup that may work next time (keep the previous data, flagged stale) vs data that is really gone."""
+    if isinstance(exc, httpx.HTTPError):
+        return True  # timeout / connection error (the client raises these after its retries)
+    return isinstance(exc, PayPalError) and (exc.status_code >= 500 or exc.status_code == 429)
+
+
 def build_case_file(session: Session, dispute: Dispute) -> CaseFile:
-    rows = session.exec(select(EvidenceItemRow).where(EvidenceItemRow.dispute_id == dispute.id)
+    """Only ACTIVE evidence (Phase 11): what the latest investigation saw, plus stale items of failed lookups."""
+    rows = session.exec(select(EvidenceItemRow).where(EvidenceItemRow.dispute_id == dispute.id,
+                                                      EvidenceItemRow.active.is_not(False))  # None = pre-Phase 11
                         .order_by(EvidenceItemRow.id)).all()
+    stale = sorted({source_of(r.source_ref) for r in rows if is_stale(r)})
     return CaseFile(
         dispute_id=dispute.paypal_dispute_id,
         reason=dispute.reason,
@@ -101,20 +132,56 @@ def build_case_file(session: Session, dispute: Dispute) -> CaseFile:
         allowed_actions=allowed_actions(dispute.raw),
         evidence=[EvidenceItem(id=r.id, type=r.type, source=r.source.value, source_ref=r.source_ref,
                                summary=r.summary, flags=r.flags or []) for r in rows],
+        data_as_of=dispute.refreshed_at, stale_sources=stale,
     )
 
 
 # ---- the investigation ---------------------------------------------------------
 
 class Investigator:
-    def __init__(self, session: Session, dispute: Dispute, client: PayPalClient | None = None):
+    """run_key: stamped on every evidence item written (Phase 11); fresh: always fetch the dispute from PayPal
+    (manual re-analyse), instead of reusing a copy fetched in the last FRESH_S seconds (webhook/poller runs)."""
+
+    def __init__(self, session: Session, dispute: Dispute, client: PayPalClient | None = None, *,
+                 run_key: str | None = None, fresh: bool = False):
         self.s, self.d, self.client = session, dispute, client
+        self.run_key = run_key or f"adhoc:{uuid.uuid4().hex[:12]}"
+        self.fresh = fresh
+        self.failed: set[str] = set()  # sources whose lookup failed transiently this run
 
     def step(self, action: str, detail: dict | None = None) -> None:
         log_step(self.s, self.d.id, AGENT, action, detail)
 
     def evidence(self, **kw: Any) -> EvidenceItemRow:
-        return _upsert_evidence(self.s, self.d, **kw)
+        return _upsert_evidence(self.s, self.d, run_key=self.run_key, **kw)
+
+    def _retire(self) -> None:
+        """Items this run didn't see: inactive (kept for history), unless their source failed transiently, in which
+        case they stay active flagged stale:<time of last success>. Logs what dropped out and what is stale."""
+        rows = self.s.exec(select(EvidenceItemRow).where(EvidenceItemRow.dispute_id == self.d.id,
+                                                         EvidenceItemRow.active.is_not(False))).all()
+        dropped, stale = [], []
+        for r in rows:
+            if r.last_seen_run == self.run_key:
+                continue
+            if source_of(r.source_ref) in self.failed:
+                when = r.last_seen_at
+                stamp = (when.replace(tzinfo=when.tzinfo or timezone.utc).isoformat() if when else "unknown")
+                r.flags = [f for f in r.flags or [] if not f.startswith(STALE)] + [f"{STALE}{stamp}"]
+                stale.append(r)
+            else:
+                r.active = False
+                dropped.append(r)
+            self.s.add(r)
+        self.s.commit()
+        if dropped:
+            self.step("No longer found this run (kept for history, not used): "
+                      + "; ".join(f"{r.type}: {r.summary[:90]}" for r in dropped),
+                      {"evidence_ids": [r.id for r in dropped]})
+        if stale:
+            self.step("Couldn't refresh " + ", ".join(sorted(self.failed)) + "; using the last good copy (stale): "
+                      + "; ".join(f"{r.type}: {r.summary[:60]}" for r in stale),
+                      {"evidence_ids": [r.id for r in stale], "stale_sources": sorted(self.failed)})
 
     async def run(self) -> CaseFile:
         d = self.d
@@ -136,6 +203,7 @@ class Investigator:
         self._troubleshooting_record()
         self._refund_policy()
         self._paypal_dispute_messages(pp)
+        self._retire()
         case = build_case_file(self.s, d)
         self.step(f"Case file ready: {len(case.evidence)} evidence items",
                   {"evidence_ids": [e.id for e in case.evidence]})
@@ -146,7 +214,7 @@ class Investigator:
     async def _paypal_dispute(self) -> dict:
         d = self.d
         fetched = d.refreshed_at.replace(tzinfo=d.refreshed_at.tzinfo or timezone.utc) if d.refreshed_at else None
-        if fetched and d.raw and (datetime.now(timezone.utc) - fetched).total_seconds() < FRESH_S:
+        if not self.fresh and fetched and d.raw and (datetime.now(timezone.utc) - fetched).total_seconds() < FRESH_S:
             raw = d.raw  # ingest fetched it moments ago; skip a second identical GET
             self.step(f"Using the dispute as fetched from PayPal {int((datetime.now(timezone.utc) - fetched).total_seconds())}s "
                       f"ago: {raw.get('reason')}, {raw.get('dispute_life_cycle_stage')}, {raw.get('status')}, "
@@ -157,15 +225,25 @@ class Investigator:
             return raw
         try:
             fresh = await get_dispute(d.paypal_dispute_id, client=self.client)
-            raw = fresh.raw
-            d.raw, d.status, d.refreshed_at = raw, fresh.status or d.status, datetime.now(timezone.utc)
-            d.stage = fresh.dispute_life_cycle_stage or d.stage
-            self.s.add(d)
+            # Phase 11: one full refresh (status, stage, reason, amount, due date, transaction id, raw; order
+            # re-matched when it wasn't before), the same function ingest uses.
+            from app.ingest import upsert_dispute
+
+            was_unmatched = d.order_id is None
+            upsert_dispute(self.s, fresh)
             self.s.commit()
-        except PayPalError as exc:
+            self.s.refresh(d)
             raw = d.raw or {}
-            self.step("Could not refresh dispute from PayPal; using last stored copy",
-                      {"debug_id": exc.debug_id, "status": exc.status_code})
+            if was_unmatched and d.order_id:
+                self.step(f"Matched the dispute to store order #{d.order_id} on this refresh", {"order_id": d.order_id})
+        except (PayPalError, httpx.HTTPError) as exc:
+            raw = d.raw or {}
+            # every PayPal-side source depends on this copy: keep their previous items, flagged stale
+            self.failed |= {"paypal:dispute", "paypal:capture", "paypal:trackers"} if transient(exc) else set()
+            self.step("Could not refresh the dispute from PayPal; using the last stored copy"
+                      + (f" (fetched {_day(d.refreshed_at)})" if d.refreshed_at else ""),
+                      {"debug_id": getattr(exc, "debug_id", None), "status": getattr(exc, "status_code", None),
+                       "error": type(exc).__name__, "stale": True})
             return raw
         due = raw.get("seller_response_due_date")
         self.step(
@@ -184,9 +262,12 @@ class Investigator:
             return
         try:
             cap = await get_capture(capture_id, client=self.client)
-        except (PayPalError, ValueError) as exc:
-            self.step(f"Could not fetch transaction {capture_id} from PayPal",
-                      {"error": str(exc), "debug_id": getattr(exc, "debug_id", None)})
+        except (PayPalError, ValueError, httpx.HTTPError) as exc:
+            if transient(exc):
+                self.failed.add("paypal:capture")  # keep the last good copy, flagged stale
+            self.step(f"Could not fetch transaction {capture_id} from PayPal"
+                      + (" (temporary error: keeping the last good copy, marked stale)" if transient(exc) else ""),
+                      {"error": str(exc)[:300], "debug_id": getattr(exc, "debug_id", None)})
             return
         sp = cap.get("seller_protection") or {}
         reason = (cap.get("status_details") or {}).get("reason")
@@ -208,9 +289,12 @@ class Investigator:
             return
         try:
             pp_order = await get_order(order.paypal_order_id, client=self.client)
-        except (PayPalError, ValueError) as exc:
-            self.step(f"Could not fetch PayPal order {order.paypal_order_id} for tracking",
-                      {"error": str(exc), "debug_id": getattr(exc, "debug_id", None)})
+        except (PayPalError, ValueError, httpx.HTTPError) as exc:
+            if transient(exc):
+                self.failed.add("paypal:trackers")
+            self.step(f"Could not fetch PayPal order {order.paypal_order_id} for tracking"
+                      + (" (temporary error: keeping the last good copy, marked stale)" if transient(exc) else ""),
+                      {"error": str(exc)[:300], "debug_id": getattr(exc, "debug_id", None)})
             return
         trackers = trackers_from_order(pp_order)
         if not trackers:
@@ -234,11 +318,15 @@ class Investigator:
 
     def _paypal_dispute_messages(self, raw: dict) -> None:
         msgs = [m for m in raw.get("messages") or [] if (m.get("posted_by") or "").upper() == "BUYER"]
+        # read from the stored copy because the refresh failed: still stale, as of that copy's fetch time
+        at = self.d.refreshed_at
+        flags = ([f"{STALE}{at.replace(tzinfo=at.tzinfo or timezone.utc).isoformat() if at else 'unknown'}"]
+                 if "paypal:dispute" in self.failed else [])
         for i, m in enumerate(msgs):
             row = self.evidence(type="buyer_message", source="paypal",
                                 source_ref=f"paypal:dispute/{self.d.paypal_dispute_id}/message/{i}",
                                 summary=f"Buyer wrote in the PayPal case on {_day(m.get('time_posted'))}: "
-                                        f"\"{(m.get('content') or '').strip()}\"")
+                                        f"\"{(m.get('content') or '').strip()}\"", flags=flags)
             self.step(f"Found buyer message in PayPal case ({_day(m.get('time_posted'))})", {"evidence_id": row.id})
 
     # Store lookups
@@ -360,5 +448,6 @@ class Investigator:
 
 
 @observe(type="agent")
-async def investigate(session: Session, dispute: Dispute, client: PayPalClient | None = None) -> CaseFile:
-    return await Investigator(session, dispute, client).run()
+async def investigate(session: Session, dispute: Dispute, client: PayPalClient | None = None, *,
+                      run_key: str | None = None, fresh: bool = False) -> CaseFile:
+    return await Investigator(session, dispute, client, run_key=run_key, fresh=fresh).run()

@@ -42,6 +42,7 @@ from app.troubleshooting.service import auto_invite
 class CaseState(TypedDict, total=False):
     dispute_row_id: int
     run_key: str
+    fresh: bool                        # Phase 11: manual re-analyse fetches everything from PayPal now
     case_file: dict[str, Any]          # CaseFile.model_dump(mode="json")
     recommendation: dict[str, Any] | None
     decision_id: int | None
@@ -59,7 +60,7 @@ def build_graph(engine: Engine, checkpointer: BaseCheckpointSaver | None = None,
     async def investigate_node(state: CaseState) -> CaseState:
         with _session() as s:
             dispute = s.get(Dispute, state["dispute_row_id"])
-            case = await investigate(s, dispute, client)
+            case = await investigate(s, dispute, client, run_key=state.get("run_key"), fresh=state.get("fresh", False))
             # Phase 9A: optional automatic invite to buyer troubleshooting (merchant setting; never fails the run).
             await auto_invite(s, dispute, client)
         return {"case_file": case.model_dump(mode="json")}

@@ -11,7 +11,7 @@ import {
   type TroubleshootingStatus,
   type TSProofView,
 } from "../api";
-import { ActionChip, addressLines, caseStatus, Chip, day, Due, fightRoute, label, money, useNow, when, type Tone } from "../format";
+import { ActionChip, addressLines, caseStatus, Chip, day, Due, fetchedAgo, fightRoute, label, money, sourceLabel, useNow, when, type Tone } from "../format";
 import ShippingPanel from "../ShippingPanel";
 import Timeline from "../Timeline";
 import { useDisputeEvents } from "../useDisputeEvents";
@@ -578,6 +578,25 @@ function current(decisions: Decision[]) {
   return decisions.find((d) => d.status === "PROPOSED") ?? decisions.find((d) => d.can_retry) ?? decisions[0] ?? null;
 }
 
+/** Phase 11: how old the PayPal data behind this recommendation is, and which sources were stale. */
+export function Freshness({ d }: { d: Pick<Decision, "data_as_of" | "stale_sources"> }) {
+  const now = useNow(30_000);
+  const ago = fetchedAgo(d.data_as_of, now);
+  const stale = d.stale_sources ?? [];
+  if (!ago && stale.length === 0) return null;
+  return (
+    <>
+      {ago && <p className="mt-2 text-xs text-slate-500" data-testid="data-freshness">{ago}</p>}
+      {stale.length > 0 && (
+        <p role="alert" data-testid="stale-banner" className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900">
+          Couldn't refresh {stale.map(sourceLabel).join(", ")} from PayPal on this run, so the last good copy was used.
+          Re-analyse once PayPal is reachable before relying on it.
+        </p>
+      )}
+    </>
+  );
+}
+
 function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDetail; onDone: () => void }) {
   const c = detail.case;
   const actionable = d.status === "PROPOSED" || d.can_retry;
@@ -635,6 +654,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
         <Chip text={`${d.confidence} confidence`} />
         {!actionable && <Chip text={d.status.toLowerCase()} tone={d.status === "FAILED" ? "danger" : "muted"} />}
       </div>
+      <Freshness d={d} />
       <p className="mt-3 text-sm leading-relaxed text-slate-800">{d.reasoning}</p>
       {d.economic_note && (
         <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">

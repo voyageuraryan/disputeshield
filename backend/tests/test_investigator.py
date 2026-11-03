@@ -203,9 +203,10 @@ async def test_paypal_failures_are_logged_and_investigation_continues(pp, engine
     did = make_dispute(engine, oid, "PP-R-ZWL-10195422", transaction_id="4S541016HD390220V")
 
     case, steps = await run_investigation(engine, did, pp)
-    assert "Could not refresh dispute from PayPal; using last stored copy" in steps
-    assert "Could not fetch transaction 4S541016HD390220V from PayPal" in steps
-    assert "Could not fetch PayPal order 2WB80238HM8587143 for tracking" in steps
+    assert any(s.startswith("Could not refresh the dispute from PayPal; using the last stored copy") for s in steps)
+    assert "Could not fetch transaction 4S541016HD390220V from PayPal" in steps  # 404: gone, not "temporary"
+    assert ("Could not fetch PayPal order 2WB80238HM8587143 for tracking (temporary error: keeping the last good "
+            "copy, marked stale)") in steps  # 500: transient
     assert {"order", "tracking", "listing", "buyer_history"} <= set(by_type(case))  # store side still gathered
 
 
@@ -235,7 +236,7 @@ async def test_graph_pauses_for_approval_and_resumes(pp, engine, order31, tmp_pa
         actions = [(a.agent, a.action) for a in s.exec(select(AgentStep).order_by(AgentStep.id)).all()]
     assert any(a == "analyst" and act.startswith("Recommend GATHER_MORE") for a, act in actions)
     assert result["decision_id"] and result["recommendation"]["action"] == "GATHER_MORE"
-    assert actions[-1] == ("orchestrator", "Waiting for merchant approval")
+    assert actions[-2:] == [("orchestrator", "Waiting for merchant approval"), ("orchestrator", "run_finished")]
     assert not any(a[0] == "executor" for a in actions)
 
     posts_before = [c for c in respx.calls if c.request.method == "POST" and "oauth2" not in str(c.request.url)]

@@ -63,6 +63,27 @@ export function dueIn(iso: string | null | undefined, now = Date.now()): { text:
   return { text, urgent: ms < 48 * 3_600_000, ms };
 }
 
+/** Parse a backend timestamp; SQLite drops the offset, so a bare one is UTC. */
+export function utcMs(iso: string): number {
+  return Date.parse(/[zZ]|[+-]\d\d:?\d\d$/.test(iso) ? iso : `${iso}Z`);
+}
+
+/** "Based on data fetched 7 min ago" (Phase 11 freshness line). */
+export function fetchedAgo(iso: string | null | undefined, now = Date.now()): string | null {
+  if (!iso) return null;
+  const mins = Math.max(0, Math.floor((now - utcMs(iso)) / 60_000));
+  if (Number.isNaN(mins)) return null;
+  const ago = mins < 1 ? "just now" : mins < 60 ? `${mins} min ago` : mins < 1440 ? `${Math.floor(mins / 60)} h ${mins % 60} min ago` : `${Math.floor(mins / 1440)} d ago`;
+  return `Based on data fetched ${ago}`;
+}
+
+const SOURCE_WORDS: Record<string, string> = {
+  "paypal:dispute": "the PayPal dispute",
+  "paypal:capture": "the PayPal transaction",
+  "paypal:trackers": "PayPal tracking",
+};
+export const sourceLabel = (s: string) => SOURCE_WORDS[s] ?? s;
+
 /** Re-render every `ms` so countdowns tick. */
 export function useNow(ms = 30_000) {
   const [now, setNow] = useState(Date.now());
