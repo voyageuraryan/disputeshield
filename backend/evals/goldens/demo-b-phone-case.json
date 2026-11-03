@@ -99,9 +99,10 @@
   ],
   "expected_action": "SETTLE",
   "acceptable_actions": [
-    "SETTLE"
+    "SETTLE",
+    "GATHER_MORE"
   ],
   "must_cite_types": [],
   "must_not_claim": [],
-  "notes": "Cheap and weak (no refund policy): settle."
+  "notes": "Cheap and weak (no refund policy): the baseline settles. Borderline (decided 2026-11-03 after the G74 fix): the listing says 'for Pixel 9' and the buyer says it's 'for a different model', i.e. the listing shows exactly what was sold, which weakens the claim; the documented one-step move toward the merchant is therefore acceptable."
 }

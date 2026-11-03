@@ -48,6 +48,11 @@ class Settings(BaseSettings):
     llm_providers: str = "groq,gemini"
     # Replace buyer emails / addresses with placeholders before prompts leave the server.
     llm_redact_pii: bool = True
+    # Sampling for the structured LLM calls (decisions, notes, plans). Providers default to temperature 1.0, which
+    # made the same dispute get different recommendations between runs (seen in the 10C evals). Groq: temperature
+    # 0-2 and a best-effort seed; Gemini: seed, but temperature is ignored on Gemini 3.6 Flash and newer.
+    llm_temperature: float = 0.0
+    llm_seed: int = 7
     groq_api_key: SecretStr = SecretStr("")
     groq_model: str = "openai/gpt-oss-120b"     # free plan, strict JSON-schema output
     gemini_api_key: SecretStr = SecretStr("")

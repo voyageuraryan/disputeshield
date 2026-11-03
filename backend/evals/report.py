@@ -45,8 +45,17 @@ def deep_goldens() -> list[Golden]:
     return [g for g in sel if any(g.id == i or g.id.startswith(i) for i in ids)]
 
 
+def selected_conversations():
+    """Conversational goldens (Phase 10C) matching EVALS_ONLY (all when unset)."""
+    from evals.goldens.conversations import load_conversations
+
+    convs = load_conversations()
+    only = [x.strip() for x in os.getenv("EVALS_ONLY", "").split(",") if x.strip()]
+    return [g for g in convs if any(g.id == o or g.id.startswith(o) for o in only)] if only else convs
+
+
 def metric_row(m, kind: str) -> dict:
-    return {"name": m.__name__, "kind": kind, "score": m.score,
+    return {"name": m.__name__, "kind": kind, "score": m.score, "threshold": getattr(m, "threshold", None),
             "success": bool(m.success) if m.score is not None else None,
             "reason": m.reason, "error": getattr(m, "error", None)}
 
@@ -61,13 +70,30 @@ def record(golden: Golden, out: dict, metrics: list[dict]) -> None:
     })
 
 
+def record_conv(golden, res: dict, metrics: list[dict]) -> None:
+    facts = res.get("facts") or {}
+    ROWS.append({
+        "id": golden.id, "suite": "conversation", "reason": "TROUBLESHOOTING", "expected": "/".join(golden.expected_status),
+        "acceptable": [], "action": facts.get("final_status"), "error": res.get("error"), "error_detail": res.get("detail"),
+        "cached": res.get("cached"), "model": res.get("model"), "providers": [], "elapsed_s": None, "tokens": None,
+        "simulator": res.get("simulator"), "research": res.get("research"),
+        "turns": len(res.get("turns") or []), "metrics": metrics,
+    })
+
+
+def _decision(r: dict) -> bool:
+    return r.get("suite", "decision") == "decision"
+
+
 def _pct(a: int, b: int) -> str:
     return f"{a}/{b} ({a / b:.0%})" if b else "-"
 
 
 def build(rows: list[dict], judge_model: str | None) -> dict:
+    convs = [r for r in rows if not _decision(r)]
+    rows_all, rows = rows, [r for r in rows if _decision(r)]
     ran = [r for r in rows if not r.get("error")]
-    stats = gates.summarize(rows)
+    stats = gates.summarize(rows_all)
     by_reason = {}
     for reason, short in REASON_SHORT.items():
         rr = [r for r in ran if r["reason"] == reason]
@@ -91,12 +117,19 @@ def build(rows: list[dict], judge_model: str | None) -> dict:
         "generated": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "model_under_test": sorted({r["model"] for r in ran if r.get("model")}),
         "providers": sorted({p for r in ran for p in r.get("providers") or []}), "judge": judge_model,
-        "goldens": len(rows), "ran": len(ran), "skipped": {r["id"]: r["error"] for r in rows if r.get("error")},
-        "gates": gates.check(rows), "metrics": stats, "by_reason": by_reason, "confusion": confusion, "worst": worst,
+        "goldens": len(rows), "ran": len(ran), "skipped": {r["id"]: r["error"] for r in rows_all if r.get("error")},
+        "gates": gates.check(rows_all), "metrics": stats,
+        "conversations": {"goldens": len(convs), "ran": sum(not r.get("error") for r in convs),
+                          "outcome_correct": sum(any(m["name"] == "SessionOutcome" and m["success"] for m in r["metrics"])
+                                                 for r in convs),
+                          "rows": [{"id": r["id"], "expected": r["expected"], "got": r["action"], "turns": r.get("turns"),
+                                    "error": r.get("error"), "research": r.get("research"),
+                                    "failed": [{"metric": m["name"], "score": m["score"], "reason": (m["reason"] or "")[:300]}
+                                               for m in r["metrics"] if m["success"] is False]} for r in convs]}, "by_reason": by_reason, "confusion": confusion, "worst": worst,
         "latency_s": {"p50": p50, "p95": p95, "note": "pipeline time per golden incl. rate-limit spacing"},
         "tokens": {"input": sum(t.get("input") or 0 for t in tok), "output": sum(t.get("output") or 0 for t in tok),
                    "goldens_with_usage": len(tok)},
-        "rows": rows,
+        "rows": rows_all,
     }
 
 
@@ -120,6 +153,14 @@ def markdown(rep: dict) -> str:
     md += ["", "Confusion matrix (rows: expected, columns: recommended)", "",
            "| expected \\ got | " + " | ".join(ACTIONS) + " |", "|---" * (len(ACTIONS) + 1) + "|"]
     md += [f"| {e} | " + " | ".join(str(c[a]) for a in ACTIONS) + " |" for e, c in rep["confusion"].items()]
+    cv = rep.get("conversations") or {}
+    if cv.get("goldens"):
+        md += ["", "## Troubleshooting conversations (simulated buyers)", "",
+               f"Conversations {cv['goldens']}, ran {cv['ran']}, final status correct {_pct(cv['outcome_correct'], cv['ran'])}.",
+               "", "| Conversation | Expected status | Got | Turns | Failed metrics |", "|---|---|---|---|---|"]
+        for c in cv["rows"]:
+            failed = "<br>".join(f"{f['metric']}: {f['reason'][:120]}" for f in c["failed"]).replace("|", "/") or "-"
+            md.append(f"| {c['id']} | {c['expected']} | {c['error'] or c['got']} | {c['turns']} | {failed} |")
     md += ["", "## Worst cases", ""]
     for w in rep["worst"] or []:
         md.append(f"- **{w['id']}** (expected {w['expected']}, got {w['got']})")
@@ -136,7 +177,9 @@ def merged_rows(rows: list[dict]) -> list[dict]:
         old = json.loads((REPORTS / "latest.json").read_text()).get("rows") or []
     except (OSError, ValueError):
         old = []
-    current = {g.id for g in load_goldens()}
+    from evals.goldens.conversations import load_conversations
+
+    current = {g.id for g in load_goldens()} | {g.id for g in load_conversations()}
     by_id = {r["id"]: r for r in old if r.get("id") in current}
     by_id.update({r["id"]: r for r in rows})
     return list(by_id.values())

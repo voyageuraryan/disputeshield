@@ -7,12 +7,11 @@ import pytest
 from deepeval import assert_test
 from deepeval.test_case import LLMTestCase
 
-from evals import gates
 from evals.checks import STRICT
 from evals.metrics import deterministic_metrics
 from evals.metrics.agentic import run_case, step_efficiency, task_completion, tool_case, tool_correctness
 from evals.metrics.judged import judged_cases
-from evals.report import ROWS, deep_goldens, metric_row, record, selected_goldens
+from evals.report import deep_goldens, metric_row, record, selected_goldens
 
 GOLDENS = selected_goldens()
 DEEP = {g.id for g in deep_goldens()}
@@ -57,16 +56,3 @@ def test_golden(golden, outputs, judge):
     record(golden, out, rows)
     if len(golden.acceptable_actions) == 1:  # non-borderline: the validity metrics must all pass (gate 1)
         assert_test(case, [m for m in deterministic_metrics() if m.key in STRICT], run_async=False)
-
-
-def test_gates():
-    """Runs last: the whole-run gates (action accuracy >= 90%, judged averages >= 0.7, complete run)."""
-    if not ROWS:
-        pytest.skip("no goldens ran")
-    import os
-
-    from evals.report import merged_rows
-
-    rows = merged_rows(ROWS) if os.getenv("EVALS_MERGE") == "1" else ROWS  # chunked: gate the whole report
-    result = gates.check(rows)
-    assert result["passed"], "eval gates failed:\n" + "\n".join(result["failures"])

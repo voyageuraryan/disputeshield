@@ -231,3 +231,24 @@ def test_strict_schema_keeps_fields_named_title():
     assert set(item["properties"]) == {"title", "why"} and item["required"] == ["title", "why"]
     assert "title" not in item and "title" not in schema  # the annotations are still stripped
     assert item["additionalProperties"] is False
+
+
+@respx.mock
+async def test_structured_calls_use_low_temperature_and_a_seed(monkeypatch):
+    """10C evals: providers default to temperature 1.0, so identical disputes got different recommendations."""
+    import json as _json
+
+    from app.agents.llm import GEMINI_URL, GROQ_URL, gemini_call, groq_call
+    from app.schemas import SellerNote
+
+    ok = {"note": "n", "cited_evidence_ids": [1]}
+    groq = respx.post(GROQ_URL).respond(200, json={"choices": [{"message": {"content": _json.dumps(ok)},
+                                                                 "finish_reason": "stop"}]})
+    gem = respx.post(GEMINI_URL.format(model="g")).respond(200, json={"candidates": [{
+        "content": {"parts": [{"text": _json.dumps(ok)}]}, "finishReason": "STOP"}]})
+    await groq_call(system="s", user="u", output_model=SellerNote, api_key="k", model="openai/gpt-oss-120b")
+    await gemini_call(system="s", user="u", output_model=SellerNote, api_key="k", model="g")
+    gb = _json.loads(groq.calls[0].request.content)
+    assert gb["temperature"] == 0.0 and gb["seed"] == 7
+    cfg = _json.loads(gem.calls[0].request.content)["generationConfig"]
+    assert cfg["temperature"] == 0.0 and cfg["seed"] == 7

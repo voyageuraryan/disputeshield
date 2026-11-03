@@ -54,8 +54,15 @@ class Golden(BaseModel):
         return self
 
 
+NOT_DECISION_GOLDENS = {"troubleshooting.json"}  # the conversational goldens (evals/goldens/conversations.py)
+
+
+def decision_files(directory: Path = DIR) -> list[Path]:
+    return [p for p in sorted(directory.glob("*.json")) if p.name not in NOT_DECISION_GOLDENS]
+
+
 def load_goldens(directory: Path = DIR) -> list[Golden]:
-    goldens = [Golden.model_validate(json.loads(p.read_text())) for p in sorted(directory.glob("*.json"))]
+    goldens = [Golden.model_validate(json.loads(p.read_text())) for p in decision_files(directory)]
     seen = set()
     for g in goldens:
         if g.id in seen:

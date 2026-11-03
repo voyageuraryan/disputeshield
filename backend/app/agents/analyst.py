@@ -58,9 +58,21 @@ evidence checklist, and a baseline recommendation computed by fixed rules. Write
 How the decision works (the rules already applied it; you explain it):
 - rule_score >= {FIGHT_AT}: FIGHT. rule_score < {SETTLE_BELOW}, or the amount is under the merchant's
   threshold with a weak case: SETTLE. Otherwise GATHER_MORE and name the missing evidence.
-- You may move ONE step from the baseline (SETTLE <-> GATHER_MORE <-> FIGHT) only when unstructured
-  evidence justifies it - a buyer message (for example "it arrived") or a listing that contradicts or
-  supports the complaint - and you must cite that evidence item's id. Otherwise keep the baseline.
+- Remember what each action means: SETTLE = the merchant gives in and refunds the buyer (the buyer wins);
+  FIGHT = the merchant contests with evidence (the merchant keeps the money); GATHER_MORE is in between.
+- You may move ONE step from the baseline, citing the evidence item's id, and only in the direction that
+  unstructured evidence points:
+  * evidence that WEAKENS the buyer's claim can only move toward FIGHT (SETTLE -> GATHER_MORE, or
+    GATHER_MORE -> FIGHT), never toward SETTLE: a buyer message that contradicts the claim (for example "it
+    arrived", "found it"), or a listing that states exactly the feature the buyer complains about (they
+    complain about the colour and the listing states that colour). A listing that merely describes the product
+    does NOT weaken a claim that the item is faulty, damaged or doesn't work;
+  * evidence that STRENGTHENS the claim beyond what the rules see can only move toward SETTLE (FIGHT ->
+    GATHER_MORE, or GATHER_MORE -> SETTLE): for example a buyer message describing damage nothing rebuts.
+  A buyer message that just repeats the complaint, evidence that is missing, and red flags (e.g.
+  address_mismatch) are already counted in the baseline: they never justify a move, and evidence a red flag
+  is about can't be used to argue toward FIGHT. In particular never move SETTLE -> GATHER_MORE because evidence is
+  missing; the baseline chose SETTLE knowing it is missing. Otherwise keep the baseline.
 - Only choose an action PayPal currently allows (see allowed_actions); GATHER_MORE is always possible.
 - A troubleshooting_record is the result of the buyer's guided troubleshooting page (steps tried, outcome,
   proofs). If the checklist says safety_review, the answer is GATHER_MORE: a person must review it; put
@@ -126,8 +138,11 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
     elif rec.action != baseline.action:
         cited_types = {by_id[i].type for i in rec.cited_evidence_ids if i in by_id}
         if not cited_types & JUSTIFYING_TYPES:
+            available = sorted({e.type for e in case.evidence} & JUSTIFYING_TYPES)
             problems.append(f"moving from {baseline.action} to {rec.action} must cite a buyer_message or listing "
-                            f"item that justifies it")
+                            f"item that justifies it"
+                            + ("" if available else f"; this case has none, so recommend the baseline "
+                                                    f"{baseline.action}"))
     if rec.action == "FIGHT" and not rec.cited_evidence_ids:
         problems.append("FIGHT must cite the evidence it relies on")
     if rec.action == "GATHER_MORE" and not rec.missing_items:

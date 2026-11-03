@@ -37,6 +37,16 @@ scripts/run_evals.sh --no-judge           # deterministic metrics only
   `.cache/` (git-ignored) by golden, prompt hash and model, so re-runs are free.
 - **Never touches PayPal**: each golden runs in its own in-memory database; resolution builds the PayPal request
   but nothing executes it.
+- **Troubleshooting conversations** (Phase 10C): 14 conversational goldens (`goldens/troubleshooting.json`,
+  `goldens/conversations.py`; DeepEval ConversationalGolden + Persona). `troubleshooting_sim.py` runs DeepEval's
+  ConversationSimulator (simulated buyer = the Gemini judge model) against the REAL agent on a private session; the
+  page's buttons/uploads are simulated with tokens (`[button: Yes, it works now]`, `[upload photo]`), a [screen]
+  block shows the page to the buyer (stripped before scoring), and the run stops when the session ends. Web research
+  comes from `goldens/fixtures/research.json` (real results, recorded once with `python -m evals.record_research`),
+  except the separate live-search smoke golden (`--only conv-live-search-smoke`). Metrics (`metrics/conversational.py`):
+  RoleAdherence, KnowledgeRetention, ConversationCompleteness, TurnRelevancy, ConversationalGEval Safety (1.0),
+  No promises (1.0), Grounding (0.7), plus deterministic SessionOutcome (final status) and ConversationRules
+  (safety on the hazard turn, <= 2 clarifying questions, reply language, forbidden phrases).
 - **CI**: `.github/workflows/ci.yml` (unit tests on every push) and `evals.yml` (this suite on manual dispatch
   or nightly, secrets GROQ_API_KEY + GEMINI_API_KEY, cache restored between runs).
 
@@ -67,5 +77,15 @@ scripts/run_evals.sh --no-judge           # deterministic metrics only
 9. **LangGraph CallbackHandler** isn't usable with deepeval 4.3.2 on our graph (G70): our own root spans are used.
 10. **CI needs a GitHub remote + the two secrets**; nothing runs until the repo is pushed (your call). The e2e
     Playwright suite isn't in CI (it needs browsers and a dev stack).
+12. **Conversations need three quotas at once**: the agent (Groq), the simulated buyer and the judge (Gemini).
+    A 12-conversation run is roughly 90 agent calls (more than Groq's free daily tokens) plus ~250 Gemini calls;
+    run it over several days with `--only conv- --merge` (everything is cached). As of 2026-11-03 the research
+    fixture isn't recorded yet (Gemini quota) and no live conversation has run: the harness is verified offline.
+13. **Simulated buttons.** The buyer "presses" page buttons with tokens; a token the simulated buyer forgets or
+    misspells is just text to the agent, so a run can drift (ConversationRules flags drift on hazard cases).
+14. **ConversationalGEval can't read `context`** (deepeval 4.3.2: no label for MultiTurnParams.CONTEXT); the
+    Grounding rubric reads the plan from metadata instead (regression test checks the judge sees it).
+15. **Sampling.** The model under test now runs at temperature 0 with a fixed seed (LLM_TEMPERATURE / LLM_SEED);
+    Groq's seed is best-effort and Gemini 3.6+ ignores temperature, so some run-to-run variance remains.
 11. **Single machine memory.** Long background runs were stopped by the host for low memory (~1 GB free); run in
     chunks (`--only`) or with more free memory.

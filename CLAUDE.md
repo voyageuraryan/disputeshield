@@ -62,7 +62,9 @@ backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webho
 backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_goldens.py), pipeline.py (golden -> DB ->
                       real analyst + resolution, rate limits, cache, traces, shadow investigation), judge.py
                       (Gemini judge), fake_paypal.py, checks.py, metrics/ (deterministic, judged, agentic),
-                      gates.py, report.py, reports/; run with scripts/run_evals.sh (its own pytest.ini)
+                      gates.py, report.py, reports/; run with scripts/run_evals.sh (its own pytest.ini);
+                      10C: goldens/troubleshooting.json + conversations.py, troubleshooting_sim.py (simulated
+                      buyers vs the real agent), metrics/conversational.py, checks_conv.py, record_research.py
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)

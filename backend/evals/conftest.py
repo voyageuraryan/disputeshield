@@ -82,6 +82,35 @@ JUDGE_NAME: list[str] = []
 
 
 @pytest.fixture(scope="session")
+def conversations():
+    """run(golden) -> one simulated conversation (cached). The simulated buyer is played by the Gemini judge model
+    (never the model under test); the agent runs on the model under test through the shared rate limiter."""
+    from evals.cache import DiskCache
+    from evals.pipeline import Limiter, RateLimited, Recorder, model_under_test
+    from evals.troubleshooting_sim import FixtureMissing, load_fixture, simulate
+
+    limiter = Limiter()
+    cache = DiskCache("conversations")
+
+    def run(g):
+        from evals.judge import GeminiJudge, JudgeError
+
+        try:
+            fixture = None if g.live_search else load_fixture()
+            return simulate(g, simulator_model=GeminiJudge(cache=DiskCache("simulator")), llm=Recorder(limiter),
+                            fixture=fixture, cache=cache, model=model_under_test())
+        except FixtureMissing as exc:
+            return {"golden_id": g.id, "error": "fixture_missing", "detail": str(exc)}
+        except RateLimited as exc:
+            return {"golden_id": g.id, "error": "rate_limited", "detail": str(exc)}
+        except JudgeError as exc:
+            return {"golden_id": g.id, "error": "simulator_unavailable", "detail": str(exc)}
+        except Exception as exc:  # noqa: BLE001 - one broken conversation must not stop the run
+            return {"golden_id": g.id, "error": type(exc).__name__, "detail": str(exc)[:500]}
+    return run
+
+
+@pytest.fixture(scope="session")
 def judge():
     if os.getenv("EVALS_JUDGE", "1") == "0":
         return None

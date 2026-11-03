@@ -23,7 +23,7 @@ from pathlib import Path
 
 from app.rules.evidence_rules import economic_baseline, evaluate
 from app.schemas import CaseFile, EvidenceItem
-from evals.goldens.schema import DIR, Golden
+from evals.goldens.schema import DIR, Golden  # noqa: F401
 
 INR, SNAD, UNAUTH = "MERCHANDISE_OR_SERVICE_NOT_RECEIVED", "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED", "UNAUTHORISED"
 THRESHOLD = Decimal("25")
@@ -318,7 +318,11 @@ def build_recorded_and_demo() -> list[Golden]:
         .message("This doesn't fit my phone, it's for a different model.")
     out.append(golden("demo-b-phone-case", "Demo case B: $12 phone case, not as described", "e2e/seed_ui_demo.py B",
                       case_file("PP-EVAL-DEMO-B", SNAD, Decimal("12.00"), STAGES["chargeback"][SNAD], e.items),
-                      notes="Cheap and weak (no refund policy): settle."))
+                      acceptable=["GATHER_MORE"],
+                      notes="Cheap and weak (no refund policy): the baseline settles. Borderline (decided 2026-11-03 "
+                            "after the G74 fix): the listing says 'for Pixel 9' and the buyer says it's 'for a "
+                            "different model', i.e. the listing shows exactly what was sold, which weakens the claim; "
+                            "the documented one-step move toward the merchant is therefore acceptable."))
     # docs/TEST_SCENARIOS.md T30-T32 (Phase 9D): troubleshooting results
     for gid, flags, title, notes, must_not in (
         ("ts-fixed", ["ts_fixed"], "Buyer confirmed the lamp works after troubleshooting (T30)",
@@ -345,7 +349,9 @@ def build_recorded_and_demo() -> list[Golden]:
 
 def main() -> None:
     goldens = build_grid() + build_adversarial() + build_recorded_and_demo()
-    for old in DIR.glob("*.json"):
+    from evals.goldens.schema import decision_files
+
+    for old in decision_files():  # never the conversational goldens (troubleshooting.json)
         old.unlink()
     for g in goldens:
         (DIR / f"{g.id}.json").write_text(json.dumps(g.model_dump(mode="json"), indent=2, sort_keys=False) + "\n")

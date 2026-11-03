@@ -114,6 +114,8 @@ async def groq_call(*, system: str, user: str, output_model: type[T], api_key: s
         "response_format": {"type": "json_schema", "json_schema": {
             "name": output_model.__name__, "schema": strict_json_schema(output_model), "strict": True}},
         "max_completion_tokens": MAX_OUTPUT_TOKENS,
+        "temperature": get_settings().llm_temperature,  # documented 0-2 (default 1)
+        "seed": get_settings().llm_seed,                # documented: best-effort determinism
     }
     if model.startswith("openai/gpt-oss"):
         body["reasoning_effort"] = "medium"
@@ -139,7 +141,9 @@ async def gemini_call(*, system: str, user: str, output_model: type[T], api_key:
         "contents": [{"role": "user", "parts": [{"text": user}]}],
         "generationConfig": {"responseMimeType": "application/json",
                              "responseJsonSchema": strict_json_schema(output_model),
-                             "maxOutputTokens": MAX_OUTPUT_TOKENS * 2},
+                             "maxOutputTokens": MAX_OUTPUT_TOKENS * 2,
+                             # temperature is ignored on Gemini 3.6 Flash+; the seed still applies
+                             "temperature": get_settings().llm_temperature, "seed": get_settings().llm_seed},
     }
     try:
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as http:

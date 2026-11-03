@@ -335,3 +335,25 @@ async def test_gather_more_on_a_red_flag_gets_the_missing_items_from_the_rules(e
         r = await analyze(s, d, case, llm=llm)
     assert not r.needs_human and r.recommendation.missing_items == [
         "evidence that resolves: Carrier delivered to a different address than the order's shipping address"]
+
+
+
+def test_unjustified_move_says_which_action_to_use_when_nothing_could_justify_it():
+    """10C/G74: at temperature 0 the model kept FIGHT on an address-mismatch case; the retry now names the baseline."""
+    from decimal import Decimal as D
+
+    from app.agents.analyst import validate
+    from app.rules.evidence_rules import Baseline
+    from app.schemas import CaseFile, EvidenceItem, Recommendation
+
+    ev = lambda i, t: EvidenceItem(id=i, type=t, source="store", source_ref=f"store:{t}/{i}", summary=t)  # noqa: E731
+    fight = Recommendation(action="FIGHT", confidence="high", reasoning="Delivered and protected.",
+                           cited_evidence_ids=[1, 2], missing_items=[], economic_note="x")
+    base = Baseline("GATHER_MORE", "rule score 0.45")
+    no_msgs = CaseFile(dispute_id="P", reason="MERCHANDISE_OR_SERVICE_NOT_RECEIVED", amount=D("89"), currency="USD",
+                       due_date=None, order_id=None, allowed_actions=["provide_evidence", "accept_claim"],
+                       evidence=[ev(1, "tracking"), ev(2, "delivery_confirmation")])
+    assert any("this case has none, so recommend the baseline GATHER_MORE" in p for p in validate(fight, no_msgs, base))
+    with_msg = no_msgs.model_copy(update={"evidence": no_msgs.evidence + [ev(3, "buyer_message")]})
+    probs = validate(fight, with_msg, base)
+    assert any("must cite a buyer_message" in p for p in probs) and not any("has none" in p for p in probs)

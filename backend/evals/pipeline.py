@@ -54,8 +54,9 @@ class RateLimited(Exception):
 
 
 def model_under_test() -> str:
+    """Part of the cache key: sampling settings change answers just like the model does."""
     s = get_settings()
-    return f"{s.llm_providers}:{s.groq_model}"
+    return f"{s.llm_providers}:{s.groq_model}:t{s.llm_temperature}:s{s.llm_seed}"
 
 
 class Limiter:

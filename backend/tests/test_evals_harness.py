@@ -57,7 +57,9 @@ def test_goldens_on_disk_match_the_builder():
     if not any(recorded.glob("*.body.json")):
         pytest.skip("recorded_webhooks/ isn't present (git-ignored)")
     built = build_goldens.build_grid() + build_goldens.build_adversarial() + build_goldens.build_recorded_and_demo()
-    on_disk = {p.stem: json.loads(p.read_text()) for p in DIR.glob("*.json")}
+    from evals.goldens.schema import decision_files
+
+    on_disk = {p.stem: json.loads(p.read_text()) for p in decision_files()}
     assert {g.id: g.model_dump(mode="json") for g in built} == on_disk
 
 

@@ -308,6 +308,30 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 10C (2026-11-03)
+G74 [~] P1 APPROVED + fixed in the analyst prompt (moves are directional: evidence that weakens the claim moves only
+        toward FIGHT, evidence that strengthens it only toward SETTLE; missing evidence / repeated complaints /
+        red flags never justify a move; the meaning of SETTLE vs FIGHT spelled out). Verified live on the first
+        version: 8/9 G74 failures fixed (all weak/partial-below-threshold cells now SETTLE), guards held
+        (listing-contradicts moves to FIGHT, strong cases FIGHT, partial-above GATHER_MORE). The 9th (demo B) was a
+        genuinely borderline golden: GATHER_MORE now also acceptable (reason in its notes). Still to confirm live
+        (Groq daily tokens ran out): the final wording at temperature 0 on adv-address-mismatch and ts-defect.
+G90 [x] FOUND by the G74 verification: the LLM calls ran at the providers' default temperature 1.0, so the same
+        dispute could get different recommendations run to run (two cases flipped between identical runs) ->
+        temperature 0 + fixed seed (LLM_TEMPERATURE / LLM_SEED; Groq docs: 0-2, seed best-effort; Gemini: seed,
+        temperature ignored on 3.6 Flash+). The eval cache key includes them.
+G91 [x] Unjustified-move retries only said what was wrong; at temperature 0 the model repeated FIGHT on the
+        address-mismatch case -> the retry now names the baseline to use when nothing in the case could justify a move.
+G92 [ ] P2 10C live run pending: the research fixture must be recorded from real search (`python -m
+        evals.record_research`) and the 14 conversations run (`scripts/run_evals.sh --only conv- --merge`) once the
+        Gemini and Groq quotas reset; the harness is verified offline only.
+G93 [ ] P3 Fixed-text replies (step buttons, confirm, handoff, defect) exist in English and Spanish only, so a Hindi
+        buyer gets English for those (G49); conv-hindi-buyer's ConversationRules check will show it.
+G94 [x] The decision-golden builder deleted every *.json in goldens/ before regenerating (it would have wiped
+        troubleshooting.json) and the loader read it as a decision golden -> both skip it.
+G75 [ ] (update) After the directional fix ts-defect gave GATHER_MORE once and FIGHT once (before temperature 0);
+        a deterministic "never auto-FIGHT a confirmed defect" rule is still your decision.
+
 ### Found in Phase 10B (2026-11-02/03) — eval limitations are listed in backend/evals/README.md
 G80 [x] DAG judgement nodes had no evaluation_params: the judge saw no text and scored every explanation 0 (live)
         -> nodes judge the actual output; regression test proves the old code fails it.
@@ -797,3 +821,26 @@ known-good and known-bad output, then run live; the live runs found six problems
   the confusion matrix shows SETTLE -> GATHER_MORE 9x = G74); 38 judged results unmeasured (G86).
 - Tests: backend 539 (+41), frontend 103, e2e 29 (re-run, includes the 10A changes). vite build unchanged.
 - Fixed: G80-G85, G88. Open: G74 (P1), G75 (decision), G86, G87, G89, G70, G73, G77.
+
+## 2026-11-03 — G74 fix (approved) + Phase 10C: simulated buyers vs the troubleshooting agent
+
+ReAct summary: G74 was in the prompt's own words ("contradicts or supports the complaint"). Fixed and verified live
+until Groq's daily tokens ran out; the verification itself exposed temperature 1.0 (G90) and a retry wording gap
+(G91), both fixed. 10C was built against the installed deepeval 4.3.2 API and verified offline; the live run waits
+for the Gemini + Groq quotas (G92).
+
+- G74 / G90 / G91: see the gap list above. Analyst prompt: directional one-step moves; llm.py: temperature 0 + seed.
+- 10C goldens: 14 conversations (evals/goldens/troubleshooting.json): cooperative reset (earbuds) and outlet (lamp)
+  -> RESOLVED_FIXED; real defect with proof (x2) -> DEFECT_CONFIRMED; angry refuser -> handoff; scammer
+  injection; burning smell -> SAFETY_STOP on that turn; Spanish "sale humo"; Hindi buyer; asks the seller's
+  phone; off-topic; vague symptom (<= 2 questions); defect without proof (never confirmed); live-search smoke.
+- Harness: DeepEval ConversationSimulator (simulator = Gemini judge model) with an async model_callback driving the
+  real agent_reply / confirm_fixed / step_button / handoff / record_proof on a private session; [screen] block for
+  the buyer, stripped before scoring; stopping controller ends at a final status; research from a recorded fixture.
+- Metrics: RoleAdherenceMetric, KnowledgeRetentionMetric, ConversationCompletenessMetric, TurnRelevancyMetric,
+  ConversationalGEval Safety (1.0), No promises (1.0), Grounding (0.7) + deterministic SessionOutcome and
+  ConversationRules. Gates: SessionOutcome/ConversationRules 100%, Safety/No promises pass in EVERY conversation.
+  The report has a conversations section; GET /api/admin/evals/latest serves it (Trust page).
+- Tests: backend 560 (+21: tests/test_eval_troubleshooting.py incl. a real ConversationSimulator run with a scripted
+  buyer, metric good/bad with the scripted judge, a check that Grounding's judge sees the plan; analyst/llm tests).
+- The committed eval report is still the 10B one (consistent); today's partial merges were not kept.
