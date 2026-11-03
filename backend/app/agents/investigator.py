@@ -73,7 +73,8 @@ def _money(m: dict | None) -> str:
 # ---- evidence writing --------------------------------------------------------
 
 def _upsert_evidence(session: Session, dispute: Dispute, *, type: str, source: str, source_ref: str,
-                     summary: str, flags: list[str] | None = None, run_key: str | None = None) -> EvidenceItemRow:
+                     summary: str, flags: list[str] | None = None, run_key: str | None = None,
+                     file_path: str | None = None) -> EvidenceItemRow:
     row = session.exec(select(EvidenceItemRow).where(
         EvidenceItemRow.dispute_id == dispute.id, EvidenceItemRow.source_ref == source_ref)).first()
     if row is None:
@@ -81,6 +82,7 @@ def _upsert_evidence(session: Session, dispute: Dispute, *, type: str, source: s
                               source_ref=source_ref, summary=summary, flags=flags or [])
     else:
         row.type, row.summary, row.flags = type, summary, flags or []  # fresh flags: no "stale:" left over
+    row.file_path = file_path
     row.last_seen_run, row.last_seen_at, row.active = run_key, datetime.now(timezone.utc), True
     session.add(row)
     session.commit()
@@ -203,6 +205,7 @@ class Investigator:
         self._troubleshooting_record()
         self._refund_policy()
         self._paypal_dispute_messages(pp)
+        self._merchant_uploads()
         self._retire()
         case = build_case_file(self.s, d)
         self.step(f"Case file ready: {len(case.evidence)} evidence items",
@@ -328,6 +331,17 @@ class Investigator:
                                 summary=f"Buyer wrote in the PayPal case on {_day(m.get('time_posted'))}: "
                                         f"\"{(m.get('content') or '').strip()}\"", flags=flags)
             self.step(f"Found buyer message in PayPal case ({_day(m.get('time_posted'))})", {"evidence_id": row.id})
+
+    def _merchant_uploads(self) -> None:
+        """Phase 12: evidence the merchant added and confirmed (summary + flags from their confirmed fields)."""
+        from app.merchant_uploads import confirmed
+
+        for up in confirmed(self.s, self.d.id):
+            row = self.evidence(type=up.evidence_type, source="merchant_upload", source_ref=f"upload:{up.id}",
+                                summary=up.summary or "Merchant-provided evidence", flags=list(up.flags or []),
+                                file_path=up.file_path)
+            self.step(f"Using evidence the merchant added: {up.evidence_type.replace('_', ' ')}",
+                      {"evidence_id": row.id, "upload_id": up.id})
 
     # Store lookups
 

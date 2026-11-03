@@ -137,8 +137,11 @@ def _request_for(session: Session, d: Decision, dispute: Dispute, action: str, n
         order = session.get(Order, case.order_id) if case.order_id else None
         from app.troubleshooting.outcome import pdf_section
 
+        from app.agents.resolution import attached_labels
+
         pdf = str(build_evidence_pdf(pdf_path_for(d.id), case, note, order=order,
-                                     troubleshooting=pdf_section(session, dispute.id)))
+                                     troubleshooting=pdf_section(session, dispute.id),
+                                     attached=attached_labels(session, case)))
     try:
         return build_action_request(session, dispute, case, action, note, pdf)
     except ValueError as exc:

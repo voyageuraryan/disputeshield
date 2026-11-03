@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-03, Phase 11
+## Open items (tracked) — updated 2026-11-03, Phase 12
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -308,6 +308,30 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 12 (2026-11-03)
+G103 [ ] P2 USER DECISION (like G50). UPLOAD_EXTRACTION is on by default: the merchant's uploaded documents (labels,
+        carrier proof of delivery, receipts) go to Gemini, and they often show the buyer's name and address. On
+        the free tier, inputs may be human-reviewed. Options: keep it on (the merchant is told before uploading),
+        turn it off (the merchant types the fields), or use a paid key.
+G104 [ ] P2 Several files in one provide-evidence / provide-supporting-info call are sent as parts file1..fileN
+        (the PDF first, then the merchant's files). One file was verified live earlier. The API reference names
+        the part "evidence-file", and the guide's sample hides the field name, so multi-file sending isn't proven
+        live. It needs one approved sandbox FIGHT with an upload (the user's call: it moves money).
+G105 [x] P1 Pre-existing bug, found by the new e2e test: on a fresh database the first case-detail request
+        answered 500. settle_threshold() created the settings row and committed, which expired the timeline rows
+        already loaded. Fixed (the threshold is read first); regression test added.
+G106 [ ] P2 Gemini extraction not verified live: the main GEMINI_API_KEY answered 429 on 3.8-flash, 2.5-flash and
+        3.5-flash-lite (2026-11-03). The role keys were not used for it (one key per task). Retry after reset, or
+        add a dedicated key for the "extraction" role (gemini_key_for falls back to GEMINI_API_KEY).
+G107 [ ] P3 Extraction runs inside the upload request (up to 45 s per model, two models). Move it to a background
+        task with a live update if it feels slow in the demo.
+G108 [ ] P3 The coach assumes the added item is clean (no red flags, e.g. delivered to the order's address), and it
+        shows only the rules' baseline, not the analyst's one-step move. If PayPal allows no FIGHT right now it
+        honestly shows GATHER_MORE after the item.
+G109 [ ] P3 Merchant uploads aren't covered by the proof-retention purge (G44 covers buyer proofs only).
+G110 [ ] P3 Confirming evidence while a run is going saves it but doesn't start a run ("re-analyse when it's
+        done"), the same gap as G98.
+
 ### Found in Phase 11 (2026-11-03)
 G97 [x] P1 The investigator didn't catch httpx transport errors (timeout / connection reset): one PayPal timeout
         crashed the whole run (run_failed). Now caught; timeouts, 5xx and 429 count as transient (last good copy kept,
@@ -907,4 +931,40 @@ for the Gemini + Groq quotas (G92).
   freshness.test.tsx (9). Goldens regenerated (CaseFile fields).
 - Regression: backend 594 passed, frontend 115 passed + tsc + build, e2e 29 passed.
 - New items: G97-G102 (see open items). Eval cache invalidated by the prompt change (G100).
+
+## 2026-11-03 — Phase 12: the merchant adds the missing evidence
+
+- Upload: every missing checklist item (and the coach) has an "Add" action. The merchant picks the evidence type
+  (the types the rules know, except the ones we compute: buyer_history, troubleshooting_record), then uploads a
+  PDF/JPG/PNG under 10 MB or types a short fact. The type is checked from the bytes; damaged or password-protected
+  PDFs and undecodable images are refused; the same file twice gives the same upload. Files are stored under
+  ARTIFACTS_DIR/uploads/{dispute}/{id}.{ext}; table merchant_uploads (PENDING / CONFIRMED / DISCARDED).
+- Extraction: Gemini (Interactions API, a document or image part, strict JSON schema, store=false, temperature 0)
+  reads {document_kind, key_fields, confidence} as suggestions only. The merchant confirms or edits the fields;
+  until then nothing is evidence. The evidence summary and flags are built deterministically from the confirmed
+  fields:
+  - address_match / address_mismatch (postal code + house number + street word vs the order address;
+    a mismatch on delivery_confirmation is the existing -0.4 red flag)
+  - tracking_matches_order / tracking_not_on_order
+  - amount_matches_dispute / amount_differs
+  - delivered:<date>, delivered_before_order, file_attached
+- Evidence: the investigator re-reads confirmed uploads every run (source merchant_upload, source_ref upload:{id}),
+  so they are run-scoped like everything else; removing one drops it on the next run. "View source" shows the
+  confirmed fields and what was read.
+- Coach ("What would win this?"): rules/coach.py re-runs evaluate() + economic_baseline() on a hypothetical copy of
+  the case file. It shows each missing item, plus all missing required items together, as "Add delivery
+  confirmation → score 50 → 85 → Fight", ordered by gain, with plain-English how-to (carrier-specific for
+  USPS/UPS/FedEx/DHL, from the store shipment).
+- Confirming (or removing confirmed) evidence starts a fresh run (Phase 11 fresh mode, start_fresh_run shared with
+  re-analyse); the new proposal supersedes the old one.
+- PayPal: with an approved FIGHT, the merchant's files go along with the summary PDF in provide-evidence /
+  provide-supporting-info (required types first, each < 10 MB, files <= 40 MB so files + PDF <= 50 MB per call;
+  left-out files are logged). The PDF lists "Documents attached to this response".
+- Tests:
+  - backend tests/test_merchant_uploads.py (28): validation, advisory extraction + confirm gate, injected text,
+    flags, coach scores, fresh run + supersede, run busy, resolved, PDF parts and budget, fresh-DB regression
+  - frontend addEvidence.test.tsx (10)
+  - e2e test_add_missing_evidence_and_confirm (coach → Add → bad file refused → upload → confirm)
+- Regression: backend 622 passed, frontend 124 passed + tsc + build, e2e 30 passed.
+- Live: Gemini extraction blocked by quota (G106). New items G103-G110.
 

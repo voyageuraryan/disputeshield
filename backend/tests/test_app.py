@@ -22,6 +22,7 @@ def test_creates_tables():
     assert set(inspect(eng).get_table_names()) == {
         "orders", "shipments", "messages", "disputes", "evidence_items", "agent_steps", "decisions",
         "processed_events",  # idempotency ledger for webhook/poll ingestion
+        "merchant_uploads",  # Phase 12
         "merchant_settings",  # merchant-editable settings (settle threshold)
         "troubleshooting_sessions", "ts_steps", "ts_messages", "ts_proofs", "ts_sources",  # phase 9A
         "research_cache",  # phase 9B: 24 h web research cache

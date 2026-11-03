@@ -47,17 +47,18 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
    before saying a task is done.
 
 ## Layout
-backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py, auth.py, events_bus.py}
+backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py, auth.py, events_bus.py,
+             merchant_uploads.py (Phase 12: merchant-added evidence: validate, store, Gemini read, confirm, flags)}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
 backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py,
                       troubleshooter.py (buyer troubleshooting agent), web_research.py (grounded search), redact.py
-backend/app/rules/    evidence_rules.py
+backend/app/rules/    evidence_rules.py, coach.py ("What would win this?": hypothetical scores, pure)
 backend/app/troubleshooting/  buyer troubleshooting package: eligibility.py, access.py (link tokens, expiry,
                               rate limit), service.py (invite), proofs.py (upload checks: type/size/EXIF/GPS/dHash),
                               vision.py (advisory photo check), outcome.py (finished session -> evidence record +
                               flags, idempotent re-analysis, evidence-PDF page)
 backend/app/api/      disputes.py, decisions.py, store.py, webhooks.py, admin.py, events.py (SSE), settings.py, auth.py,
-                      evals.py (latest eval report for the Trust page),
+                      evals.py (latest eval report for the Trust page), uploads.py (merchant evidence uploads),
                       troubleshooting.py (merchant invite + public buyer /api/help routes)
 backend/app/scripts/  seed.py, poll_disputes.py, check_paypal.py, register_webhook.py, cleanup_orders.py
 backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_goldens.py), pipeline.py (golden -> DB ->
@@ -69,6 +70,7 @@ backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_gold
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
+frontend/src/evidence/  AddEvidence.tsx (add/confirm evidence, coach panel), logic.ts (pure)
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is
                       pages/Help.tsx at /help/:sessionId (public, link token); the merchant's panel is
                       TroubleshootingCard in pages/CaseDetail.tsx
@@ -77,6 +79,8 @@ frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upl
 Evidence rows are run-scoped (last_seen_run, active): the case file holds only items the latest run saw; a
 source that failed transiently keeps its items flagged `stale:<iso>`, and FIGHT is refused when required
 evidence is only stale. Manual re-analyse runs fresh=True (always re-fetches from PayPal).
+Merchant uploads (Phase 12) become evidence only after the merchant confirms the fields; Gemini's read is a
+suggestion. Summary and flags are built deterministically from the confirmed fields.
 
 ## Progress
 See PROGRESS.md. Update it at the end of every session.

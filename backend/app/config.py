@@ -90,6 +90,9 @@ class Settings(BaseSettings):
     # information, and buyer photos can show people or homes. Turn on with a paid key or the buyer's consent.
     proof_vision_check: bool = False
     vision_model: str = ""  # defaults to the first GEMINI_MODEL
+    # Phase 12: Gemini reads a merchant's uploaded document to prefill its fields (the merchant confirms them).
+    # Merchant documents (labels, receipts) can show the buyer's name and address: see PROGRESS G103.
+    upload_extraction: bool = True
     # Shown in the buyer page header.
     store_name: str = "Demo store"
     # Phase 9D: a finished buyer troubleshooting session starts a new analysis of the dispute.

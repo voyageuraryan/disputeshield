@@ -87,6 +87,7 @@ class EvidenceSource(str, Enum):
     paypal = "paypal"
     store = "store"
     buyer_portal = "buyer_portal"  # Phase 9D: the buyer troubleshooting page
+    merchant_upload = "merchant_upload"  # Phase 12: a file or fact the merchant added (fields confirmed by them)
 
 
 class EvidenceItemRow(SQLModel, table=True):
@@ -314,3 +315,32 @@ class TSSource(SQLModel, table=True):
     snippet: Optional[str] = None
     retrieved_at: datetime = Field(default_factory=utcnow)
     provider: Optional[str] = None
+
+
+class UploadStatus(str, Enum):
+    PENDING = "PENDING"        # stored + read; the merchant hasn't confirmed the fields yet (not evidence)
+    CONFIRMED = "CONFIRMED"    # the merchant confirmed the fields: the investigator turns it into evidence
+    DISCARDED = "DISCARDED"    # removed by the merchant (file deleted; row kept for the timeline)
+
+
+class MerchantUpload(SQLModel, table=True):
+    """Phase 12: evidence the merchant adds for a missing checklist item (a file or a typed fact)."""
+    __tablename__ = "merchant_uploads"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dispute_id: int = Field(foreign_key="disputes.id", index=True)
+    evidence_type: str
+    status: UploadStatus = UploadStatus.PENDING
+    file_path: Optional[str] = None      # ARTIFACTS_DIR/uploads/{dispute}/{id}.{pdf|jpg|png}; None for a typed fact
+    mime: Optional[str] = None
+    size: Optional[int] = None
+    sha256: Optional[str] = Field(default=None, max_length=64)
+    original_name: Optional[str] = None
+    fact: Optional[str] = None           # the typed fact, verbatim
+    extraction: Optional[dict] = _json_col()   # what Gemini read (advisory, never evidence by itself)
+    fields: Optional[dict] = _json_col()       # the merchant-confirmed fields
+    flags: Optional[list[str]] = _json_col()   # derived deterministically from the confirmed fields
+    summary: Optional[str] = None
+    created_at: datetime = Field(default_factory=utcnow)
+    confirmed_at: Optional[datetime] = None
+

@@ -7,7 +7,8 @@ resolve()  (graph node "resolve", before the approval interrupt)
           of the buyer's proof photos. PayPal: jpg/png/pdf, < 10 MB per file, <= 50 MB per call
           (paypal/disputes.py); the PDF is kept under 10 MB (photos are shrunk, else left out).
           Request: provide-evidence (when PayPal allows it) with PROOF_OF_FULFILLMENT + tracking_info,
-          else provide-supporting-info (case under PayPal review), both with the PDF attached;
+          else provide-supporting-info (case under PayPal review), both with the PDF attached plus (Phase 12)
+          the merchant's confirmed uploaded files, required types first, within 50 MB per call (upload_files);
           else, in an inquiry that takes no evidence, escalate (note only) so PayPal reviews it as a claim.
   SETTLE  accept-claim with a short templated note.
   GATHER_MORE  nothing to send; the merchant may approve with a different action or reject.
@@ -33,9 +34,11 @@ from app.agents.llm import LLMError, StructuredLLM
 from app.agents.redact import contains_placeholder, pii_terms, redact
 from app.agents.steps import log_step
 from app.config import get_settings
-from app.models import Decision, DecisionStatus, Dispute, Order, Shipment
+from app.models import Decision, DecisionStatus, Dispute, MerchantUpload, Order, Shipment, UploadStatus
 from app.paypal.client import PayPalClient, PayPalError
 from app.paypal.disputes import (
+    MAX_FILE_BYTES,
+    MAX_TOTAL_BYTES,
     Attachment,
     NotApprovedError,
     accept_claim,
@@ -43,7 +46,7 @@ from app.paypal.disputes import (
     provide_evidence,
     provide_supporting_info,
 )
-from app.schemas import CaseFile, SellerNote
+from app.schemas import CaseFile, EvidenceItem, SellerNote
 
 log = logging.getLogger(__name__)
 AGENT = "resolution"
@@ -153,14 +156,53 @@ def _pdf_image(path: str, max_w: float, max_h: float):
 
 
 def build_evidence_pdf(path: Path, case: CaseFile, note: str, *, order: Order | None = None,
-                       troubleshooting=None) -> Path:  # noqa: ANN001  (outcome.PdfSection | None)
-    pdf = _build_pdf(path, case, note, order, troubleshooting, images=True)
+                       troubleshooting=None, attached: list[str] | None = None) -> Path:  # noqa: ANN001
+    """troubleshooting: outcome.PdfSection | None. attached: labels of the merchant's files sent alongside."""
+    pdf = _build_pdf(path, case, note, order, troubleshooting, images=True, attached=attached or [])
     if troubleshooting is not None and pdf.stat().st_size >= PDF_MAX_BYTES:
-        pdf = _build_pdf(path, case, note, order, troubleshooting, images=False)  # PayPal: < 10 MB per file
+        pdf = _build_pdf(path, case, note, order, troubleshooting, images=False,  # PayPal: < 10 MB per file
+                         attached=attached or [])
     return pdf
 
 
-def _build_pdf(path: Path, case: CaseFile, note: str, order: Order | None, ts, *, images: bool) -> Path:  # noqa: ANN001
+# ---- Phase 12: the merchant's uploaded files go with the response ------------------------------------------
+
+UPLOAD_BUDGET = MAX_TOTAL_BYTES - PDF_MAX_BYTES  # 50 MB per call, minus room for the summary PDF (< 10 MB)
+
+
+def upload_files(session: Session, case: CaseFile) -> tuple[list[tuple[EvidenceItem, MerchantUpload]],
+                                                            list[tuple[EvidenceItem, MerchantUpload]]]:
+    """(attached, left out) confirmed merchant files that are evidence in this case file, required types first,
+    within PayPal's limits (each < 10 MB, all files + the PDF <= 50 MB per call)."""
+    from app.rules.evidence_rules import RULES
+
+    by_id = {int(e.source_ref.split(":", 1)[1]): e for e in case.evidence
+             if e.source == "merchant_upload" and e.source_ref.split(":", 1)[1].isdigit()}
+    if not by_id:
+        return [], []
+    required = set(RULES[case.reason].required) if case.reason in RULES else set()
+    ups = session.exec(select(MerchantUpload).where(MerchantUpload.id.in_(list(by_id)),
+                                                    MerchantUpload.status == UploadStatus.CONFIRMED)).all()
+    ups = sorted((u for u in ups if u.file_path and Path(u.file_path).is_file()),
+                 key=lambda u: (u.evidence_type not in required, u.id))
+    chosen, skipped, total = [], [], 0
+    for u in ups:
+        size = Path(u.file_path).stat().st_size
+        if size >= MAX_FILE_BYTES or total + size > UPLOAD_BUDGET:
+            skipped.append((by_id[u.id], u))
+            continue
+        total += size
+        chosen.append((by_id[u.id], u))
+    return chosen, skipped
+
+
+def attached_labels(session: Session, case: CaseFile) -> list[str]:
+    return [f"#{e.id} {e.type.replace('_', ' ')} ({(u.fields or {}).get('document_kind') or u.original_name or 'file'})"
+            for e, u in upload_files(session, case)[0]]
+
+
+def _build_pdf(path: Path, case: CaseFile, note: str, order: Order | None, ts, *, images: bool,  # noqa: ANN001
+               attached: list[str]) -> Path:
     from xml.sax.saxutils import escape
 
     from reportlab.lib import colors
@@ -189,6 +231,7 @@ def _build_pdf(path: Path, case: CaseFile, note: str, order: Order | None, ts, *
              p(" · ".join(facts)), Spacer(1, 8),
              Paragraph("Seller statement", styles["Heading3"]), p(note), Spacer(1, 8),
              Paragraph("Evidence", styles["Heading3"]), table, Spacer(1, 6),
+             *([p("Documents attached to this response: " + "; ".join(attached)), Spacer(1, 6)] if attached else []),
              p(f"Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC by DisputeShield from the merchant's "
                f"PayPal and store records.")]
     doc = SimpleDocTemplate(str(path), pagesize=LETTER, leftMargin=0.6 * inch, rightMargin=0.6 * inch,
@@ -246,6 +289,9 @@ def build_action_request(session: Session, dispute: Dispute, case: CaseFile, act
                          pdf_path: str | None) -> dict[str, Any]:
     """The exact PayPal call execute will make. Raises ValueError if PayPal doesn't allow it now."""
     attachments = [{"path": pdf_path, "content_type": "application/pdf"}] if pdf_path else []
+    if action == "FIGHT":  # Phase 12: the merchant's own documents go along (within PayPal's per-call limit)
+        attachments += [{"path": u.file_path, "content_type": u.mime or "application/pdf", "evidence_id": e.id}
+                        for e, u in upload_files(session, case)[0]]
     if action == "FIGHT":
         if "provide_evidence" in case.allowed_actions:
             ev_type = _requested_evidence_type(dispute.raw) or EVIDENCE_TYPE_BY_REASON.get(case.reason, "OTHER")
@@ -303,7 +349,16 @@ async def resolve(session: Session, dispute: Dispute, case: CaseFile, decision_i
         from app.troubleshooting.outcome import pdf_section
 
         ts = pdf_section(session, dispute.id)
-        pdf = build_evidence_pdf(pdf_path_for(decision.id), case, note.note, order=order, troubleshooting=ts)
+        files, left_out = upload_files(session, case)
+        pdf = build_evidence_pdf(pdf_path_for(decision.id), case, note.note, order=order, troubleshooting=ts,
+                                 attached=attached_labels(session, case))
+        if files or left_out:
+            log_step(session, dispute.id, AGENT,
+                     f"Attaching {len(files)} file(s) the merchant uploaded"
+                     + (f"; left out {len(left_out)} that don't fit PayPal's 50 MB per response: "
+                        + ", ".join(f"#{e.id}" for e, _ in left_out) if left_out else ""),
+                     {"decision_id": decision.id, "evidence_ids": [e.id for e, _ in files],
+                      "left_out": [e.id for e, _ in left_out]})
         log_step(session, dispute.id, AGENT,
                  f"Generated the evidence summary PDF ({pdf.stat().st_size // 1024} KB"
                  + (f"; with the buyer's troubleshooting record and {len(ts.images)} photo(s)" if ts else "") + ")",

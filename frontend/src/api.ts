@@ -165,6 +165,18 @@ export type Order = {
   shipments: Shipment[];
 };
 
+export type CoachItem = {
+  type: string; // one evidence type, or "a+b" for all missing required items together
+  required: boolean;
+  score_now: number;
+  score_after: number;
+  gain: number;
+  action_now: string;
+  action_after: string;
+  howto: string[];
+  assumption: string;
+};
+
 export type Checklist = {
   reason_label: string | null;
   supported: boolean;
@@ -173,7 +185,38 @@ export type Checklist = {
   red_flags: { code: string; description: string }[];
   baseline: string | null;
   baseline_why: string | null;
+  coach?: CoachItem[];
 };
+
+export type KeyFields = {
+  tracking_number: string;
+  carrier: string;
+  delivery_date: string;
+  delivered_to_address: string;
+  amount: string;
+  currency: string;
+};
+
+/** Phase 12: evidence the merchant added (PENDING until they confirm the fields). */
+export type MerchantUpload = {
+  id: number;
+  evidence_type: string;
+  status: "PENDING" | "CONFIRMED" | "DISCARDED";
+  kind: "file" | "fact";
+  original_name: string | null;
+  mime: string | null;
+  size: number | null;
+  fact: string | null;
+  extraction: { document_kind?: string; key_fields?: KeyFields; confidence?: string; skipped?: string; error?: string } | null;
+  fields: Record<string, string> | null;
+  flags: string[] | null;
+  summary: string | null;
+  created_at: string;
+  confirmed_at: string | null;
+};
+
+export type ConfirmBody = Partial<KeyFields> & { evidence_type?: string; document_kind?: string; note?: string };
+export type RunInfo = { started: boolean; run_key: string | null; message: string };
 
 export type EvidenceSource = { evidence_id: number; source: string; source_ref: string; title: string; origin: string; record: unknown };
 
@@ -185,6 +228,8 @@ export type DisputeDetail = {
   checklist: Checklist;
   decisions: Decision[];
   timeline: Step[];
+  uploads?: MerchantUpload[];
+  upload_types?: string[];
 };
 
 export type ApproveBody = { action?: "FIGHT" | "SETTLE"; note?: string; approved_by?: string };
@@ -202,6 +247,42 @@ export const disputesApi = {
   source: (evidenceId: number) => req<EvidenceSource>(`/api/evidence/${evidenceId}/source`),
   reanalyze: (id: string) =>
     req<{ queued: boolean; run_key: string }>(`/api/disputes/${encodeURIComponent(id)}/reanalyze`, { method: "POST" }),
+};
+
+// ---- Phase 12: merchant evidence uploads ---------------------------------------------------------
+
+const uploadsPath = (id: string) => `/api/disputes/${encodeURIComponent(id)}/uploads`;
+
+export const uploadsApi = {
+  /** multipart: evidence_type + file and/or fact (the browser sets the multipart boundary). */
+  create: async (id: string, evidenceType: string, file: File | null, fact: string): Promise<MerchantUpload> => {
+    const form = new FormData();
+    form.append("evidence_type", evidenceType);
+    if (file) form.append("file", file, file.name || "upload");
+    if (fact.trim()) form.append("fact", fact.trim());
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${uploadsPath(id)}`, {
+        method: "POST",
+        body: form,
+        headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {},
+      });
+    } catch {
+      throw new Error("Can't reach the DisputeShield server. Check your connection and try again.");
+    }
+    const body = await res.json().catch(() => null);
+    if (res.status === 401) {
+      goToLogin("Your session ended. Please log in again.");
+      throw new Error("401: login required");
+    }
+    if (!res.ok) throw new ApiError(errorText(body?.detail), res.status, body?.detail);
+    return body as MerchantUpload;
+  },
+  confirm: (id: string, uploadId: number, body: ConfirmBody) =>
+    req<{ upload: MerchantUpload; run: RunInfo }>(`${uploadsPath(id)}/${uploadId}/confirm`, { method: "POST", body: JSON.stringify(body) }),
+  remove: (id: string, uploadId: number) => req<RunInfo>(`${uploadsPath(id)}/${uploadId}`, { method: "DELETE" }),
+  fileUrl: (id: string, uploadId: number) =>
+    `${API_BASE}${uploadsPath(id)}/${uploadId}/file?token=${encodeURIComponent(getToken() ?? "")}`,
 };
 
 // ---- settings & live events --------------------------------------------------------------

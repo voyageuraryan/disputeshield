@@ -22,7 +22,7 @@ EvidenceType = Literal[
 class EvidenceItem(BaseModel):
     id: int
     type: EvidenceType
-    source: Literal["paypal", "store", "buyer_portal"]
+    source: Literal["paypal", "store", "buyer_portal", "merchant_upload"]
     source_ref: str  # e.g. "paypal:tracker/ABC123" or "store:order/42"
     summary: str
     flags: list[str] = []  # structured facts for the rules, e.g. "address_mismatch"

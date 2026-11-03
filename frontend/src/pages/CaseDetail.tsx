@@ -8,10 +8,13 @@ import {
   type DisputeDetail,
   type Evidence,
   type EvidenceSource,
+  type MerchantUpload,
+  type RunInfo,
   type TroubleshootingStatus,
   type TSProofView,
 } from "../api";
 import { ActionChip, addressLines, caseStatus, Chip, day, Due, fetchedAgo, fightRoute, label, money, sourceLabel, useNow, when, type Tone } from "../format";
+import { AddEvidenceForm, CoachPanel, ConfirmedUpload, ConfirmUpload } from "../evidence/AddEvidence";
 import ShippingPanel from "../ShippingPanel";
 import Timeline from "../Timeline";
 import { useDisputeEvents } from "../useDisputeEvents";
@@ -503,10 +506,66 @@ function SourceDialog({ ev, onClose }: { ev: Evidence; onClose: () => void }) {
   );
 }
 
-function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<number> }) {
+const sourceName = (s: string) => (s === "paypal" ? "PayPal" : s === "merchant_upload" ? "Your upload" : s === "buyer_portal" ? "Buyer" : "Store");
+
+/** Phase 12: evidence the merchant adds (pending confirmation and confirmed), plus the upload form. */
+function YourEvidence({ detail, addType, setAddType, canAdd, onDone }: {
+  detail: DisputeDetail;
+  addType: string | null;
+  setAddType: (t: string | null) => void;
+  canAdd: boolean;
+  onDone: () => void;
+}) {
+  const id = detail.dispute.paypal_dispute_id;
+  const types = detail.upload_types ?? [];
+  const uploads = detail.uploads ?? [];
+  const [fresh, setFresh] = useState<MerchantUpload[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
+  const pending = [...uploads, ...fresh.filter((f) => !uploads.some((u) => u.id === f.id))].filter((u) => u.status === "PENDING");
+  const confirmed = uploads.filter((u) => u.status === "CONFIRMED");
+  if (!addType && pending.length === 0 && confirmed.length === 0 && !notice) return null;
+  const done = (run: RunInfo | null) => {
+    setFresh([]);
+    setNotice(run ? run.message : null);
+    onDone();
+  };
+  return (
+    <Card title="Your evidence">
+      <div className="space-y-2">
+        {notice && <p className="rounded-md bg-indigo-50 p-2 text-xs text-indigo-900" role="status">{notice}</p>}
+        {pending.map((u) => (
+          <ConfirmUpload key={u.id} disputeId={id} upload={u} types={types} onDone={done} />
+        ))}
+        {confirmed.map((u) => (
+          <ConfirmedUpload key={u.id} disputeId={id} upload={u} onDone={done} />
+        ))}
+        {addType && canAdd && (
+          <AddEvidenceForm
+            key={addType}
+            disputeId={id}
+            types={types}
+            initialType={addType}
+            onCancel={() => setAddType(null)}
+            onUploaded={(u) => {
+              setFresh((f) => [...f, u]);
+              setAddType(null);
+              onDone();
+            }}
+          />
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function EvidencePanel({ detail, cited, onDone }: { detail: DisputeDetail; cited: Set<number>; onDone: () => void }) {
   const { checklist: cl, case: c } = detail;
   const [open, setOpen] = useState<Evidence | null>(null);
+  const [addType, setAddType] = useState<string | null>(null);
   const close = useCallback(() => setOpen(null), []);
+  const uploadable = new Set(detail.upload_types ?? []);
+  const canAdd = detail.dispute.status !== "RESOLVED" && !detail.decisions.some((x) => x.status === "APPROVED");
+  const coach = cl.coach ?? [];
   return (
     <div className="space-y-4">
       <Card title="Evidence checklist" right={cl.supported ? <span className="text-sm font-semibold">{Math.round(cl.rule_score * 100)}/100</span> : null}>
@@ -527,6 +586,15 @@ function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<nu
                   <span className="text-xs text-slate-400">{i.required ? "required" : "supporting"}</span>
                   {i.evidence_ids.length > 0 && <span className="ml-auto text-xs text-slate-400">#{i.evidence_ids.join(", #")}</span>}
                   {!i.present && i.required && <span className="ml-auto text-xs font-medium text-red-600">missing</span>}
+                  {!i.present && canAdd && uploadable.has(i.type) && (
+                    <button
+                      onClick={() => setAddType(i.type)}
+                      className={`${i.required ? "" : "ml-auto "}rounded border border-indigo-200 px-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50`}
+                      aria-label={`Add ${label(i.type)}`}
+                    >
+                      Add
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -543,6 +611,12 @@ function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<nu
           </>
         )}
       </Card>
+      <YourEvidence detail={detail} addType={addType} setAddType={setAddType} canAdd={canAdd} onDone={onDone} />
+      {cl.supported && coach.length > 0 && (
+        <Card title="What would win this?">
+          <CoachPanel items={coach} onAdd={setAddType} canAdd={canAdd} />
+        </Card>
+      )}
       <Card title={`Evidence (${c.evidence.length})`}>
         {c.evidence.length === 0 && <p className="text-sm text-slate-500">No evidence gathered yet.</p>}
         <ul className="space-y-2">
@@ -551,7 +625,7 @@ function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<nu
               <div className="mb-1 flex flex-wrap items-center gap-1.5">
                 <span className="font-semibold">#{e.id}</span>
                 <span className="font-medium">{label(e.type)}</span>
-                <Chip text={e.source === "paypal" ? "PayPal" : "Store"} />
+                <Chip text={sourceName(e.source)} />
                 {cited.has(e.id) && <Chip text="cited" tone="accent" />}
                 {e.flags
                   .filter((f) => f === "address_mismatch" || f === "tracker_cancelled")
@@ -561,7 +635,7 @@ function EvidencePanel({ detail, cited }: { detail: DisputeDetail; cited: Set<nu
               </div>
               <p className="text-slate-700">{e.summary}</p>
               <button onClick={() => setOpen(e)} className="mt-1 text-xs font-medium text-indigo-700 hover:underline">
-                View source ({e.source === "paypal" ? "PayPal record" : "store record"}) →
+                View source ({e.source === "paypal" ? "PayPal record" : e.source === "merchant_upload" ? "your upload" : "store record"}) →
               </button>
             </li>
           ))}
@@ -953,7 +1027,7 @@ export default function CaseDetail() {
           <Facts detail={detail} now={now} onDone={load} />
         </div>
         <div className="lg:col-span-5">
-          <EvidencePanel detail={detail} cited={cited} />
+          <EvidencePanel detail={detail} cited={cited} onDone={load} />
         </div>
         {/* On phones the recommendation comes first: it's what the merchant acts on. */}
         <div className="order-first space-y-4 lg:order-none lg:col-span-4">

@@ -16,12 +16,14 @@ from app.catalog import digital_only
 from app.api.decisions import DecisionOut, _out
 from app.agents.runner import run_agents
 from app.db import get_engine, get_session
-from app.models import (AgentStep, Decision, DecisionStatus, Dispute, EvidenceItemRow, Message, Order, Shipment,
-                        TroubleshootingSession)
+from app.models import (AgentStep, Decision, DecisionStatus, Dispute, EvidenceItemRow, MerchantUpload, Message, Order,
+                        Shipment, TroubleshootingSession, UploadStatus)
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
+from app.rules.coach import as_dicts as coach_dicts
+from app.rules.coach import coach
 from app.rules.evidence_rules import RULES, economic_baseline, evaluate, red_flag_description
 from app.merchant import settle_threshold
 from app.schemas import CaseFile
@@ -102,6 +104,7 @@ class Checklist(BaseModel):
     red_flags: list[dict]  # {"code", "description"}
     baseline: str | None
     baseline_why: str | None
+    coach: list[dict] = []   # Phase 12: "What would win this?" (rules/coach.py)
 
 
 class DisputeDetail(BaseModel):
@@ -112,6 +115,8 @@ class DisputeDetail(BaseModel):
     checklist: Checklist
     decisions: list[DecisionOut]
     timeline: list[StepOut]
+    uploads: list[dict] = []          # Phase 12: the merchant's uploads (pending and confirmed)
+    upload_types: list[str] = []      # evidence types the merchant can add
 
 
 def _latest(session: Session, dispute_id: int) -> Decision | None:
@@ -152,7 +157,7 @@ def order_out(session: Session, o: Order) -> OrderOut:
                     shipments=[ShipmentOut(**s.model_dump(include=set(ShipmentOut.model_fields))) for s in ships])
 
 
-def _checklist(case: CaseFile, threshold) -> Checklist:
+def _checklist(case: CaseFile, threshold, carrier: str | None = None) -> Checklist:
     result = evaluate(case)
     rule = RULES.get(case.reason)
     by_type: dict[str, list[int]] = {}
@@ -169,7 +174,8 @@ def _checklist(case: CaseFile, threshold) -> Checklist:
     return Checklist(reason_label=rule.label if rule else None, supported=result.reason_supported,
                      rule_score=result.rule_score, items=items,
                      red_flags=[{"code": c, "description": red_flag_description(case.reason, c)} for c in result.red_flags],
-                     baseline=base.action if base else None, baseline_why=base.why if base else None)
+                     baseline=base.action if base else None, baseline_why=base.why if base else None,
+                     coach=coach_dicts(coach(case, threshold, carrier=carrier)))
 
 
 class ReanalyzeOut(BaseModel):
@@ -183,23 +189,35 @@ def reanalyze(dispute_id: str, background: BackgroundTasks, session: Session = D
     """Run the agents again on the current evidence and settings (e.g. after changing the settle threshold).
     The new proposal supersedes the old PROPOSED one; nothing is sent to PayPal without approval."""
     d = _find(session, dispute_id)
+    key = start_fresh_run(session, d, background, engine, "Asked the agents to re-analyse the case")
+    return ReanalyzeOut(queued=True, run_key=key)
+
+
+def check_can_change(session: Session, d: Dispute) -> None:
+    """409 when the case can't take new analysis or evidence (resolved, or a response is being sent)."""
     if d.status == "RESOLVED":
         raise HTTPException(409, "the dispute is resolved; there is nothing to analyse")
     pending = session.exec(select(Decision).where(Decision.dispute_id == d.id,
                                                   Decision.status == DecisionStatus.APPROVED)).first()
     if pending:
         raise HTTPException(409, f"decision #{pending.id} is being sent to PayPal; wait for it to finish")
+
+
+def start_fresh_run(session: Session, d: Dispute, background: BackgroundTasks, engine: Engine, why: str) -> str:
+    """Queue a fresh agent run (Phase 11: re-fetches everything); its proposal supersedes the PROPOSED one.
+    409 if the case can't change or a run is already going."""
+    check_can_change(session, d)
     from app.agents import runner
 
     # Phase 11: one run at a time (double clicks, a webhook run already going): claimed before it's scheduled
     if runner.in_progress(session, d.id) or not runner.claim(d.id):
         raise HTTPException(409, "The agents are already analysing this case; wait for that run to finish.")
     key = f"run:{d.paypal_dispute_id}:manual:{datetime.now(timezone.utc).isoformat()}"
-    session.add(AgentStep(dispute_id=d.id, agent="merchant", action="Asked the agents to re-analyse the case"))
+    session.add(AgentStep(dispute_id=d.id, agent="merchant", action=why))
     session.commit()
     # fresh: everything is fetched from PayPal now, even if a webhook fetched it seconds ago
     background.add_task(run_agents, d.id, key, engine, fresh=True, claimed=True)
-    return ReanalyzeOut(queued=True, run_key=key)
+    return key
 
 
 @router.get("/api/disputes", response_model=list[DisputeRow])
@@ -214,13 +232,25 @@ def list_disputes(session: Session = Depends(get_session)) -> list[DisputeRow]:
 @router.get("/api/disputes/{dispute_id}", response_model=DisputeDetail)
 def get_dispute_detail(dispute_id: str, session: Session = Depends(get_session)) -> DisputeDetail:
     d = _find(session, dispute_id)
+    # first: on a fresh database this creates the settings row and commits, which would expire rows loaded before it
+    threshold = settle_threshold(session)
     case = build_case_file(session, d)
     decisions = session.exec(select(Decision).where(Decision.dispute_id == d.id).order_by(Decision.id.desc())).all()
     steps = session.exec(select(AgentStep).where(AgentStep.dispute_id == d.id).order_by(AgentStep.id)).all()
-    return DisputeDetail(settle_threshold=settle_threshold(session),
+    from app.api.uploads import upload_out
+    from app.merchant_uploads import UPLOAD_TYPES
+
+    ship = session.exec(select(Shipment).where(Shipment.order_id == d.order_id, Shipment.carrier.is_not(None))
+                        ).first() if d.order_id else None
+    ups = session.exec(select(MerchantUpload).where(MerchantUpload.dispute_id == d.id,
+                                                    MerchantUpload.status != UploadStatus.DISCARDED)
+                       .order_by(MerchantUpload.id)).all()
+    return DisputeDetail(settle_threshold=threshold,
                          dispute=_row(session, d), order=_order(session, d.order_id), case=case,
-                         checklist=_checklist(case, settle_threshold(session)), decisions=[_out(x, session) for x in decisions],
-                         timeline=[StepOut(**s.model_dump(include=set(StepOut.model_fields))) for s in steps])
+                         checklist=_checklist(case, threshold, ship.carrier if ship else None),
+                         decisions=[_out(x, session) for x in decisions],
+                         timeline=[StepOut(**s.model_dump(include=set(StepOut.model_fields))) for s in steps],
+                         uploads=[upload_out(u).model_dump(mode="json") for u in ups], upload_types=list(UPLOAD_TYPES))
 
 
 # Served at the spec's path (/disputes/...) and under /api for the frontend's Vite proxy.
@@ -296,6 +326,13 @@ async def evidence_source(evidence_id: int, session: Session = Depends(get_sessi
                               for s in steps],
                     "proofs": [{"id": p.id, "step_id": p.step_id, "mime": p.mime, "size": p.size,
                                 "checks": p.checks, "advisory_photo_check": p.vision_verdict} for p in proofs]})
+        if kind == "upload" and parts[0].isdigit():  # Phase 12: what the merchant uploaded and confirmed
+            up = session.get(MerchantUpload, int(parts[0]))
+            if up is not None and up.dispute_id == ev.dispute_id:
+                return out(f"Your upload #{up.id}", "Added by you", {
+                    "evidence_type": up.evidence_type, "file": up.original_name, "mime": up.mime, "size": up.size,
+                    "fact": up.fact, "confirmed_fields": up.fields, "flags": up.flags,
+                    "read_automatically": up.extraction, "confirmed_at": up.confirmed_at and up.confirmed_at.isoformat()})
         if kind == "paypal":
             if parts[0] == "capture":
                 return out(f"PayPal capture {parts[1]}", "PayPal (live)", await get_capture(parts[1], client=paypal))

@@ -1,5 +1,6 @@
 """Merchant UI scenarios in a real browser (see README). Nothing is ever sent to PayPal."""
 
+import base64
 import re
 import time
 
@@ -552,3 +553,50 @@ def test_reply_as_seller_reaches_the_buyer_live(stack, page, browser):
     # (the panel refreshes by itself every few seconds while the buyer's page is open)
     buyer.close()
     assert real_errors(page) == []
+
+
+# ---- Phase 12: the merchant adds missing evidence -----------------------------------------------------------
+
+PNG_1PX = base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=")
+
+
+def test_add_missing_evidence_and_confirm(stack, page):
+    """Coach -> Add -> upload a file -> check fields -> confirm. A run 'in progress' is simulated so nothing starts
+    (a run would fetch the dispute from PayPal); the evidence is saved and the merchant is told to re-analyse."""
+    from datetime import datetime, timezone
+
+    b = did(stack, "PP-DEMO-B")
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S.%f")
+    stack.sql("insert into agent_steps (dispute_id, agent, action, created_at) values (?, 'orchestrator', "
+              "'run_started', ?)", b, now)
+    try:
+        page.goto(f"{stack.base}/cases/PP-DEMO-B")
+        coach = page.locator("[data-testid=coach]")
+        coach.wait_for()
+        assert "→ score" in coach.inner_text()
+        page.get_by_role("button", name="Add Refund policy").first.click()
+        form = page.get_by_role("form", name="Add evidence")
+        assert form.locator("select").input_value() == "refund_policy"
+
+        # client-side check: a .txt is refused before anything is sent
+        form.locator("input[type=file]").set_input_files({"name": "notes.txt", "mimeType": "text/plain",
+                                                          "buffer": b"hello"})
+        form.get_by_role("button", name="Upload").click()
+        page.wait_for_selector("text=Only PDF, JPG or PNG files")
+
+        form.locator("input[type=file]").set_input_files({"name": "policy.png", "mimeType": "image/png",
+                                                          "buffer": PNG_1PX})
+        form.get_by_role("button", name="Upload").click()
+        card = page.locator("[data-testid^=confirm-]")
+        card.wait_for()
+        assert "automatic reading is off" in card.inner_text().lower()  # e2e has no Gemini key: merchant fills in
+        assert stack.sql("select status from merchant_uploads where dispute_id=?", b) == [("PENDING",)]
+        card.locator("input").first.fill("Store return policy screenshot")
+        card.get_by_role("button", name="Confirm and add as evidence").click()
+        page.wait_for_selector("text=already analysing this case")
+        page.wait_for_selector("button:has-text('Remove')")
+        row = stack.sql("select status, summary from merchant_uploads where dispute_id=?", b)[0]
+        assert row[0] == "CONFIRMED" and row[1].startswith("Merchant-provided Store return policy screenshot")
+        assert not real_errors(page)
+    finally:
+        stack.sql("delete from agent_steps where dispute_id=? and action='run_started' and created_at=?", b, now)
