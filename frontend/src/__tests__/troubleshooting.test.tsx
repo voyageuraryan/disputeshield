@@ -363,6 +363,22 @@ describe("case page troubleshooting card", () => {
     expect(el.textContent).toContain("AI look (advisory only): shows the step = no");
   });
 
+  it("a file deleted under the retention policy shows the reason instead of checks", async () => {
+    replies["GET /api/disputes/PP-1/troubleshooting"] = [{
+      status: 200,
+      body: {
+        ...ELIGIBLE, session: { ...BRIEF, status: "DEFECT_CONFIRMED" }, steps: [{ ...STEP, status: "DONE_NOT_FIXED", proofs: 1 }],
+        messages: [],
+        proofs: [{ id: 8, step_id: 31, mime: "image/jpeg", size: 10, created_at: "x",
+                   checks: { detected_type: "JPEG", purged_at: "2027-02-01T00:00:00Z", purged_reason: "deleted 90 days after the dispute was resolved (retention policy)" } }],
+      },
+    }];
+    await act(async () => root.render(<TroubleshootingCard detail={detail()} />));
+    await flush();
+    expect(el.textContent).toContain("File deleted: deleted 90 days after the dispute was resolved (retention policy).");
+    expect(el.textContent).not.toContain("JPEG");
+  });
+
   it("reply as seller: sends into the buyer chat, shows the pause, and can let the assistant continue", async () => {
     const running = { ...ELIGIBLE, session: { ...BRIEF, status: "ACTIVE" }, steps: [STEP], messages: [OPENER] };
     replies["GET /api/disputes/PP-1/troubleshooting"] = [{ status: 200, body: running }];

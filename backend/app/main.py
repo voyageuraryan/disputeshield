@@ -32,6 +32,9 @@ async def lifespan(app: FastAPI):
     from app.troubleshooting import outcome
 
     outcome.install(asyncio.get_running_loop())  # 9D: a finished buyer session starts a new analysis
+    from app.troubleshooting.retention import retention_loop
+
+    retention = asyncio.create_task(retention_loop(engine), name="proof-retention")  # G44
     poller = None
     if s.poll_disputes and s.paypal_client_id and s.paypal_client_secret.get_secret_value():
         from app.scripts.poll_disputes import poll_forever
@@ -44,6 +47,9 @@ async def lifespan(app: FastAPI):
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await poller
+    retention.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await retention
     outcome.set_scheduler(None)
     await close_paypal_client()
 

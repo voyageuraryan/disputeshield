@@ -72,6 +72,8 @@ class Settings(BaseSettings):
     proof_image_max_bytes: int = 10 * 1024 * 1024
     proof_video_max_bytes: int = 50 * 1024 * 1024
     proof_video_max_seconds: int = 30
+    # G44: delete buyer proof files this many days after the dispute is resolved (0 = keep them).
+    proof_retention_days: int = 90
     # Advisory Gemini look at each proof photo (shown to the merchant, never decides anything). Off by default:
     # on Gemini's free tier, inputs may be read by human reviewers and Google asks not to send personal
     # information, and buyer photos can show people or homes. Turn on with a paid key or the buyer's consent.

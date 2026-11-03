@@ -294,6 +294,8 @@ export type TSProofChecks = {
   near_duplicates?: { proof_id: number; distance: number; step?: number; case?: string }[];
   evidence_ready?: boolean;
   evidence_copy?: string;
+  purged_at?: string; // G44: file deleted under the retention policy (the record stays)
+  purged_reason?: string;
 };
 export type TSProofView = {
   id: number;
@@ -513,5 +515,8 @@ export const helpApi = {
     if (!res.ok) throw new ApiError("couldn't load the file", res.status, null);
     return res.blob();
   },
+  /** G44: the buyer removes their own upload while the page is open. */
+  deleteProof: (sessionId: string, token: string, proofId: number) =>
+    helpReq(sessionId, token, `/proofs/${proofId}`, { method: "DELETE" }),
   stream: helpStream,
 };

@@ -298,9 +298,9 @@ G42 [ ] P3 Citations are checked for existence, not relevance: live, "E5" also m
         (carexpert, drive.com.au stored as sources) and a proof step cited a "no recall found" page.
 G43 [~] P3 (9D: app-wide toast "Buyer finished troubleshooting" + queue badge + re-analysis to GATHER_MORE with
         "safety issue: review personally".) Still no email/push when the app isn't open.
-G44 [~] P3 (9C: EXIF time, GPS stripping, sha256 + perceptual-hash duplicate checks and the advisory vision
-        check are done.) Still open: proof files are kept indefinitely under ARTIFACTS_DIR/ts/ (no retention or
-        deletion when the dispute closes), and the buyer can't delete an upload they regret.
+G44 [x] (9C checks + 2026-11-03) Proof files are deleted PROOF_RETENTION_DAYS (90) after the dispute is resolved
+        (every 6 h in the app, or app/scripts/purge_proofs.py; record + checks kept, file endpoints answer 410),
+        and the buyer can delete their own upload while the page is open (step goes back to awaiting proof).
 G45 [x] Latent llm.py bug found live: strict_json_schema deleted fields named "title" but still required them,
         so Groq and Gemini rejected every troubleshooting plan -> fixed + regression test.
 G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test would have spent real quota) ->
@@ -325,8 +325,8 @@ G91 [x] Unjustified-move retries only said what was wrong; at temperature 0 the 
 G92 [ ] P2 10C live run pending: the research fixture must be recorded from real search (`python -m
         evals.record_research`) and the 14 conversations run (`scripts/run_evals.sh --only conv- --merge`) once the
         Gemini and Groq quotas reset; the harness is verified offline only.
-G93 [ ] P3 Fixed-text replies (step buttons, confirm, handoff, defect) exist in English and Spanish only, so a Hindi
-        buyer gets English for those (G49); conv-hindi-buyer's ConversationRules check will show it.
+G93 [x] Fixed-text replies (13 tables) now in en/es/fr/de/pt/hi with matching placeholders, proof kinds translated,
+        and regional codes (es-MX, pt-BR) fall back to their base language (they used to get English).
 G94 [x] The decision-golden builder deleted every *.json in goldens/ before regenerating (it would have wiped
         troubleshooting.json) and the loader read it as a decision golden -> both skip it.
 G75 [ ] (update) After the directional fix ts-defect gave GATHER_MORE once and FIGHT once (before temperature 0);
@@ -844,3 +844,14 @@ for the Gemini + Groq quotas (G92).
 - Tests: backend 560 (+21: tests/test_eval_troubleshooting.py incl. a real ConversationSimulator run with a scripted
   buyer, metric good/bad with the scripted judge, a check that Grounding's judge sees the plan; analyst/llm tests).
 - The committed eval report is still the 10B one (consistent); today's partial merges were not kept.
+
+## 2026-11-03 (later) — leftovers without API quota
+
+- The user offered three more Gemini API keys to use in parallel. Declined: Google's APIs Terms of Service §2(d)
+  ("You agree to, and will not attempt to circumvent, such limitations") rules out spreading one app across free
+  keys to get past the per-project quota; the keys were not stored anywhere. Options: Gemini paid tier on one key,
+  or keep spreading runs over days (everything is cached).
+- Quota status: Groq TPD still full (198,925/200,000, rolling); Gemini 2.5-flash and 3.8-flash daily quota used up;
+  3.5-flash-lite answers but grounded search (research fixture) also 429. G74 final check, G92 and G86 wait.
+- Fixed offline: G93 (fixed replies in 6 languages, regional fallback), G44 (retention + buyer delete, with UI).
+- Tests: backend 579, frontend 106, e2e 29.

@@ -190,3 +190,34 @@ describe("step card", () => {
     expect(el.textContent).toContain("Uploaded ✓ (2)");
   });
 });
+
+describe("deleting an upload (G44)", () => {
+  it("asks first, then deletes with the link headers and passes the fresh session up", async () => {
+    const calls: { url: string; init?: RequestInit }[] = [];
+    vi.stubGlobal("fetch", vi.fn(async (url: string, init?: RequestInit) => {
+      calls.push({ url, init });
+      if (init?.method === "DELETE") return new Response(JSON.stringify({ id: 5, steps: [], messages: [] }), { status: 200 });
+      return new Response(new Blob(["x"], { type: "image/jpeg" }));
+    }));
+    const onChanged = vi.fn();
+    render({ onChanged }, { proofs: 1, proof_files: [{ id: 3, kind: "image" }] });
+    await flush();
+    const del = el.querySelector('[aria-label="Delete this photo"]') as HTMLButtonElement;
+    vi.stubGlobal("confirm", () => false);
+    await act(async () => del.click());
+    expect(calls.some((c) => c.init?.method === "DELETE")).toBe(false);
+    vi.stubGlobal("confirm", () => true);
+    await act(async () => del.click());
+    await flush();
+    const d = calls.find((c) => c.init?.method === "DELETE")!;
+    expect(d.url).toBe("/api/help/5/proofs/3");
+    expect((d.init!.headers as Record<string, string>)["X-Help-Token"]).toBe("tok");
+    expect(onChanged).toHaveBeenCalledWith(expect.objectContaining({ id: 5 }));
+  });
+
+  it("no delete button when the page has ended (no onChanged)", async () => {
+    render({}, { proofs: 1, proof_files: [{ id: 3, kind: "image" }] });
+    await flush();
+    expect(el.querySelector('[aria-label="Delete this photo"]')).toBeNull();
+  });
+});

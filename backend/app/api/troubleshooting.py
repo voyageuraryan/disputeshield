@@ -290,7 +290,11 @@ def proof_file(dispute_id: str, proof_id: int, session: Session = Depends(get_se
     d = _find(session, dispute_id)
     proof = session.get(TSProof, proof_id)
     row = session.get(TroubleshootingSession, proof.session_id) if proof else None
-    if proof is None or row is None or row.dispute_id != d.id or not Path(proof.file_path).is_file():
+    if proof is None or row is None or row.dispute_id != d.id:
+        raise HTTPException(404, "unknown proof")
+    if (proof.checks or {}).get("purged_at"):
+        raise HTTPException(410, f"This file was {proof.checks.get('purged_reason', 'deleted')}.")
+    if not proof.file_path or not Path(proof.file_path).is_file():
         raise HTTPException(404, "unknown proof")
     return FileResponse(proof.file_path, media_type=proof.mime,
                         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
@@ -602,10 +606,25 @@ def buyer_proof_file(proof_id: int, row: TroubleshootingSession = Depends(buyer_
                      session: Session = Depends(get_session)) -> FileResponse:
     """The buyer's own upload (thumbnail/preview). Another session's proof id is simply 'not found'."""
     proof = session.get(TSProof, proof_id)
-    if proof is None or proof.session_id != row.id or not Path(proof.file_path).is_file():
+    if proof is None or proof.session_id != row.id or not proof.file_path or not Path(proof.file_path).is_file():
         raise HTTPException(404, "unknown file")
     return FileResponse(proof.file_path, media_type=proof.mime,
                         headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+
+
+@buyer_router.delete("/{session_id}/proofs/{proof_id}", response_model=BuyerSessionOut)
+def buyer_delete_proof(proof_id: int, row: TroubleshootingSession = Depends(buyer_device),
+                       session: Session = Depends(get_session)) -> BuyerSessionOut:
+    """G44: the buyer removes their own upload while the page is open (file and record)."""
+    from app.troubleshooting.retention import DeleteRefused, buyer_delete
+
+    try:
+        buyer_delete(session, row, proof_id)
+    except LookupError as exc:
+        raise HTTPException(404, "unknown file") from exc
+    except DeleteRefused as exc:
+        raise HTTPException(409, str(exc)) from exc
+    return _view(session, row)
 
 
 # ---- buyer live updates (SSE) ---------------------------------------------------------------------------

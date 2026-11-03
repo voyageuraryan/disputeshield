@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ApiError, helpApi, type ProofUpload, type StepAnswer, type TSSourceView, type TSStepView } from "../api";
+import { ApiError, helpApi, type BuyerSession, type ProofUpload, type StepAnswer, type TSSourceView, type TSStepView } from "../api";
 import { STEP_STATUS_LABEL, VIDEO_MAX_SECONDS, checkFile, domainOf, stepActions } from "./logic";
 
 export const btn =
@@ -24,9 +24,10 @@ export type StepCardProps = {
   token: string;
   onAnswer: (status: StepAnswer, note: string) => void;
   onUploaded: (r: ProofUpload) => void;
+  onChanged?: (s: BuyerSession) => void; // after the buyer deletes an upload
 };
 
-export function StepCard({ step: s, sources, open, busy, current, sessionId, token, onAnswer, onUploaded }: StepCardProps) {
+export function StepCard({ step: s, sources, open, busy, current, sessionId, token, onAnswer, onUploaded, onChanged }: StepCardProps) {
   const a = stepActions(s, open, busy);
   const [note, setNote] = useState("");
   const [showNote, setShowNote] = useState(false);
@@ -79,7 +80,9 @@ export function StepCard({ step: s, sources, open, busy, current, sessionId, tok
       )}
       {s.buyer_note && <p className="mt-2 text-sm text-slate-600">Your note: {s.buyer_note}</p>}
 
-      {a.canUpload && <UploadArea step={s} kind={kind} sessionId={sessionId} token={token} highlight={a.needsProofNow} onUploaded={onUploaded} />}
+      {a.canUpload && (
+        <UploadArea step={s} kind={kind} sessionId={sessionId} token={token} highlight={a.needsProofNow} onUploaded={onUploaded} onChanged={onChanged} />
+      )}
 
       {a.canAnswer && (
         <div className="mt-4 space-y-2">
@@ -150,6 +153,7 @@ export function UploadArea({
   token,
   highlight,
   onUploaded,
+  onChanged,
 }: {
   step: TSStepView;
   kind: string;
@@ -157,6 +161,7 @@ export function UploadArea({
   token: string;
   highlight: boolean;
   onUploaded: (r: ProofUpload) => void;
+  onChanged?: (s: BuyerSession) => void;
 }) {
   const [up, setUp] = useState<UploadState | null>(null);
   const live = useRef<string | null>(null);
@@ -212,7 +217,7 @@ export function UploadArea({
       {(step.proof_files?.length ?? 0) > 0 && (
         <ul className="mt-3 flex flex-wrap gap-2" aria-label="Your uploads for this step">
           {step.proof_files!.map((f) => (
-            <ProofThumb key={f.id} sessionId={sessionId} token={token} proofId={f.id} video={f.kind === "video"} />
+            <ProofThumb key={f.id} sessionId={sessionId} token={token} proofId={f.id} video={f.kind === "video"} onChanged={onChanged} />
           ))}
         </ul>
       )}
@@ -250,8 +255,29 @@ export function UploadArea({
 
 /** A photo thumbnail is fetched with the link headers (an <img> can't send them); videos (up to 50 MB) are
  * shown as a tile instead of being downloaded again just for a preview. */
-function ProofThumb({ sessionId, token, proofId, video }: { sessionId: string; token: string; proofId: number; video: boolean }) {
+function ProofThumb({
+  sessionId,
+  token,
+  proofId,
+  video,
+  onChanged,
+}: {
+  sessionId: string;
+  token: string;
+  proofId: number;
+  video: boolean;
+  onChanged?: (s: BuyerSession) => void;
+}) {
   const [src, setSrc] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const remove = async () => {
+    if (!window.confirm(`Delete this ${video ? "video" : "photo"}? It can't be undone.`)) return;
+    try {
+      onChanged?.(await helpApi.deleteProof(sessionId, token, proofId));
+    } catch (e) {
+      setErr((e as Error).message.replace(/^\d+: /, ""));
+    }
+  };
   useEffect(() => {
     if (video) return;
     let url: string | null = null;
@@ -270,13 +296,28 @@ function ProofThumb({ sessionId, token, proofId, video }: { sessionId: string; t
     };
   }, [sessionId, token, proofId, video]);
   return (
-    <li className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-slate-200">
+    <li className="relative flex h-16 w-16 items-center justify-center overflow-hidden rounded-md bg-slate-200">
       {video ? (
         <span role="img" aria-label="Your video" className="text-2xl">🎬</span>
       ) : src ? (
         <img src={src} alt="Your photo" className="h-full w-full object-cover" />
       ) : (
         <span className="sr-only">Your photo</span>
+      )}
+      {onChanged && (
+        <button
+          type="button"
+          onClick={remove}
+          aria-label={`Delete this ${video ? "video" : "photo"}`}
+          className="absolute right-0.5 top-0.5 flex h-6 w-6 items-center justify-center rounded-full bg-white/90 text-sm font-semibold text-slate-800 shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-600"
+        >
+          ×
+        </button>
+      )}
+      {err && (
+        <span role="alert" className="sr-only">
+          {err}
+        </span>
       )}
     </li>
   );

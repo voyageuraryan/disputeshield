@@ -247,6 +247,7 @@ export default function Help() {
             token={token}
             onAnswer={(status, note) => answer(s.id, status, note)}
             onUploaded={uploaded}
+            onChanged={open ? apply : undefined}
           />
         ))}
       </ol>

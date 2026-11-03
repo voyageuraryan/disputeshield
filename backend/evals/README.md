@@ -77,6 +77,8 @@ scripts/run_evals.sh --no-judge           # deterministic metrics only
 9. **LangGraph CallbackHandler** isn't usable with deepeval 4.3.2 on our graph (G70): our own root spans are used.
 10. **CI needs a GitHub remote + the two secrets**; nothing runs until the repo is pushed (your call). The e2e
     Playwright suite isn't in CI (it needs browsers and a dev stack).
+16. **Fixed-text replies** now exist in English, Spanish, French, German, Portuguese and Hindi; other languages
+    (e.g. Tamil, Italian) still get English for them, and the page's buttons are English (G49).
 12. **Conversations need three quotas at once**: the agent (Groq), the simulated buyer and the judge (Gemini).
     A 12-conversation run is roughly 90 agent calls (more than Groq's free daily tokens) plus ~250 Gemini calls;
     run it over several days with `--only conv- --merge` (everything is cached). As of 2026-11-03 the research

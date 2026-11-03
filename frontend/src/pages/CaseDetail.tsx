@@ -118,6 +118,9 @@ const STEP_DONE: Record<string, string> = {
 export function ProofFlags({ p }: { p: TSProofView }) {
   const c = p.checks ?? {};
   const v = p.vision_verdict;
+  if (c.purged_at) {
+    return <span className="block text-xs text-slate-500">File deleted: {c.purged_reason ?? "retention policy"}.</span>;
+  }
   const warn: string[] = [];
   if (c.taken_after_dispute === "no") warn.push("taken before the dispute was opened");
   if (c.reused_from_other_cases?.length) warn.push(`same file as case ${c.reused_from_other_cases.join(", ")}`);

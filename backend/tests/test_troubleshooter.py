@@ -682,3 +682,30 @@ def test_buyer_portal_url_used_for_links(monkeypatch):
         assert build_link(3, "tok") == "https://buyer-words.trycloudflare.com/help/3?t=tok"
     finally:
         get_settings.cache_clear()
+
+
+# ---- G93 / G49: fixed-text replies in every supported language ---------------------------------------------------
+
+FIXED_TABLES = ("TROUBLE_REPLY", "HANDOFF_REPLY", "FIXED_CONFIRMED_REPLY", "NOT_FIXED_REPLY", "DECLINED_REPLY",
+                "DEFECT_REPLY", "LLM_DOWN_INTRO", "NEXT_STEP_REPLY", "ASK_PROOF_REPLY", "ALL_TRIED_REPLY",
+                "GOT_PROOF_REPLY", "CONFIRM_ASK_REPLY", "NEUTRAL_REPLY")
+
+
+@pytest.mark.parametrize("name", FIXED_TABLES)
+def test_fixed_replies_cover_every_supported_language_with_the_same_placeholders(name):
+    import string
+
+    table = getattr(T, name)
+    fields = lambda s: sorted(f for _, f, _, _ in string.Formatter().parse(s) if f)  # noqa: E731
+    for lang in ("en", "es", "fr", "de", "pt", "hi"):
+        assert lang in table, (name, lang)
+        assert fields(table[lang]) == fields(table["en"]), (name, lang)
+    assert all(T.detect_language(table["hi"].format(n=2, title="x", kind="y")) == "hi" for _ in [0])
+
+
+def test_regional_codes_fall_back_to_the_base_language_and_kinds_are_translated():
+    assert T._t(T.NEXT_STEP_REPLY, "pt-BR") == T.NEXT_STEP_REPLY["pt"]
+    assert T._t(T.NEXT_STEP_REPLY, "es-MX") == T.NEXT_STEP_REPLY["es"]
+    assert T._t(T.NEXT_STEP_REPLY, "it") == T.NEXT_STEP_REPLY["en"]  # not translated yet: English
+    step = T.TSStep(session_id=1, ordinal=1, title="t", instruction="i", proof_kind="video")
+    assert T._kind(step, "hi") == "वीडियो" and T._kind(step, "de") == "Video" and T._kind(step, "en") == "video"

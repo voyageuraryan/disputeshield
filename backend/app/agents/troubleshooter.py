@@ -283,58 +283,112 @@ NEUTRAL_REPLY = {
 TROUBLE_REPLY = {
     "en": "Sorry, I'm having trouble answering right now. Please try again in a minute, or tap \"Talk to the seller\".",
     "es": "Lo siento, ahora mismo no puedo responder. Inténtelo de nuevo en un minuto o pulse \"Hablar con el vendedor\".",
+    "fr": "Désolé, je n'arrive pas à répondre pour le moment. Réessayez dans une minute ou appuyez sur « Talk to the seller ».",
+    "de": "Entschuldigung, ich kann gerade nicht antworten. Bitte versuchen Sie es in einer Minute erneut oder tippen Sie auf „Talk to the seller“.",
+    "pt": 'Desculpe, não consigo responder agora. Tente novamente daqui a um minuto ou toque em "Talk to the seller".',
+    "hi": 'क्षमा करें, मैं अभी जवाब नहीं दे पा रहा हूँ। कृपया एक मिनट बाद फिर कोशिश करें या "Talk to the seller" पर टैप करें।',
 }
 HANDOFF_REPLY = {
     "en": "I've passed this to the seller with everything you've told me so far. They'll reply to you directly.",
     "es": "He pasado esto al vendedor con todo lo que me ha contado. Le responderá directamente.",
+    "fr": "J'ai transmis votre demande au vendeur avec tout ce que vous m'avez dit. Il vous répondra directement.",
+    "de": "Ich habe alles, was Sie mir gesagt haben, an den Verkäufer weitergegeben. Er antwortet Ihnen direkt.",
+    "pt": "Passei isto ao vendedor com tudo o que me disse. Ele vai responder-lhe diretamente.",
+    "hi": "आपने जो कुछ बताया है, वह सब मैंने विक्रेता को भेज दिया है। वे सीधे आपसे संपर्क करेंगे।",
 }
 FIXED_CONFIRMED_REPLY = {
     "en": "Great, glad it's working! Thanks for trying the steps. You can close this page.",
     "es": "¡Genial, me alegra que funcione! Gracias por probar los pasos. Ya puede cerrar esta página.",
+    "fr": "Parfait, ravi que cela fonctionne ! Merci d'avoir suivi les étapes. Vous pouvez fermer cette page.",
+    "de": "Super, schön dass es funktioniert! Danke, dass Sie die Schritte ausprobiert haben. Sie können diese Seite schließen.",
+    "pt": "Ótimo, fico contente que esteja a funcionar! Obrigado por seguir os passos. Pode fechar esta página.",
+    "hi": "बहुत बढ़िया, खुशी है कि यह काम कर रहा है! कदम आज़माने के लिए धन्यवाद। आप यह पेज बंद कर सकते हैं।",
 }
 NOT_FIXED_REPLY = {
     "en": "Thanks for checking. Let's continue with the steps that are left.",
     "es": "Gracias por comprobarlo. Sigamos con los pasos que quedan.",
+    "fr": "Merci d'avoir vérifié. Continuons avec les étapes restantes.",
+    "de": "Danke fürs Prüfen. Machen wir mit den restlichen Schritten weiter.",
+    "pt": "Obrigado por verificar. Vamos continuar com os passos que faltam.",
+    "hi": "जाँचने के लिए धन्यवाद। आइए बाकी कदमों के साथ आगे बढ़ें।",
 }
 DECLINED_REPLY = {
     "en": "Understood, we'll stop here. The seller can see what you've told me so far.",
     "es": "Entendido, lo dejamos aquí. El vendedor puede ver lo que me ha contado.",
+    "fr": "Compris, nous nous arrêtons ici. Le vendeur peut voir ce que vous m'avez dit.",
+    "de": "Verstanden, wir hören hier auf. Der Verkäufer kann sehen, was Sie mir bisher gesagt haben.",
+    "pt": "Entendido, ficamos por aqui. O vendedor pode ver o que me disse até agora.",
+    "hi": "समझ गया, हम यहीं रुकते हैं। आपने अब तक जो बताया है, वह विक्रेता देख सकते हैं।",
 }
 DEFECT_REPLY = {
     "en": ("Thank you. You've tried every step and the problem is still there, and your photos/videos show it. "
            "I've passed everything to the seller, who will decide what happens next and contact you."),
     "es": ("Gracias. Ha probado todos los pasos y el problema sigue, y sus fotos o vídeos lo muestran. "
            "He pasado todo al vendedor, que decidirá los siguientes pasos y se pondrá en contacto con usted."),
+    "fr": "Merci. Vous avez essayé toutes les étapes, le problème persiste et vos photos/vidéos le montrent. J'ai tout transmis au vendeur, qui décidera de la suite et vous contactera.",
+    "de": "Danke. Sie haben jeden Schritt ausprobiert, das Problem besteht weiter, und Ihre Fotos/Videos zeigen es. Ich habe alles an den Verkäufer weitergegeben; er entscheidet über das Weitere und meldet sich bei Ihnen.",
+    "pt": "Obrigado. Experimentou todos os passos, o problema continua e as suas fotos/vídeos mostram-no. Passei tudo ao vendedor, que vai decidir o que acontece a seguir e entrar em contacto consigo.",
+    "hi": "धन्यवाद। आपने हर कदम आज़माया, समस्या अब भी है और आपकी फ़ोटो/वीडियो इसे दिखाती हैं। मैंने सब कुछ विक्रेता को भेज दिया है, जो आगे क्या होगा यह तय करेंगे और आपसे संपर्क करेंगे।",
 }
 
 LLM_DOWN_INTRO = {
     "en": "I can't look up your exact model right now, so here are general safety-checked steps to start with.",
     "es": "Ahora no puedo buscar su modelo exacto, así que empecemos con unos pasos generales y seguros.",
+    "fr": "Je ne peux pas rechercher votre modèle exact pour le moment ; voici des étapes générales et sûres pour commencer.",
+    "de": "Ich kann Ihr genaues Modell gerade nicht nachschlagen; hier sind allgemeine, sichere Schritte für den Anfang.",
+    "pt": "Neste momento não consigo pesquisar o seu modelo exato, por isso aqui ficam passos gerais e seguros para começar.",
+    "hi": "मैं अभी आपका सटीक मॉडल नहीं खोज पा रहा हूँ, इसलिए शुरू करने के लिए यहाँ कुछ सामान्य और सुरक्षित कदम हैं।",
 }
 # Phase 9C: replies to the step buttons are fixed text (no LLM call per tap: fast, and nothing to go wrong).
 NEXT_STEP_REPLY = {
     "en": "Thanks for trying that. Next, step {n}: {title}.",
     "es": "Gracias por probarlo. Siguiente, paso {n}: {title}.",
+    "fr": "Merci d'avoir essayé. Étape suivante, {n} : {title}.",
+    "de": "Danke fürs Ausprobieren. Als Nächstes Schritt {n}: {title}.",
+    "pt": "Obrigado por experimentar. A seguir, passo {n}: {title}.",
+    "hi": "आज़माने के लिए धन्यवाद। अगला, कदम {n}: {title}।",
 }
 ASK_PROOF_REPLY = {
     "en": "Thanks. Please add the {kind} for step {n} using the upload box on that step.",
     "es": "Gracias. Añada la prueba ({kind}) del paso {n} con el recuadro de subida de ese paso.",
+    "fr": "Merci. Ajoutez la {kind} de l'étape {n} avec la zone d'envoi de cette étape.",
+    "de": "Danke. Bitte fügen Sie das {kind} für Schritt {n} über das Upload-Feld dieses Schritts hinzu.",
+    "pt": "Obrigado. Adicione a prova ({kind}) do passo {n} na área de envio desse passo.",
+    "hi": "धन्यवाद। कृपया उस कदम के अपलोड बॉक्स से कदम {n} के लिए {kind} जोड़ें।",
 }
 ALL_TRIED_REPLY = {
     "en": "You've been through all the steps. If you can, add the {kind} for step {n}; if not, tap "
           "\"Talk to the seller\".",
     "es": "Ha probado todos los pasos. Si puede, añada la prueba ({kind}) del paso {n}; si no, pulse "
           "\"Hablar con el vendedor\".",
+    "fr": "Vous avez suivi toutes les étapes. Si possible, ajoutez la {kind} de l'étape {n} ; sinon, appuyez sur « Talk to the seller ».",
+    "de": "Sie haben alle Schritte durchgeführt. Wenn möglich, fügen Sie das {kind} für Schritt {n} hinzu; sonst tippen Sie auf „Talk to the seller“.",
+    "pt": 'Já fez todos os passos. Se puder, adicione a prova ({kind}) do passo {n}; caso contrário, toque em "Talk to the seller".',
+    "hi": 'आपने सभी कदम पूरे कर लिए हैं। हो सके तो कदम {n} के लिए {kind} जोड़ें; नहीं तो "Talk to the seller" पर टैप करें।',
 }
 GOT_PROOF_REPLY = {
     "en": "Got it, thanks. When you've finished step {n}, tap one of its buttons.",
     "es": "Recibido, gracias. Cuando termine el paso {n}, pulse uno de sus botones.",
+    "fr": "Bien reçu, merci. Quand vous avez terminé l'étape {n}, appuyez sur l'un de ses boutons.",
+    "de": "Erhalten, danke. Wenn Sie mit Schritt {n} fertig sind, tippen Sie auf einen seiner Buttons.",
+    "pt": "Recebido, obrigado. Quando terminar o passo {n}, toque num dos botões dele.",
+    "hi": "मिल गया, धन्यवाद। कदम {n} पूरा करने के बाद उसका कोई एक बटन दबाएँ।",
 }
 CONFIRM_ASK_REPLY = {
     "en": "That's great! Please confirm below whether it's working now.",
     "es": "¡Estupendo! Confirme abajo si ya funciona.",
+    "fr": "Excellent ! Confirmez ci-dessous si cela fonctionne maintenant.",
+    "de": "Prima! Bitte bestätigen Sie unten, ob es jetzt funktioniert.",
+    "pt": "Excelente! Confirme abaixo se já funciona.",
+    "hi": "बहुत अच्छा! कृपया नीचे पुष्टि करें कि अब यह काम कर रहा है या नहीं।",
 }
-KIND_ES = {"photo": "foto", "video": "vídeo", "screenshot": "captura de pantalla"}
+KIND_WORDS = {  # proof kinds in the buyer's language (fixed-text replies)
+    "es": {"photo": "foto", "video": "vídeo", "screenshot": "captura de pantalla"},
+    "fr": {"photo": "photo", "video": "vidéo", "screenshot": "capture d'écran"},
+    "de": {"photo": "Foto", "video": "Video", "screenshot": "Bildschirmfoto"},
+    "pt": {"photo": "foto", "video": "vídeo", "screenshot": "captura de ecrã"},
+    "hi": {"photo": "फ़ोटो", "video": "वीडियो", "screenshot": "स्क्रीनशॉट"},
+}
 
 
 def guard_problems(message: str) -> list[str]:
@@ -342,7 +396,9 @@ def guard_problems(message: str) -> list[str]:
 
 
 def _t(table: dict[str, str], lang: str | None) -> str:
-    return table.get(lang or "en") or table["en"]
+    """The reply in the buyer's language; a regional code (es-MX, pt-BR) falls back to its base language."""
+    code = (lang or "en").lower()
+    return table.get(code) or table.get(code.split("-")[0]) or table["en"]
 
 
 # ---- generic plan ------------------------------------------------------------------------------------
@@ -828,7 +884,7 @@ class StepUnknown(LookupError):
 
 def _kind(st: TSStep, lang: str | None) -> str:
     kind = st.proof_kind if st.proof_kind != "none" else "photo"
-    return KIND_ES.get(kind, kind) if (lang or "en").split("-")[0] == "es" else kind
+    return KIND_WORDS.get((lang or "en").lower().split("-")[0], {}).get(kind, kind)
 
 
 def _has_proof(db: Session, st: TSStep) -> bool:
