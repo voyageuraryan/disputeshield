@@ -97,7 +97,8 @@ def conversations():
 
         try:
             fixture = None if g.live_search else load_fixture()
-            return simulate(g, simulator_model=GeminiJudge(cache=DiskCache("simulator")), llm=Recorder(limiter),
+            return simulate(g, simulator_model=GeminiJudge(cache=DiskCache("simulator"), role="simulator"),
+                            llm=Recorder(limiter),
                             fixture=fixture, cache=cache, model=model_under_test())
         except FixtureMissing as exc:
             return {"golden_id": g.id, "error": "fixture_missing", "detail": str(exc)}

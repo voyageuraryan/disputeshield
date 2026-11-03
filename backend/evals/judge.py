@@ -43,14 +43,16 @@ class JudgeError(RuntimeError):
 
 
 class GeminiJudge(DeepEvalBaseLLM):
-    def __init__(self, models: list[str] | None = None, cache: DiskCache | None = None, interval: float | None = None):
+    def __init__(self, models: list[str] | None = None, cache: DiskCache | None = None, interval: float | None = None,
+                 role: str = "judge"):
         s = get_settings()
         names = models or [m.strip() for m in (os.getenv("EVALS_JUDGE_MODEL") or DEFAULT_JUDGE_MODELS).split(",")
                            if m.strip()]
         if not names:
             raise JudgeError("no judge model configured (EVALS_JUDGE_MODEL / GEMINI_MODEL)")
         self.models = names
-        self.api_key = s.gemini_api_key.get_secret_value()
+        self.role = role  # judge / simulator: each may have its own key (EVALS_*_GEMINI_API_KEY), no failover
+        self.api_key = s.gemini_key_for(role)
         self.cache = cache if cache is not None else DiskCache("judge")
         self.interval = float(os.getenv("EVALS_JUDGE_INTERVAL_S", "7")) if interval is None else interval
         self._lock = threading.Lock()

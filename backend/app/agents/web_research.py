@@ -213,7 +213,7 @@ async def research(product_name: str, model: str | None, symptom: str, *, db: Se
     own = http is None
     http = http or httpx.AsyncClient(timeout=TIMEOUT_S)
     try:
-        gem_key = s.gemini_api_key.get_secret_value()
+        gem_key = s.gemini_key_for("research")
         for m in [x.strip() for x in (s.research_model or s.gemini_model).split(",") if x.strip()] if gem_key else []:
             try:
                 result = await gemini_research(prompt, api_key=gem_key, model=m, http=http)

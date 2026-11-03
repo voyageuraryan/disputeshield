@@ -308,6 +308,15 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Per-role Gemini keys (2026-11-03)
+G95 [x] Dedicated Gemini keys per role, as the user asked (RESEARCH_ / EVALS_JUDGE_ / EVALS_SIMULATOR_GEMINI_API_KEY in
+        backend/.env, git-ignored; unset -> GEMINI_API_KEY; never fails over to another role's key).
+G96 [ ] P2 On the new keys: gemini-2.5-flash is "no longer available to new users" (404, use 3.8-flash),
+        gemini-3.8-flash answered 503 "high demand"/timeouts, gemini-3.5-flash-lite works. Google Search grounding
+        is refused at once ("exceeded your current quota") on the fresh research key while plain generation works:
+        the free tier seems to give new projects no grounding quota (check aistudio.google.com/rate-limit). The
+        10C research fixture therefore still needs the original key's grounding (after reset), Tavily, or billing.
+
 ### Found in Phase 10C (2026-11-03)
 G74 [~] P1 APPROVED + fixed in the analyst prompt (moves are directional: evidence that weakens the claim moves only
         toward FIGHT, evidence that strengthens it only toward SETTLE; missing evidence / repeated complaints /

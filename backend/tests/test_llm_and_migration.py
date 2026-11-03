@@ -252,3 +252,14 @@ async def test_structured_calls_use_low_temperature_and_a_seed(monkeypatch):
     assert gb["temperature"] == 0.0 and gb["seed"] == 7
     cfg = _json.loads(gem.calls[0].request.content)["generationConfig"]
     assert cfg["temperature"] == 0.0 and cfg["seed"] == 7
+
+
+def test_role_keys_fall_back_to_the_main_key_and_never_to_each_other(monkeypatch):
+    from app.config import Settings
+
+    s = Settings(_env_file=None, gemini_api_key="main", evals_judge_gemini_api_key="judge-key")
+    assert s.gemini_key_for("judge") == "judge-key"
+    assert s.gemini_key_for("simulator") == "main" and s.gemini_key_for("research") == "main"
+    assert s.gemini_key_for("app") == "main"
+    s2 = Settings(_env_file=None, gemini_api_key="", evals_judge_gemini_api_key="judge-key")
+    assert s2.gemini_key_for("simulator") == ""  # no borrowing another role's key

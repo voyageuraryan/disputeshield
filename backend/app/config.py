@@ -56,6 +56,17 @@ class Settings(BaseSettings):
     groq_api_key: SecretStr = SecretStr("")
     groq_model: str = "openai/gpt-oss-120b"     # free plan, strict JSON-schema output
     gemini_api_key: SecretStr = SecretStr("")
+    # Optional dedicated Gemini keys per role (each its own project + quota). Unset -> GEMINI_API_KEY. A role never
+    # switches to another role's key when its own quota runs out: that job just stops (no failover between keys).
+    research_gemini_api_key: SecretStr = SecretStr("")    # web research (troubleshooting plans, eval fixture)
+    evals_judge_gemini_api_key: SecretStr = SecretStr("")  # eval judge (backend/evals/judge.py)
+    evals_simulator_gemini_api_key: SecretStr = SecretStr("")  # eval simulated buyer (Phase 10C)
+
+    def gemini_key_for(self, role: str) -> str:
+        """research | judge | simulator | app -> that role's key, else GEMINI_API_KEY."""
+        own = {"research": self.research_gemini_api_key, "judge": self.evals_judge_gemini_api_key,
+               "simulator": self.evals_simulator_gemini_api_key}.get(role)
+        return (own.get_secret_value() if own else "") or self.gemini_api_key.get_secret_value()
     # Comma-separated, tried in order. gemini-3.8-flash often 503s ("high demand") on the free tier.
     gemini_model: str = "gemini-3.8-flash,gemini-2.5-flash"
     cors_origins: str = "http://localhost:5173"  # comma-separated
