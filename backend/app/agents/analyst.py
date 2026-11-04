@@ -31,6 +31,7 @@ from app.config import get_settings  # noqa: F401
 from app.merchant import money_settings, settle_threshold
 from app.models import Decision, DecisionStatus, Dispute
 from app.rules.evidence_rules import (
+    defect_confirmed,
     RULES,
     FIGHT_AT,
     SETTLE_BELOW,
@@ -86,6 +87,8 @@ How the decision works (the rules already applied it; you explain it):
   this buyer matching on device / IP / address; "ce3_like_match" = similar to Visa CE 3.0 evidence, never call it
   CE 3.0 compliance) and buyer_history flag buyer_serial_disputes (2+ other disputes in 12 months). They are
   supporting context: never the only reason to FIGHT, and a serial-dispute flag never proves this claim false.
+- A troubleshooting_record flagged ts_defect_confirmed (the buyer proved the fault) is never fought: never FIGHT it,
+  whatever the listing says; GATHER_MORE (the merchant reviews it) or a settling action.
 - Data freshness: the case file says when the PayPal data was fetched and which sources couldn't be refreshed
   this run (their items are the last good copy, flagged "stale:<time>"). Never FIGHT on stale required
   evidence: recommend GATHER_MORE and name the source to refresh in missing_items.
@@ -189,6 +192,9 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
         problems.append("required evidence is stale (couldn't be refreshed from PayPal this run): "
                         + ", ".join(f"#{e.id} {e.type}" for e in stale)
                         + "; don't FIGHT on stale data: recommend GATHER_MORE and name what to refresh")
+    if rec.action == "FIGHT" and defect_confirmed(case):  # G75: same spirit as the safety rule
+        problems.append("the buyer proved the fault in troubleshooting: never recommend FIGHT for a confirmed defect; "
+                        "recommend GATHER_MORE (the merchant reviews it) or a settling action")
     if checklist is not None and checklist.safety_review and rec.action != "GATHER_MORE":
         problems.append(f"the buyer reported a safety problem: the recommendation must be GATHER_MORE (a person "
                         f"reviews it), not {rec.action}")

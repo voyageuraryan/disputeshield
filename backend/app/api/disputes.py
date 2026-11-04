@@ -24,7 +24,7 @@ from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
 from app.rules.coach import as_dicts as coach_dicts
 from app.rules.coach import coach
-from app.rules.evidence_rules import RULES, economic_baseline, evaluate, red_flag_description
+from app.rules.evidence_rules import RULES, defect_confirmed, economic_baseline, evaluate, red_flag_description
 from app.merchant import settle_threshold
 from app.schemas import CaseFile
 
@@ -176,8 +176,8 @@ def _checklist(case: CaseFile, threshold, carrier: str | None = None) -> Checkli
                  for t in rule.required + rule.supporting]
     base = None
     if result.reason_supported:
-        base = economic_baseline(result, case.amount, threshold,
-                                 can_fight=case.can_fight, can_settle=case.can_settle)
+        base = economic_baseline(result, case.amount, threshold, can_fight=case.can_fight,
+                                 can_settle=case.can_settle, defect=defect_confirmed(case))
     return Checklist(reason_label=rule.label if rule else None, supported=result.reason_supported,
                      rule_score=result.rule_score, items=items,
                      red_flags=[{"code": c, "description": red_flag_description(case.reason, c)} for c in result.red_flags],

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 
-from app.rules.evidence_rules import RULES, economic_baseline, evaluate
+from app.rules.evidence_rules import defect_confirmed, RULES, economic_baseline, evaluate
 from app.schemas import CaseFile, EvidenceItem
 
 ADDABLE = {"tracking", "delivery_confirmation", "invoice", "listing", "refund_policy", "buyer_message", "order"}
@@ -71,7 +71,7 @@ def coach(case: CaseFile, threshold: Decimal, *, carrier: str | None = None) -> 
     if rule is None or not now.reason_supported:
         return []
     base = lambda cl: economic_baseline(cl, case.amount, threshold, can_fight=case.can_fight,  # noqa: E731
-                                        can_settle=case.can_settle).action
+                                        can_settle=case.can_settle, defect=defect_confirmed(case)).action
     action_now = base(now)
     have = {e.type for e in case.evidence}
     missing = [t for t in (*rule.required, *rule.supporting) if t not in have and t in ADDABLE]

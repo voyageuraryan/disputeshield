@@ -185,8 +185,10 @@ def full_baseline(checklist, case, threshold: Decimal, s: MoneySettings, calibra
     refund (or a full refund isn't allowed). Returns (Baseline, options, suggested offer or None)."""
     from app.rules.evidence_rules import Baseline, economic_baseline
 
+    from app.rules.evidence_rules import defect_confirmed
+
     base = economic_baseline(checklist, case.amount, threshold, can_fight=case.can_fight,
-                             can_settle=case.can_accept_claim or case.can_offer)
+                             can_settle=case.can_accept_claim or case.can_offer, defect=defect_confirmed(case))
     opts = options(checklist.rule_score, case.amount, case.currency, can_fight=case.can_fight,
                    can_accept_claim=case.can_accept_claim, offer_types=case.offer_types, s=s,
                    calibration=calibration)

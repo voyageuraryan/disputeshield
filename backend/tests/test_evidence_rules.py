@@ -180,3 +180,41 @@ def test_baseline_wording_when_only_fight_is_blocked():
     assert "settling is still possible" in eb(strong, Decimal("45"), Decimal("25"), can_fight=False).why
     assert "does not allow a response right now" in eb(strong, Decimal("45"), Decimal("25"),
                                                         can_fight=False, can_settle=False).why
+
+
+# ---- G75 (user decision 2026-11-04): a proven defect is never fought automatically ------------------------------
+
+def _defect_case(flags, items=("listing", "order", "refund_policy", "tracking", "delivery_confirmation")):
+    from app.schemas import CaseFile, EvidenceItem
+    ev = [EvidenceItem(id=i + 1, type=t, source="store", source_ref=f"store:{t}/{i}", summary=t) for i, t in enumerate(items)]
+    ev.append(EvidenceItem(id=99, type="troubleshooting_record", source="buyer_portal", source_ref="ts:session/1",
+                           summary="Buyer tried every step and showed the fault", flags=list(flags)))
+    return CaseFile(dispute_id="D", reason="MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED", amount=Decimal("89"), currency="USD",
+                    due_date=None, order_id=1, evidence=ev, allowed_actions=["provide_evidence", "accept_claim"],
+                    status="OPEN")
+
+
+def test_g75_confirmed_defect_never_fight_baseline():
+    from app.rules.evidence_rules import defect_confirmed, economic_baseline, evaluate
+    strong = _defect_case(["ts_defect_confirmed"])
+    cl = evaluate(strong)
+    plain = economic_baseline(cl, strong.amount, Decimal("25"))
+    guarded = economic_baseline(cl, strong.amount, Decimal("25"), defect=defect_confirmed(strong))
+    assert defect_confirmed(strong)
+    if plain.action == "FIGHT":
+        assert guarded.action == "GATHER_MORE" and "never fight that automatically" in guarded.why
+    assert guarded.action != "FIGHT"
+    suspect = _defect_case(["ts_defect_confirmed", "ts_proof_suspect"])
+    assert not defect_confirmed(suspect)  # suspect proof: the rule doesn't apply (no penalty either way)
+
+
+def test_g75_validator_rejects_fight_on_a_confirmed_defect():
+    from app.agents.analyst import validate
+    from app.rules.evidence_rules import Baseline
+    from app.schemas import Recommendation
+    case = _defect_case(["ts_defect_confirmed"])
+    fight = Recommendation(action="FIGHT", confidence="high", reasoning="Listing matches.", cited_evidence_ids=[1, 2],
+                           missing_items=[], economic_note="n")
+    assert any("never recommend FIGHT for a confirmed defect" in p for p in validate(fight, case, Baseline("FIGHT", "r")))
+    ok = _defect_case(["ts_fixed"])
+    assert not any("confirmed defect" in p for p in validate(fight, ok, Baseline("FIGHT", "r")))

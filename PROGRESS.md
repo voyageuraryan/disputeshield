@@ -333,7 +333,7 @@ G145 [ ] P1 USER DECISION (Bryntum): the Deadlines view uses the PUBLIC TRIAL pa
         only the alias in package.json changes). The trial's postinstall (it stamps a per-install UUID into the
         bundle, used with bryntum.com/verify) was NOT run, because npm's install-scripts policy blocked it; the
         component works without it.
-G146 [ ] P2 AG Grid's own blog names its prize "Best Use of AG Studio" (not AG Grid). Phase 14 uses AG Grid + AG
+G146 [x] P2 (resolved by the official rules: the prize is "Best Use of AG Grid", any AG Grid tools) AG Grid's own blog names its prize "Best Use of AG Studio" (not AG Grid). Phase 14 uses AG Grid + AG
         Charts Community; check what AG Studio is and whether the entry needs it.
 G147 [ ] P3 The Deadlines chunk is 3.8 MB (1.5 MB gzip), lazy-loaded on /deadlines only.
 G148 [ ] P3 The "PayPal reviewing" bar's end is an estimate (now + 7 days): PayPal gives no review end date.
@@ -404,7 +404,7 @@ G111 [ ] P2 make-offer not run live. Shapes come from the v1 OpenAPI (offer_type
 G112 [ ] P2 Offer types are taken ONLY from allowed_response_options.make_offer.offer_types (rule: no guessing). If the
         sandbox sends a make_offer link without that list, no offer is proposed (falls back to accept-claim). Check
         what a live inquiry returns.
-G113 [ ] P2 USER DECISION. The brief's fight formula "P(win) x amount - (1-P(win)) x (amount+fee) - handling" counts the
+G113 [x] P2 (user decision 2026-11-04: keep the keep-the-sale formula) USER DECISION. The brief's fight formula "P(win) x amount - (1-P(win)) x (amount+fee) - handling" counts the
         amount twice next to settle = -amount (fighting would beat refunding even at 15% odds). Implemented with the
         keep-the-sale baseline: fight = -(1-P(win)) x (amount+fee) - handling (documented in rules/money.py). The
         partial-offer formula uses + (1-P(accept)) x fight (fight is already a net value). Say if you want the
@@ -426,7 +426,7 @@ G120 [x] Frontend rounding differed from the backend on .5 cents (-146.845 -> -1
         zero like Decimal ROUND_HALF_UP.
 
 ### Found in Phase 12 (2026-11-03)
-G103 [ ] P2 USER DECISION (like G50). UPLOAD_EXTRACTION is on by default: the merchant's uploaded documents (labels,
+G103 [x] P2 (user decision 2026-11-04: keep extraction ON; merchants are told before uploading) USER DECISION (like G50). UPLOAD_EXTRACTION is on by default: the merchant's uploaded documents (labels,
         carrier proof of delivery, receipts) go to Gemini, and they often show the buyer's name and address. On
         the free tier, inputs may be human-reviewed. Options: keep it on (the merchant is told before uploading),
         turn it off (the merchant types the fields), or use a paid key.
@@ -497,7 +497,7 @@ G93 [x] Fixed-text replies (13 tables) now in en/es/fr/de/pt/hi with matching pl
         and regional codes (es-MX, pt-BR) fall back to their base language (they used to get English).
 G94 [x] The decision-golden builder deleted every *.json in goldens/ before regenerating (it would have wiped
         troubleshooting.json) and the loader read it as a decision golden -> both skip it.
-G75 [ ] (update) After the directional fix ts-defect gave GATHER_MORE once and FIGHT once (before temperature 0);
+G75 [x] (user decision 2026-11-04: add the rule; done: economic_baseline(defect=...) + analyst validator + prompt; tests in test_evidence_rules.py) After the directional fix ts-defect gave GATHER_MORE once and FIGHT once (before temperature 0);
         a deterministic "never auto-FIGHT a confirmed defect" rule is still your decision.
 
 ### Found in Phase 10B (2026-11-02/03) — eval limitations are listed in backend/evals/README.md
@@ -537,7 +537,7 @@ G74 [ ] P1 (found by the evals) With a weak case (baseline SETTLE) and a buyer m
         WEAKENS the claim ("it arrived"). Proposed fix (needs a live re-run to verify, not started after the host
         stopped the run for low memory): prompt says moves toward the merchant need evidence against the claim and
         that missing evidence is already in the baseline.
-G75 [ ] P2 DECISION (yours): ts-defect (buyer proved the fault) -> the model moved GATHER_MORE -> FIGHT citing the
+G75 [x] P2 (decided + done 2026-11-04, see above) DECISION (yours): ts-defect (buyer proved the fault) -> the model moved GATHER_MORE -> FIGHT citing the
         listing. Option: a rule like the safety one (defect confirmed without suspect proof: never auto-FIGHT).
 G76 [x] Address mismatch: GATHER_MORE with no missing items -> NEEDS_HUMAN. Nothing required is missing (the case is
         weak because of a red flag) -> code names "evidence that resolves: <red flag>" (rule-owned), like G59.

@@ -21,7 +21,7 @@ import json
 from decimal import Decimal
 from pathlib import Path
 
-from app.rules.evidence_rules import economic_baseline, evaluate
+from app.rules.evidence_rules import defect_confirmed, economic_baseline, evaluate
 from app.schemas import CaseFile, EvidenceItem
 from evals.goldens.schema import DIR, Golden  # noqa: F401
 
@@ -115,7 +115,7 @@ def raw_for(case: CaseFile) -> dict:
 
 def baseline(case: CaseFile) -> str:
     return economic_baseline(evaluate(case), case.amount, THRESHOLD, can_fight=case.can_fight,
-                             can_settle=case.can_settle).action
+                             can_settle=case.can_settle, defect=defect_confirmed(case)).action
 
 
 def golden(gid, title, source, case, *, expected=None, acceptable=(), must_cite=(), must_not=(), notes="",

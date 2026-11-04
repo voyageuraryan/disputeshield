@@ -34,7 +34,7 @@ from app.config import get_settings
 from app.db import create_db_and_tables
 from app.models import (AgentStep, Decision, Dispute, EvidenceItemRow, EvidenceSource, MerchantSettings, Order,
                         Shipment)
-from app.rules.evidence_rules import economic_baseline, evaluate
+from app.rules.evidence_rules import defect_confirmed, economic_baseline, evaluate
 from app.schemas import SellerNote
 from app.tracing import observe, update_trace
 from evals.cache import DiskCache, digest
@@ -182,7 +182,7 @@ def prompt_hash(g: Golden, engine, dispute_id: int) -> str:
     with Session(engine) as s:
         case = build_case_file(s, s.get(Dispute, dispute_id))
         checklist = evaluate(case)
-        base = economic_baseline(checklist, case.amount, THRESHOLD, can_fight=case.can_fight, can_settle=case.can_settle)
+        base = economic_baseline(checklist, case.amount, THRESHOLD, can_fight=case.can_fight, can_settle=case.can_settle, defect=defect_confirmed(case))
         user = redact(build_prompt(case, checklist, base, THRESHOLD), pii_terms(s, case.order_id))
     return digest(SYSTEM_PROMPT, user, NOTE_SYSTEM_PROMPT)[:16]
 

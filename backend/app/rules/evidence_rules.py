@@ -221,8 +221,19 @@ class Baseline:
     why: str
 
 
+DEFECT_NO_FIGHT_WHY = ("the buyer tried every troubleshooting step and showed the fault: never fight that automatically; "
+                       "review it yourself (G75)")
+
+
+def defect_confirmed(case: CaseFile) -> bool:
+    """G75: the buyer proved the fault (troubleshooting record ts_defect_confirmed, no suspect proof)."""
+    ts = _flags(case, TS_RECORD)
+    return "ts_defect_confirmed" in ts and "ts_proof_suspect" not in ts
+
+
 def economic_baseline(checklist: ChecklistResult, amount: Decimal, threshold: Decimal,
-                      *, can_fight: bool = True, can_settle: bool = True) -> Baseline:
+                      *, can_fight: bool = True, can_settle: bool = True,
+                      defect: bool = False) -> Baseline:
     """FIGHT if rule_score >= 0.7. SETTLE if rule_score < 0.4, or amount < threshold with a weak
     case (rule_score < 0.7). Otherwise GATHER_MORE. Then, if PayPal doesn't allow the action
     right now, fall back to GATHER_MORE. A safety report from buyer troubleshooting always means GATHER_MORE:
@@ -230,6 +241,8 @@ def economic_baseline(checklist: ChecklistResult, amount: Decimal, threshold: De
     if getattr(checklist, "safety_review", False):
         return Baseline("GATHER_MORE", SAFETY_WHY)
     b = _baseline(checklist, amount, threshold, can_fight=can_fight, can_settle=can_settle)
+    if defect and b.action == "FIGHT":  # G75 (user decision 2026-11-04): a proven defect is never fought automatically
+        b = Baseline("GATHER_MORE", b.why + "; but " + DEFECT_NO_FIGHT_WHY)
     notes = getattr(checklist, "notes", None) or []
     return Baseline(b.action, b.why + "".join(f"; {n}" for n in notes)) if notes else b
 
