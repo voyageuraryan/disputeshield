@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
-import { authApi } from "./api";
+import { authApi, demoApi } from "./api";
+import Scenarios from "./demo/Scenarios";
+import Tour from "./demo/Tour";
 import { clearToken, getToken, tokenExpired } from "./auth";
 import NewDisputeAlerts from "./NewDisputeAlerts";
 
@@ -61,9 +63,12 @@ export default function Layout() {
             {merchant && <NavLink to="/queue" className={link}>Disputes</NavLink>}
             {merchant && <NavLink to="/orders" className={link}>Orders</NavLink>}
             {merchant && <NavLink to="/analytics" className={link}>Analytics</NavLink>}
+            {merchant && <NavLink to="/trust" className={link}>Trust</NavLink>}
             <NavLink to="/store" className={link}>Store</NavLink>
             {merchant && <NavLink to="/settings" className={link}>Settings</NavLink>}
+            <NavLink to="/demo" className={link}>About</NavLink>
           </nav>
+          {merchant && <DemoTools />}
           <Account />
         </div>
       </header>
@@ -74,3 +79,24 @@ export default function Layout() {
     </div>
   );
 }
+
+/** Phase 16: "Take the tour" for everyone signed in; "Scenarios" only when the server says demo mode is on. */
+function DemoTools() {
+  const [tour, setTour] = useState(false);
+  const [drawer, setDrawer] = useState(false);
+  const [demo, setDemo] = useState(false);
+  useEffect(() => {
+    demoApi.status().then((s) => setDemo(s.enabled), () => setDemo(false));
+  }, []);
+  return (
+    <div className="flex items-center gap-2 text-sm">
+      <button onClick={() => setTour(true)} className="rounded-md border border-slate-300 px-2.5 py-1 hover:bg-slate-50">Take the tour</button>
+      {demo && (
+        <button onClick={() => setDrawer(true)} className="rounded-md bg-amber-100 px-2.5 py-1 font-medium text-amber-900 hover:bg-amber-200">Scenarios</button>
+      )}
+      {tour && <Tour onClose={() => setTour(false)} />}
+      {drawer && <Scenarios onClose={() => setDrawer(false)} />}
+    </div>
+  );
+}
+

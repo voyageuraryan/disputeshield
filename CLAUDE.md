@@ -50,6 +50,7 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 ## Layout
 backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py, auth.py, events_bus.py,
              signals.py (Phase 15: hashed checkout signals, CE 3.0-LIKE prior history, serial disputes),
+             trust.py (Phase 16: guardrails -> code refs, counters), demo_scenarios.py (DEMO_MODE + ADMIN_TOKEN only),
              merchant_uploads.py (Phase 12: merchant-added evidence: validate, store, Gemini read, confirm, flags)}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
 backend/app/analytics/ outcomes.py (capture on RESOLVED), kpis.py, query.py (Ask: whitelisted structured query, no SQL),
@@ -75,7 +76,9 @@ backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_gold
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page),
-                      Analytics.tsx (AG Grid + AG Charts Community; helpers in src/analytics/logic.ts)
+                      Analytics.tsx (AG Grid + AG Charts Community; helpers in src/analytics/logic.ts),
+                      Trust.tsx (eval report + guardrails + counters), Demo.tsx (public /demo; text = docs/DEVPOST.md)
+frontend/src/demo/    Tour.tsx + tour.ts (5-step guided tour), Scenarios.tsx (demo-mode drawer), content.ts
 frontend/src/offers/    logic.ts (Phase 13: offer math mirroring rules/money.py; Options card is in CaseDetail)
 frontend/src/evidence/  AddEvidence.tsx (add/confirm evidence, coach panel), logic.ts (pure)
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is

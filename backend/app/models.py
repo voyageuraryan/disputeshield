@@ -36,6 +36,8 @@ class Order(SQLModel, table=True):
     ip_hash: Optional[str] = Field(default=None, max_length=32, index=True)
     device_hash: Optional[str] = Field(default=None, max_length=32, index=True)
     payer_hash: Optional[str] = Field(default=None, max_length=32, index=True)   # PayPal payer.payer_id
+    # Phase 16: set when a demo scenario created this order (DEMO_MODE only); drives its post-payment store data
+    demo_scenario: Optional[str] = Field(default=None, max_length=40)
 
 
 class Shipment(SQLModel, table=True):

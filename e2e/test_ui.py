@@ -689,3 +689,67 @@ def test_analytics_page_demo_data(stack, page):
     page.screenshot(path=os.path.join(os.environ.get("E2E_SHOTS", "/tmp"), "analytics.png"), full_page=True)
     assert not real_errors(page)
 
+
+
+# ---- Phase 16: demo + trust ---------------------------------------------------------------------------------
+
+def _shot(page, name):
+    import os
+    d = os.environ.get("E2E_SHOTS")
+    if d:
+        page.screenshot(path=os.path.join(d, name), full_page=True)
+
+
+def test_demo_landing_is_public(auth_stack, browser):
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    pg.goto(f"{auth_stack.base}/demo")
+    pg.wait_for_selector("[data-testid=demo-landing]")
+    assert "/login" not in pg.url
+    text = pg.inner_text("[data-testid=demo-landing]")
+    for heading in ("What it does", "The 90-second version", "How PayPal is used", "How AI is used", "Architecture", "Guardrails"):
+        assert heading in text
+    assert pg.locator("svg[role=img]").count() == 1
+    assert pg.locator("text=Take the tour").count() == 0 and pg.locator("text=Scenarios").count() == 0
+    _shot(pg, "demo.png")
+    ctx.close()
+
+
+def test_trust_page(stack, page):
+    page.goto(f"{stack.base}/trust")
+    page.wait_for_selector("[data-testid=eval-cards]")
+    cards = page.locator("[data-testid=eval-cards] > div")
+    assert cards.count() == 4
+    assert "ACTION ACCURACY" in cards.nth(0).inner_text().upper() and "TOOL CORRECTNESS" in cards.nth(3).inner_text().upper()
+    assert page.locator("[data-testid=eval-table] tbody tr").count() >= 10
+    assert page.locator("[data-testid=guardrails] li").count() >= 10
+    assert "decisions.py" in page.inner_text("[data-testid=guardrails]")
+    assert page.locator("[data-testid=counters] > div").count() == 6
+    assert "Quality gates not passed" in page.inner_text("[data-testid=eval-section]")  # shown honestly
+    _shot(page, "trust.png")
+    assert not real_errors(page)
+
+
+def test_guided_tour_five_steps(stack, page):
+    page.goto(f"{stack.base}/queue")
+    page.wait_for_selector(".ag-row")
+    assert page.locator("button:has-text('Scenarios')").count() == 0   # demo mode is off in the UI suite
+    page.locator("button:has-text('Take the tour')").click()
+    tour = page.locator("[data-testid=tour]")
+    titles = ["1 · Every dispute", "2 · The agents work live", "3 · Evidence", "4 · Options", "5 · Nothing moves without you"]
+    for i, title in enumerate(titles):
+        tour.locator(f"text={title}").wait_for()
+        # the highlighted element was found (no "Looking for ..." placeholder)
+        page.wait_for_function("!document.querySelector('[data-testid=tour]').innerText.includes('Looking for')",
+                               timeout=8000)
+        if i in (1, 3, 4):
+            import os
+            page.wait_for_timeout(700)
+            if os.environ.get("E2E_SHOTS"):  # viewport shot: the highlight is positioned in viewport coordinates
+                page.screenshot(path=os.path.join(os.environ["E2E_SHOTS"], f"tour-{i + 1}.png"))
+        if i < 4:
+            tour.locator("button:has-text('Next')").click()
+    assert "/cases/" in page.url
+    tour.locator("button:has-text('Finish')").click()
+    assert page.locator("[data-testid=tour]").count() == 0
+    assert not real_errors(page)

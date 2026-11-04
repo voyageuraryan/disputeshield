@@ -17,6 +17,7 @@ from app.api.store import router as store_router
 from app.api.evals import router as evals_router
 from app.api.uploads import router as uploads_router
 from app.api.analytics import router as analytics_router
+from app.api.demo import router as demo_router
 from app.api.troubleshooting import buyer_router as help_router, merchant_router as troubleshooting_router
 from app.api.webhooks import router as webhooks_router
 from app.config import get_settings
@@ -79,7 +80,8 @@ app.include_router(events_router, dependencies=merchant)
 app.include_router(settings_router, dependencies=merchant)
 app.include_router(troubleshooting_router, dependencies=merchant)
 app.include_router(uploads_router, dependencies=merchant)
-app.include_router(analytics_router, dependencies=merchant)  # Phase 14  # Phase 12: merchant evidence uploads
+app.include_router(analytics_router, dependencies=merchant)  # Phase 14
+app.include_router(demo_router, dependencies=merchant)  # Phase 16: trust + demo mode (gated)  # Phase 12: merchant evidence uploads
 app.include_router(evals_router, dependencies=merchant)  # Phase 10B: latest eval report (Trust page)
 
 

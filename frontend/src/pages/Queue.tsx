@@ -252,7 +252,7 @@ export default function Queue() {
         )
       ) : (
         // short lists size to their rows; long ones scroll inside a fixed-height grid
-        <div style={(rows?.length ?? 0) > 15 ? { height: "calc(100vh - 220px)", minHeight: 360 } : undefined}>
+        <div data-tour="queue" style={(rows?.length ?? 0) > 15 ? { height: "calc(100vh - 220px)", minHeight: 360 } : undefined}>
           <AgGridReact<DisputeRow>
             ref={grid}
             theme={theme}

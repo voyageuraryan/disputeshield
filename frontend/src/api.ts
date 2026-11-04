@@ -69,10 +69,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ sku, ...(deviceFp ? { device_fp: deviceFp } : {}) }),
     }),
-  captureOrder: (paypalOrderId: string) =>
+  captureOrder: (paypalOrderId: string, deviceFp?: string | null) =>
     req<{ order_id: number; paypal_order_id: string; capture_id: string; status: string }>(
       `/api/store/orders/${encodeURIComponent(paypalOrderId)}/capture`,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify(deviceFp ? { device_fp: deviceFp } : {}) },
     ),
 };
 
@@ -687,3 +687,35 @@ export const analyticsApi = {
   ask: (dataset: string, question: string) =>
     req<QueryResult>("/api/analytics/ask", { method: "POST", body: JSON.stringify({ dataset, question }) }),
 };
+
+// ---- Phase 16: trust + demo mode ------------------------------------------------------------------------
+
+export type Guardrail = { key: string; name: string; rule?: number; what: string; where: string[] };
+export type TrustCounters = {
+  proposed: number; approved: number; rejected: number; overridden: number; executed: number; failed: number;
+  superseded: number; awaiting: number; needs_human: number; by_recommendation: Record<string, number>;
+};
+export type EvalMetric = { kind: string; measured: number; passed: number; errored: number; average: number | null; pass_rate: number | null };
+export type EvalReport = {
+  generated: string; model_under_test: string[]; judge: string; goldens: number; ran: number;
+  gates: { passed: boolean; partial?: boolean; failures: string[] };
+  metrics: Record<string, EvalMetric>;
+  by_reason?: Record<string, { goldens: number; action_correct: number; metrics_failed: number }>;
+};
+export type Scenario = { key: string; title: string; sku: string; expect: string; why: string; checklist: { step: string; link?: string }[] };
+export type CreatedScenario = Scenario & { order_id: number; paypal_order_id: string; store_url: string };
+
+const adminHeaders = (token: string) => ({ "X-Admin-Token": token });
+
+export const trustApi = {
+  trust: () => req<{ guardrails: Guardrail[]; counters: TrustCounters }>("/api/trust"),
+  evals: () => req<EvalReport>("/api/admin/evals/latest"),
+};
+
+export const demoApi = {
+  status: () => req<{ enabled: boolean }>("/api/demo/status"),
+  scenarios: (token: string) => req<Scenario[]>("/api/demo/scenarios", { headers: adminHeaders(token) }),
+  create: (key: string, token: string) =>
+    req<CreatedScenario>(`/api/demo/scenarios/${encodeURIComponent(key)}`, { method: "POST", headers: adminHeaders(token) }),
+};
+

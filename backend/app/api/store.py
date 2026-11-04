@@ -72,26 +72,20 @@ class CreateOrderOut(BaseModel):
     order_id: int
 
 
-@router.post("/orders", response_model=CreateOrderOut)
-async def create_store_order(
-    body: CreateOrderIn,
-    request: Request,
-    session: Session = Depends(get_session),
-    paypal: PayPalClient = Depends(get_paypal_client),
-) -> CreateOrderOut:
-    product = PRODUCTS.get(body.sku)
-    if product is None:
-        raise HTTPException(404, f"unknown sku {body.sku}")
+async def open_paypal_order(session: Session, product, quantity: int, *, paypal: PayPalClient,  # noqa: ANN001
+                            ip: str | None = None, device_fp: str | None = None,
+                            demo_scenario: str | None = None) -> Order:
+    """Create the store order row + the real PayPal (sandbox) order. Shared by the Store and demo scenarios."""
     _require_paypal_configured()
     order = Order(
-        items=[order_item(product, body.quantity)],
-        amount=product.price * body.quantity,
+        items=[order_item(product, quantity)],
+        amount=product.price * quantity,
         currency=product.currency,
         product_listing=product.listing,
+        demo_scenario=demo_scenario,
     )
     # Phase 15: only keyed hashes of the IP and the device fingerprint are kept (app/signals.py)
-    capture_checkout(order, ip=client_ip(request.headers, request.client.host if request.client else None),
-                     device_fp=body.device_fp)
+    capture_checkout(order, ip=ip, device_fp=device_fp)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -103,7 +97,7 @@ async def create_store_order(
             internal_order_id=order.id,
             invoice_id=order.invoice_id,
             currency=product.currency,
-            items=[LineItem(product.name, product.sku, product.price, body.quantity, product.paypal_category)],
+            items=[LineItem(product.name, product.sku, product.price, quantity, product.paypal_category)],
             request_id=f"ds-create-{order.id}-{nonce}",
             client=paypal,
         )
@@ -117,7 +111,23 @@ async def create_store_order(
     order.paypal_order_id = pp_order["id"]
     session.add(order)
     session.commit()
-    return CreateOrderOut(id=pp_order["id"], order_id=order.id)
+    session.refresh(order)
+    return order
+
+
+@router.post("/orders", response_model=CreateOrderOut)
+async def create_store_order(
+    body: CreateOrderIn,
+    request: Request,
+    session: Session = Depends(get_session),
+    paypal: PayPalClient = Depends(get_paypal_client),
+) -> CreateOrderOut:
+    product = PRODUCTS.get(body.sku)
+    if product is None:
+        raise HTTPException(404, f"unknown sku {body.sku}")
+    order = await open_paypal_order(session, product, body.quantity, paypal=paypal, device_fp=body.device_fp,
+                                    ip=client_ip(request.headers, request.client.host if request.client else None))
+    return CreateOrderOut(id=order.paypal_order_id, order_id=order.id)
 
 
 class CaptureOut(BaseModel):
@@ -127,9 +137,15 @@ class CaptureOut(BaseModel):
     status: str
 
 
+class CaptureIn(BaseModel):
+    device_fp: str | None = Field(default=None, max_length=64)  # Phase 16: the paying browser's hashed fingerprint
+
+
 @router.post("/orders/{paypal_order_id}/capture", response_model=CaptureOut)
 async def capture_store_order(
     paypal_order_id: str,
+    request: Request,
+    body: CaptureIn | None = None,
     session: Session = Depends(get_session),
     paypal: PayPalClient = Depends(get_paypal_client),
 ) -> CaptureOut:
@@ -157,8 +173,15 @@ async def capture_store_order(
     order.buyer_email = result.payer_email
     order.shipping_address = result.shipping_address
     order.payer_hash = signal_hash("payer", result.payer_id)  # Phase 15: PayPal payer.payer_id, hashed
+    if not (order.ip_hash or order.device_hash):  # e.g. a demo scenario order created by the merchant's click:
+        capture_checkout(order, device_fp=body.device_fp if body else None,  # record the paying browser instead
+                         ip=client_ip(request.headers, request.client.host if request.client else None))
     session.add(order)
     session.commit()
+    if order.demo_scenario:  # Phase 16: a demo scenario's post-payment store data (delivery, history)
+        from app.demo_scenarios import after_capture
+
+        after_capture(session, order)
     return CaptureOut(order_id=order.id, paypal_order_id=paypal_order_id,
                       capture_id=result.capture_id, status=result.capture_status)
 

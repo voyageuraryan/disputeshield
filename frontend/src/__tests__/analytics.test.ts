@@ -75,3 +75,12 @@ describe("formatting and charts", () => {
     ]);
   });
 });
+
+describe("money tiles (G125)", () => {
+  it("lists each currency separately", async () => {
+    const { moneyTile } = await import("../pages/Analytics");
+    expect(moneyTile({ USD: { protected: 100, refunded: 5 }, INR: { protected: 2000, refunded: 0 } }, "protected")).toMatch(/\$100.*·.*2,000/);
+    expect(moneyTile({}, "refunded")).toBe("$0");
+  });
+});
+

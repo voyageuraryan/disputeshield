@@ -26,8 +26,8 @@ const NOTE_MAX = 1000;
 type Action = SendAction;
 const OFFERS: Action[] = ["SETTLE_PARTIAL", "REPLACEMENT"];
 
-const Card = ({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) => (
-  <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+const Card = ({ title, children, right, tour }: { title: string; children: React.ReactNode; right?: React.ReactNode; tour?: string }) => (
+  <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" data-tour={tour}>
     <div className="mb-3 flex items-center justify-between gap-2">
       <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">{title}</h2>
       {right}
@@ -582,7 +582,7 @@ function EvidencePanel({ detail, cited, onDone }: { detail: DisputeDetail; cited
   const canAdd = detail.dispute.status !== "RESOLVED" && !detail.decisions.some((x) => x.status === "APPROVED");
   const coach = cl.coach ?? [];
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" data-tour="evidence">
       <Card title="Evidence checklist" right={cl.supported ? <span className="text-sm font-semibold">{Math.round(cl.rule_score * 100)}/100</span> : null}>
         {!cl.supported ? (
           <p className="text-sm text-slate-600">There is no rule for this dispute reason yet, so a person should review it.</p>
@@ -763,6 +763,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
     <>
     <Card
       title="Recommendation"
+      tour="recommendation"
       right={
         <span className="flex items-center gap-3 text-xs text-slate-400">
           {(d.status === "PROPOSED" || d.status === "FAILED" || d.status === "REJECTED") && detail.dispute.status !== "RESOLVED" && (
@@ -923,6 +924,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
           ) : (
             <div className="flex flex-wrap gap-2">
               <button
+                data-tour="approve"
                 disabled={busy || !action || !allowed || needsNote || offerIssues.length > 0}
                 onClick={() => setConfirming(true)}
                 className="flex-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
@@ -976,7 +978,7 @@ export function OptionsCard({ options, offer, amount, currency, chosen, canPick,
 }) {
   const { rows, best } = withOffer(options, offer, amount);
   return (
-    <Card title="Options">
+    <Card title="Options" tour="options">
       <p className="mb-2 text-xs text-slate-500">
         Expected net outcome for you compared with keeping the sale (estimates: the win and accept chances are starting
         assumptions, not yet learned from your cases).

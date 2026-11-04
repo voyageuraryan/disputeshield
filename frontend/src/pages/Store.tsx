@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api, type Product } from "../api";
 import { deviceFingerprint } from "../fingerprint";
 import { initPayPal, type SdkInstance } from "../paypal";
 
 type Status = { kind: "idle" | "working" | "ok" | "error"; text?: string };
 
-function BuyButton({ sdk, product }: { sdk: SdkInstance; product: Product }) {
+function BuyButton({ sdk, product, payOrderId }: { sdk: SdkInstance; product: Product; payOrderId?: string }) {
   const [status, setStatus] = useState<Status>({ kind: "idle" });
 
   const onClick = async () => {
@@ -14,7 +15,7 @@ function BuyButton({ sdk, product }: { sdk: SdkInstance; product: Product }) {
       onApprove: async ({ orderId }) => {
         setStatus({ kind: "working", text: "Capturing payment…" });
         try {
-          const r = await api.captureOrder(orderId);
+          const r = await api.captureOrder(orderId, await deviceFingerprint());
           setStatus({ kind: "ok", text: `Paid. Order #${r.order_id}, capture ${r.capture_id}` });
         } catch (e) {
           setStatus({ kind: "error", text: (e as Error).message });
@@ -26,7 +27,10 @@ function BuyButton({ sdk, product }: { sdk: SdkInstance; product: Product }) {
     try {
       // v6 expects a promise resolving to { orderId }; the server sets the price.
       // Phase 15: only a hash of the device fingerprint is sent (see fingerprint.ts)
-      const order = deviceFingerprint().then((fp) => api.createOrder(product.sku, fp)).then((o) => ({ orderId: o.id }));
+      // Phase 16: a demo scenario already created the PayPal order: pay that exact order
+      const order = payOrderId
+        ? Promise.resolve({ orderId: payOrderId })
+        : deviceFingerprint().then((fp) => api.createOrder(product.sku, fp)).then((o) => ({ orderId: o.id }));
       await session.start({ presentationMode: "auto" }, order);
     } catch (e) {
       setStatus({ kind: "error", text: (e as Error).message });
@@ -46,6 +50,10 @@ function BuyButton({ sdk, product }: { sdk: SdkInstance; product: Product }) {
 }
 
 export default function Store() {
+  const [params] = useSearchParams();
+  // Phase 16: a demo scenario link (?pay=<PayPal order id>&sku=...) pays that exact, already-created order
+  const payOrderId = /^[A-Z0-9]{8,32}$/.test(params.get("pay") ?? "") ? (params.get("pay") as string) : undefined;
+  const paySku = params.get("sku") ?? undefined;
   const [products, setProducts] = useState<Product[]>([]);
   const [sdk, setSdk] = useState<SdkInstance | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -80,15 +88,21 @@ export default function Store() {
           registered in India, and PayPal blocks India-to-India payments (checkout then shows a generic error).
         </p>
       </div>
+      {payOrderId && (
+        <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900" data-testid="demo-order">
+          Demo scenario order {payOrderId}: pay for the highlighted product below with the sandbox buyer. Other products start a
+          normal new order.
+        </p>
+      )}
       {error && <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">{error}</p>}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {products.map((p) => (
-          <div key={p.sku} className="flex flex-col rounded-lg border bg-white p-4 shadow-sm">
+          <div key={p.sku} className={`flex flex-col rounded-lg border bg-white p-4 shadow-sm ${payOrderId && p.sku === paySku ? "ring-2 ring-amber-400" : ""}`}>
             <div className="mb-3 flex h-28 items-center justify-center rounded-md bg-slate-100 text-5xl">{p.image}</div>
             <h2 className="font-medium">{p.name}</h2>
             <p className="mb-2 text-lg font-semibold">${p.price}</p>
             <p className="mb-4 flex-1 text-xs text-slate-600">{p.listing}</p>
-            {sdk ? <BuyButton sdk={sdk} product={p} /> : !error && <p className="text-xs text-slate-400">Loading PayPal…</p>}
+            {sdk ? <BuyButton sdk={sdk} product={p} payOrderId={p.sku === paySku ? payOrderId : undefined} /> : !error && <p className="text-xs text-slate-400">Loading PayPal…</p>}
           </div>
         ))}
       </div>

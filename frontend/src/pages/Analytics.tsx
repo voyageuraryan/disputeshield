@@ -85,6 +85,10 @@ function Tile({ name, value, sub }: { name: string; value: string; sub?: string 
   );
 }
 
+/** G125: one amount per currency (never adds USD to INR). */
+export const moneyTile = (m: Record<string, { protected: number; refunded: number }>, key: "protected" | "refunded") =>
+  Object.entries(m).map(([c, v]) => usd(v[key], c)).join(" · ") || usd(0);
+
 const usd = (n: number, currency = "USD") => n.toLocaleString(undefined, { style: "currency", currency, maximumFractionDigits: 0 });
 
 export default function Analytics() {
@@ -102,7 +106,7 @@ export default function Analytics() {
   if (error && !data) return <p className="rounded-md bg-red-50 p-3 text-sm text-red-700">Couldn't load analytics: {error}</p>;
   if (!data) return <p className="text-sm text-slate-500">Loading analytics…</p>;
   const k = data.kpis;
-  const [cur, money] = Object.entries(k.money)[0] ?? ["USD", { protected: 0, refunded: 0 }];
+  const cur = Object.keys(k.money)[0] ?? "USD"; // charts use the main currency; the money tiles list each one
 
   return (
     <div className="space-y-4">
@@ -134,8 +138,8 @@ export default function Analytics() {
       ) : (
         <>
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-7" data-testid="kpis">
-            <Tile name="Money protected" value={usd(money.protected, cur)} sub="won + partial-offer savings" />
-            <Tile name="Money refunded" value={usd(money.refunded, cur)} sub="lost, settled or offers paid" />
+            <Tile name="Money protected" value={moneyTile(k.money, "protected")} sub="won + partial-offer savings" />
+            <Tile name="Money refunded" value={moneyTile(k.money, "refunded")} sub="lost, settled or offers paid" />
             <Tile name="Win rate" value={pct(k.win_rate)} sub={`${k.contested} contested case(s)`} />
             <Tile name="Agent accuracy" value={pct(k.accuracy.rate)} sub={`${k.accuracy.correct} of ${k.accuracy.scored} checkable`} />
             <Tile name="Median time to respond" value={k.median_hours_to_response == null ? "—" : `${k.median_hours_to_response} h`} sub="dispute opened → response sent" />

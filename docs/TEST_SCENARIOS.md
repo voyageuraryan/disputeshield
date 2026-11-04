@@ -249,3 +249,22 @@ The buyer link points at `FRONTEND_URL` (localhost:5173 in dev), so open it on t
 
 **Quick tour (~45 min):** A2 → B2 (phone case) → C3 → C2 → D3/D6 → G4 + E14 → E1–E4 → E5 → E10 → I2.
 **Fight demo:** B1 lamp → add tracking → C1 → D1 → E7 (or E6 if PayPal shows "Needs your response").
+
+## Demo mode (Phase 16)
+
+For judges / a live demo only. Set `DEMO_MODE=true`, `ADMIN_TOKEN=<secret>` and optionally
+`DEMO_BUYER_EMAIL=<sandbox US buyer>` in `backend/.env`, then restart. A **Scenarios** button appears in the top bar
+(enter the admin token once). Each scenario creates a real sandbox PayPal order + its store data and shows a copyable
+checklist:
+
+| Scenario | Buyer reports | Expected |
+|---|---|---|
+| Strong "item not received" (lamp) | I didn't receive it | FIGHT |
+| $12 "not as described" (phone case) | significantly not as described | SETTLE (under the $25 threshold, weak) |
+| Faulty earbuds | not as described: doesn't work | troubleshooting invite, then decide |
+| Unauthorised with earlier orders (lamp) | I didn't authorise this payment | FIGHT (CE 3.0-like earlier orders) |
+
+The buyer pays the scenario's order on the Store link (`/store?pay=…`), then opens the dispute by hand: sandbox site →
+Activity → the payment → Report a problem. **Take the tour** walks through queue → timeline → evidence → options →
+approve. The public explainer is at `/demo` (no sign-in); the safety story is at `/trust`.
+

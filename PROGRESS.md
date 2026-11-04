@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-04, Phase 15
+## Open items (tracked) — updated 2026-11-04, Phase 16
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -309,6 +309,24 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 16 (2026-11-04)
+G135 [ ] P2 Demo scenarios not run live. Check with DEMO_MODE=true + ADMIN_TOKEN:
+        - the real sandbox order is created
+        - the Store link (/store?pay=<id>&sku=…) pays that exact order through JS SDK v6 (session.start with an
+          existing orderId)
+        - the capture hook adds delivery / history
+        - a hand-opened dispute arrives
+G136 [ ] P3 Whether the sandbox "Report a problem" offers an "unauthorised" option for a store payment isn't
+        verified; the scenario's checklist says to use "item not received" if not (the earlier-orders evidence shows
+        either way).
+G137 [ ] P3 The Trust page shows the latest eval report as it is: 2 Nov, partial run, gates not passed (G100: the
+        prompts changed since, so it needs a full re-run). The page says so instead of hiding it.
+G138 [ ] P3 Tour step 4 highlights the Recommendation card when the chosen case has no Options card (cases analysed
+        before Phase 13, seeded demo decisions). It prefers a case awaiting approval.
+G139 [x] A scenario order is created by the merchant's click, so its IP/device hashes would have been the
+        merchant's. The capture step now records the paying browser's hashes when the order has none (also helps any
+        order created without them).
+
 ### Found in Phase 15 (2026-11-04)
 G129 [ ] P2 Checkout signal capture not run live: needs one sandbox purchase from the Store page. The fingerprint
         uses crypto.subtle, which needs https or localhost; the tunnel is https. Check the order gets
@@ -335,7 +353,7 @@ G123 [ ] P3 The Analytics chunk is 1.46 MB (438 KB gzip), lazy-loaded on /analyt
 G124 [ ] P3 Accuracy only scores cases PayPal decided (contested). Settled cases have no counterfactual, and
         GATHER_MORE isn't a prediction. RESOLVED_WITH_PAYOUT is excluded from win rate and money (the spec doesn't
         say who was covered). Documented in analytics/kpis.py and outcomes.py.
-G125 [ ] P3 Money tiles show the first currency when outcomes span several (the KPIs are per currency).
+G125 [x] P3 (fixed Phase 16: one amount per currency) Money tiles show the first currency when outcomes span several (the KPIs are per currency).
 G126 [x] AG Charts 14 takes axes as an object keyed x/y. An array was silently ignored (no % / $ axis labels), and
         `as never` casts hid it. Now the options are typed against AG Charts' types; a unit test pins it.
 G127 [x] Monthly accuracy swung 0% <-> 100% on months with 1-2 checkable cases: the chart shows months with >= 3,
@@ -1163,4 +1181,40 @@ for the Gemini + Groq quotas (G92).
   signals.test.ts (3).
 - Regression: backend 714 passed, frontend 144 passed + tsc + build, e2e 32 passed. Migration checked on a copy of
   the dev DB.
+
+## 2026-11-04 — Phase 16: effortless demo, visible safety story
+
+- /trust (merchant sign-in):
+  - the latest DeepEval report as cards (action accuracy, faithfulness average, safety = the weakest of the
+    safety metrics measured, tool correctness) and a full metrics table, with the gates shown honestly when not
+    passed
+  - the guardrails, each with where it is enforced in code (app/trust.py; a test resolves every reference): rule 5
+    double check, citations, no over-claiming, rules first, PII redaction + hashed signals, injection guard,
+    safety stop, structured output + retry, sandbox only, timeline
+  - live counters: proposed / approved / rejected / overridden / sent / needed review
+- Demo mode: only with DEMO_MODE=true AND ADMIN_TOKEN (default off: the endpoints answer 404). The Scenarios drawer
+  (admin token) creates a REAL sandbox order through the normal checkout code (store.open_paypal_order) plus its
+  store data:
+  - strong INR → FIGHT
+  - $12 SNAD weak → SETTLE
+  - faulty earbuds → troubleshooting invite
+  - unauthorised with earlier orders → FIGHT (CE 3.0-like)
+  The capture hook adds delivery to the buyer's address and DEMO-HIST earlier orders. A copyable checklist lists
+  the hand steps (pay via /store?pay=…; sandbox → Activity → Report a problem), with links. PayPal has no API for
+  a buyer to open a dispute.
+- Guided tour (Take the tour): 5 steps (queue → live timeline → evidence → options → approve) highlighting
+  data-tour elements, opening a case that awaits approval.
+- Public /demo landing (no sign-in, "About" tab): tagline, 90-second explainer, how PayPal / AI are used, an inline
+  SVG architecture diagram, guardrails. docs/DEVPOST.md is the same text; tests/test_devpost_sync.py keeps them
+  identical and checks a few claims against the code.
+- Fixed: G125 (money tiles per currency), G139.
+- Tests:
+  - backend tests/test_demo_trust.py (13): guardrail refs resolve, rule 5, counters, demo gating (off by
+    default; flag without token; token without flag; missing / wrong token), scenario end to end with capture →
+    CE3-like
+  - backend test_devpost_sync.py (3)
+  - frontend demo.test.ts (6), layout tests (Scenarios only when enabled, never for buyers), money tiles
+  - e2e: public /demo with real login on, /trust, the 5-step tour (screenshots reviewed: the diagram was
+    re-laid out so arrows don't cross)
+- Regression: backend 730 passed, frontend 152 passed + tsc + build, e2e 35 passed.
 

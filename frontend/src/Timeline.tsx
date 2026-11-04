@@ -61,7 +61,7 @@ export default function Timeline({ steps, state }: { steps: Step[] | null; state
 
   const st = STATE_TEXT[state];
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Agent timeline">
+    <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm" aria-label="Agent timeline" data-tour="timeline">
       <div className="mb-3 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-500">Agent timeline</h2>
         <span className="flex items-center gap-1.5 text-xs text-slate-500" aria-live="polite">

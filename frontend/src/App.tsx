@@ -13,6 +13,8 @@ const Login = lazy(() => import("./pages/Login"));
 const AuthCallback = lazy(() => import("./pages/AuthCallback"));
 const Help = lazy(() => import("./pages/Help"));
 const Analytics = lazy(() => import("./pages/Analytics"));
+const Trust = lazy(() => import("./pages/Trust"));
+const Demo = lazy(() => import("./pages/Demo"));
 
 const Loading = () => <p className="text-sm text-slate-500">Loading…</p>;
 const page = (el: React.ReactNode, auth = true) => <Suspense fallback={<Loading />}>{auth ? <RequireAuth>{el}</RequireAuth> : el}</Suspense>;
@@ -30,6 +32,8 @@ export default function App() {
         <Route path="/orders" element={page(<Orders />)} />
         <Route path="/settings" element={page(<Settings />)} />
         <Route path="/analytics" element={page(<Analytics />)} />
+        <Route path="/trust" element={page(<Trust />)} />
+        <Route path="/demo" element={page(<Demo />, false)} />
         <Route path="/login" element={page(<Login />, false)} />
         <Route path="/auth/callback" element={page(<AuthCallback />, false)} />
         <Route path="*" element={<Navigate to="/queue" replace />} />

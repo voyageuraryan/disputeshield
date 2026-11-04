@@ -46,6 +46,9 @@ class Settings(BaseSettings):
     session_hours: int = 12
     # Shared secret for /admin/sandbox/* demo helpers (X-Admin-Token header). Empty = helpers disabled.
     admin_token: SecretStr = SecretStr("")
+    # Phase 16: the Scenarios drawer (one-click demo orders). Needs DEMO_MODE=true AND ADMIN_TOKEN; off by default.
+    demo_mode: bool = False
+    demo_buyer_email: str = ""   # the sandbox US personal (buyer) account to name in the checklists
 
     # LLMs: tried in LLM_PROVIDERS order; a provider without a key is skipped.
     llm_providers: str = "groq,gemini"
