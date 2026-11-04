@@ -541,3 +541,23 @@ def test_sse_ends_when_the_session_ends(client, engine):
         got = events("".join(r.iter_text()))
     state = next(d for k, d, _ in got if k == "state")
     assert state["ended"] and state["status"] == "HANDED_TO_MERCHANT" and got[-1][0] == "bye"
+
+
+def test_image_bomb_is_rejected_from_the_header_before_any_decode(monkeypatch):
+    """Pillow only WARNS between MAX_PIXELS and 2x MAX_PIXELS; that used to fully decode a 50-100 MP image (a 393 KB
+    PNG took ~900 MB). Scaled down here: limit 10,000 px, image 15,000 px (inside the old warning-only band)."""
+    from PIL import ImageFile
+
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", Image.MAX_IMAGE_PIXELS)  # restored after the test
+    monkeypatch.setattr(P, "MAX_PIXELS", 10_000)
+    buf = io.BytesIO()
+    Image.new("L", (150, 100)).save(buf, "PNG")
+    decoded = []
+    real_load = ImageFile.ImageFile.load
+    monkeypatch.setattr(ImageFile.ImageFile, "load", lambda self: decoded.append(1) or real_load(self))
+    with pytest.raises(P.ProofRejected, match="too large"):
+        P.clean_image(buf.getvalue(), "image/png")
+    assert decoded == []                                   # rejected from the header, never decoded
+    buf = io.BytesIO()
+    Image.new("L", (90, 100)).save(buf, "PNG")             # under the limit: still accepted
+    assert P.clean_image(buf.getvalue(), "image/png").width == 90

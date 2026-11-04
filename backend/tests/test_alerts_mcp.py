@@ -229,6 +229,7 @@ async def test_approve_via_mcp_needs_the_exact_confirmation(mcp, engine, snad_ca
     phrase = info["confirmation_phrase"]
     assert not err and phrase == f"APPROVE SETTLE_PARTIAL PP-D-OFFER {dec.offer_amount:.2f} USD"
     assert info["decision_id"] == dec.id and info["options"]
+    assert info["draft_note"] == dec.draft_note and "draft_note" in info["how_to_approve"]  # merchant sees what's sent
 
     for wrong in ("yes", "APPROVE FIGHT PP-D-OFFER 200.00 USD", f"APPROVE SETTLE_PARTIAL PP-D-OFFER 200.00 USD", ""):
         err, _, text = call(mcp, token, "approve_decision", decision_id=dec.id, confirm=wrong)
@@ -271,5 +272,13 @@ async def test_mcp_read_tools(mcp, engine, snad_case):
     assert not err and rows[0]["dispute_id"] == "PP-D-OFFER" and rows[0]["recommendation"] == "SETTLE_PARTIAL"
     err, case, _ = call(mcp, token, "get_case", dispute_id="PP-D-OFFER")
     assert not err and case["decision"]["recommendation"] == "SETTLE_PARTIAL" and case["evidence"]
+    for e in case["evidence"]:  # buyer-written text is labelled as data for the assistant
+        assert e["trust"] == ("untrusted_buyer_text" if e["type"] in ("buyer_message", "troubleshooting_record")
+                              else "system")
     err, _, text = call(mcp, token, "get_case", dispute_id="NOPE")
     assert err and "unknown dispute" in text
+
+
+def test_buyer_written_evidence_is_labelled_untrusted_for_assistants():
+    assert mcp_server._trust("buyer_message") == mcp_server._trust("troubleshooting_record") == "untrusted_buyer_text"
+    assert mcp_server._trust("tracking") == mcp_server._trust("listing") == "system"

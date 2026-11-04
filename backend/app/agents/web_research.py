@@ -85,12 +85,19 @@ def is_low_trust(src: ResearchSource) -> bool:
     return any(m in d for m in LOW_TRUST)
 
 
+def is_web_url(url: str | None) -> bool:
+    """Only plain http(s) links are kept: a javascript:/data: "source" would become a clickable link for the buyer
+    and the merchant."""
+    p = urlparse((url or "").strip())
+    return p.scheme in ("http", "https") and bool(p.hostname)
+
+
 def rank_sources(sources: list[ResearchSource], brand_words: list[str]) -> list[ResearchSource]:
     """Official first (domain names the brand, or a support/manual/recall page), marketplaces and forums
     dropped when anything else exists. De-duplicated by URL."""
     seen, uniq = set(), []
     for s in sources:
-        if s.url and s.url not in seen:
+        if s.url and is_web_url(s.url) and s.url not in seen:
             seen.add(s.url)
             uniq.append(s)
     trusted = [s for s in uniq if not is_low_trust(s)]
@@ -243,6 +250,7 @@ async def research(product_name: str, model: str | None, symptom: str, *, db: Se
 
 def save_sources(db: Session, ts: TroubleshootingSession, notes: ResearchNotes) -> list[TSSource]:
     """Store every source in ts_sources for this session; the plan may cite only these ids."""
+    notes.sources = [x for x in notes.sources if is_web_url(x.url)]  # also covers results cached before this check
     rows = [TSSource(session_id=ts.id, url=x.url[:2000], title=x.title[:300], snippet=x.snippet[:400],
                      provider=notes.provider) for x in notes.sources]
     for r in rows:

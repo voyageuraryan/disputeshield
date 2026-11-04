@@ -1,6 +1,8 @@
 import asyncio
 import contextlib
 import logging
+import os
+import re
 from contextlib import asynccontextmanager
 
 from fastapi import Depends, FastAPI
@@ -26,6 +28,21 @@ from app.db import create_db_and_tables, engine
 from app.paypal.client import close_paypal_client
 
 log = logging.getLogger(__name__)
+
+_TOKEN_IN_URL = re.compile(r"((?:^|[?&])(?:token|t)=)[^&\s]+")
+
+
+class _RedactTokenFilter(logging.Filter):
+    """Strip session/link tokens from uvicorn access-log lines (SSE and file URLs still carry ?token=)."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        args = record.args
+        if isinstance(args, tuple) and len(args) >= 3 and isinstance(args[2], str) and "=" in args[2]:
+            record.args = (*args[:2], _TOKEN_IN_URL.sub(r"\1[redacted]", args[2]), *args[3:])
+        return True
+
+
+logging.getLogger("uvicorn.access").addFilter(_RedactTokenFilter())
 
 
 @asynccontextmanager
@@ -76,7 +93,15 @@ async def lifespan(app: FastAPI):
     await close_paypal_client()
 
 
-app = FastAPI(title="DisputeShield", lifespan=lifespan)
+def docs_enabled() -> bool:
+    """Interactive API docs are for local development; on Render they'd publish the whole route map (unless
+    DEMO_MODE is on for a demo)."""
+    return not os.environ.get("RENDER") or get_settings().demo_mode
+
+
+_docs = docs_enabled()
+app = FastAPI(title="DisputeShield", lifespan=lifespan, docs_url="/docs" if _docs else None,
+              redoc_url="/redoc" if _docs else None, openapi_url="/openapi.json" if _docs else None)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,

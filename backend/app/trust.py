@@ -34,14 +34,18 @@ GUARDRAILS: list[dict] = [
      "what": "A deterministic checklist and money calculator set the baseline; the AI may move one step only when it "
              "cites a buyer message or the listing.",
      "where": ["app.rules.evidence_rules:evaluate", "app.rules.money:full_baseline", "app.rules.evidence_rules:steps_apart"]},
-    {"key": "pii", "name": "Personal data redacted before any AI call",
-     "what": "Buyer names, emails, addresses and phone numbers are replaced with placeholders; notes that echo a "
-             "placeholder are rejected. Checkout IP / device / payer ids are stored only as keyed hashes.",
+    {"key": "pii", "name": "Personal data redacted before AI calls",
+     "what": "Emails and the order's shipping / delivery addresses are replaced with placeholders in every AI "
+             "call; in the buyer troubleshooting chat, phone and card numbers are too. Buyer names are not yet "
+             "redacted. Notes that echo a placeholder are rejected. Checkout IP / device / payer ids are stored "
+             "only as keyed hashes.",
      "where": ["app.agents.redact:pii_terms", "app.agents.redact:redact", "app.agents.redact:contains_placeholder",
                "app.signals:signal_hash"]},
     {"key": "injection", "name": "Prompt-injection guard",
-     "what": "Buyer messages, uploaded documents and questions are passed as data, never instructions; troubleshooting "
-             "replies are checked before sending; 'Ask your disputes' is a whitelisted structured query, never SQL.",
+     "what": "In the troubleshooting chat and document reads, buyer text and uploaded documents are passed as data, "
+             "never instructions, and troubleshooting replies are checked before sending; dispute analysis relies on "
+             "deterministic checks (citations, one-step moves, note validation); 'Ask your disputes' is a "
+             "whitelisted structured query, never SQL.",
      "where": ["app.agents.troubleshooter:guard_problems", "app.merchant_uploads:read_document",
                "app.analytics.query:validate"]},
     {"key": "safety", "name": "Safety stop",

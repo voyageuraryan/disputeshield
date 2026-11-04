@@ -78,7 +78,7 @@ services:
       # Phase 12: Gemini reads merchant uploads to prefill fields (user decision G103: on)
       - key: UPLOAD_EXTRACTION
         value: "true"
-      # Phase 17: this API's own public URL (MCP endpoint = <PUBLIC_API_URL>/mcp), e.g. https://disputeshield-api.onrender.com
+      # Phase 17: this API's own public URL (MCP endpoint = <PUBLIC_API_URL>/mcp), e.g. https://disputeshield-api-l7ne.onrender.com
       - key: PUBLIC_API_URL
         sync: false
       # Phase 17: alerts (optional). Email via SMTP (STARTTLS) and/or a Slack incoming webhook.
@@ -109,7 +109,7 @@ services:
     envVars:
       - key: NODE_VERSION
         value: "22"
-      # Public URL of disputeshield-api, e.g. https://disputeshield-api.onrender.com
+      # Public URL of disputeshield-api, e.g. https://disputeshield-api-l7ne.onrender.com
       # (fromService `host` is the private-network hostname, which browsers can't reach.)
       - key: VITE_API_BASE_URL
         sync: false

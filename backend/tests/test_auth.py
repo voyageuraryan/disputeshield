@@ -237,8 +237,8 @@ def test_paypal_errors(client):
     _, q = start(client)
     f = fragment(client.get(f"/api/auth/paypal/callback?code=C&state={q['state']}"))
     assert f["error"] == "PayPal login failed; please try again" and ex.call_count == 1  # code never re-sent
-    assert fragment(client.get("/api/auth/paypal/callback?error=access_denied&error_description=User%20cancelled"))[
-        "error"] == "User cancelled"
+    f = fragment(client.get("/api/auth/paypal/callback?error=access_denied&error_description=Call%20+1-555%20now"))
+    assert f["code"] == "cancelled" and "555" not in f["error"]  # PayPal's free text is never reflected
     assert "did not return a login code" in fragment(client.get("/api/auth/paypal/callback"))["error"]
 
 

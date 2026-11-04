@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import smtplib
+import ssl
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 
@@ -121,7 +122,7 @@ def _send_email(to: str, subject: str, text: str) -> None:
     msg["From"], msg["To"], msg["Subject"] = s.smtp_from, to, subject
     msg.set_content(text)
     with smtplib.SMTP(s.smtp_host, s.smtp_port, timeout=20) as smtp:
-        smtp.starttls()
+        smtp.starttls(context=ssl.create_default_context())  # verify the server certificate
         if s.smtp_user:
             smtp.login(s.smtp_user, s.smtp_password.get_secret_value())
         smtp.send_message(msg)

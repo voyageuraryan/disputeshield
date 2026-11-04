@@ -709,3 +709,13 @@ def test_regional_codes_fall_back_to_the_base_language_and_kinds_are_translated(
     assert T._t(T.NEXT_STEP_REPLY, "it") == T.NEXT_STEP_REPLY["en"]  # not translated yet: English
     step = T.TSStep(session_id=1, ordinal=1, title="t", instruction="i", proof_kind="video")
     assert T._kind(step, "hi") == "वीडियो" and T._kind(step, "de") == "Video" and T._kind(step, "en") == "video"
+
+
+def test_sources_keep_only_http_links():
+    from app.agents.web_research import is_web_url
+
+    s = [ResearchSource(url="javascript:alert(1)", title="soundpeak.example", snippet="x"),
+         ResearchSource(url="data:text/html,hi", title="d", snippet="x"),
+         ResearchSource(url="https://soundpeak.example/e5", title="soundpeak.example", snippet="x")]
+    assert [x.url for x in rank_sources(s, ["SoundPeak"])] == ["https://soundpeak.example/e5"]
+    assert is_web_url("http://a.example/x") and not is_web_url("https:///nohost") and not is_web_url(None)

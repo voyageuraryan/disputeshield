@@ -344,6 +344,42 @@ G155 [x] render.yaml covers every Phase 13-18 setting (role Gemini keys, BUYER_P
         UPLOAD_EXTRACTION, PUBLIC_API_URL, SMTP / Slack, DEMO_MODE). Full git history scanned before going public: no
         secrets; the user's note file is excluded locally (.git/info/exclude).
 
+### Security audit (2026-11-04): Group A fixed (no behaviour change for real users)
+G159 [x] Image bomb: Pillow only WARNS between MAX_PIXELS and 2x, so a 50-100 MP proof was fully decoded (a 393 KB
+        PNG took ~900 MB; Render free = 512 MB, ephemeral DB). Now the size is checked from the header before
+        load(), the warning is an error, at most 2 decodes and 1 ffmpeg run at once. Tested (no decode happens).
+G160 [x] Session / link tokens in ?token= / ?t= are redacted from uvicorn access logs (filter in app/main.py).
+        The URLs still carry them: G166.
+G161 [x] /docs, /redoc, /openapi.json are off on Render unless DEMO_MODE (docs_enabled()); local dev keeps them.
+G162 [x] Trust page claims corrected: names are not redacted yet; the "data, never instructions" claim is limited
+        to the troubleshooting chat and document reads (G168, G169).
+G163 [x] Login errors: the callback sends a fixed code; the frontend shows only fixed messages, never URL text
+        (anyone could craft /auth/callback#error=...). PayPal's error_description is no longer reflected.
+G164 [x] Smaller fixes: SMTP STARTTLS verifies the certificate; research sources keep only http(s) links;
+        DEPLOY.md / render.yaml name the real API host (disputeshield-api-l7ne); MCP explain_recommendation
+        returns draft_note and get_case labels buyer-written evidence trust="untrusted_buyer_text"; auth self-check
+        lists public routes exactly (now also checks /api/auth/me), checks every /api/help route without the
+        link token, admin routes 404 off / 403 wrong token, docs off on Render, log redaction.
+        Local only (not in git): chmod 600 on the .db files. Demo admin token was already in sessionStorage.
+G165 [ ] P1 Open from the audit, Group B (low risk; check first): help-link rate limit after the token check +
+        per-IP; proof caps per step/session/bytes; slowapi limits (store orders, login, admin, Ask; exempt
+        loopback for e2e/evals; check ADMIN_TOKEN length on Render first); webhook 64 KB cap, record only after
+        verification (keeps the dev recorder), cert host + timestamp pre-check; store order cleanup; approved_by
+        from the session + settings audit; allowlist re-check per request (judge account removal, G151); MCP
+        token expiry; react-router update + strict next= filter; right-most XFF; signal key required on Render.
+G166 [ ] P1 Group C (changes AI output; run evals before/after): buyer_message justifies moves toward FIGHT only;
+        defect_cited must exclude ts_proof_suspect; stronger validate_note (URLs, PII, admissions, insults,
+        injection words; re-run at approve / retry / MCP); troubleshooter guard on plans + translations
+        (multilingual, URL ban; beware "replace the battery" false positives); DEFECT_CONFIRMED only from button
+        presses + unverified-proof flag + dHash duplicates + deleted-proof tombstone.
+G167 [ ] P2 Group D (changes a flow; safe first step first): MCP confirmation shown on the dashboard, not returned
+        to the assistant; validate MCP note; remove ?token= (fetch with the header / fetch-event-source); session
+        epoch + logout; email_verified + payer-id pinning (log a real sandbox userinfo first); AUTH_MODE=off only
+        with ALLOW_INSECURE_LOCAL from loopback (update e2e / dev.sh / CI together); CSP (report-only first).
+G168 [ ] P2 Redact buyer names / phones in buyer_message and troubleshooting summaries before the analyst and note
+        LLM calls (redact_buyer_text is only used in the troubleshooting chat today).
+G169 [ ] P2 Mark buyer text as untrusted data in the analyst and note prompts (as the troubleshooter does).
+
 ### Found in Phases 17-18 and the full regression (2026-11-04)
 G140 [x] MCP server verified LIVE with the official SDK client (streamable HTTP) on a dev-DB copy:
         - the 5 tools; list / get_case / explain_recommendation on real cases
@@ -1330,3 +1366,15 @@ for the Gemini + Groq quotas (G92).
   - Not run: approving a decision live (money moves in the sandbox: the user's call); buyer steps (pay, open a
     dispute) that need the sandbox buyer's login; real-LLM evals (quota, G100).
 
+## 2026-11-04 — Security audit + Group A fixes
+- White-hat audit of the code and the live Render deployment (no code changed during the audit). Findings were
+  grouped by how likely the fix is to disrupt the working app: A none, B low, C changes AI output, D changes a flow.
+- Group A fixed in one commit: G159-G164. Groups B-D are open as G165-G169.
+- Not changed on purpose: WEBHOOK_RECORD_DIR via the dev tunnel (the recorder feeds build_goldens.py; the proper
+  fix is "record only after verification", in G165).
+- Tests: backend 758 passed (new: bomb rejected before decode, http-only sources, MCP draft_note + trust labels,
+  exact public routes, help routes need the link token, admin 404/403, docs off on Render, log redaction);
+  frontend 158 passed + tsc (new: login errors show fixed messages only). Bomb re-measured: rejected in 0 ms, no
+  extra memory.
+- Needs the user: redeploy to Render (docs off, bomb fix live); check the PayPal webhook URL and Log in with PayPal
+  Return URL use disputeshield-api-l7ne.

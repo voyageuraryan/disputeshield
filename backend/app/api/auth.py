@@ -51,26 +51,30 @@ async def callback(code: str | None = None, state: str | None = None, error: str
                    error_description: str | None = None,
                    paypal: PayPalClient = Depends(get_paypal_client)) -> RedirectResponse:
     if error:  # e.g. the merchant pressed Cancel on PayPal's page
-        return _to_frontend({"error": error_description or error})
+        log.info("Log in with PayPal returned an error: %.80s", error)
+        # Never reflect PayPal's (attacker-settable) error text onto our domain: fixed code + fixed message only.
+        return _to_frontend({"error": "Login was cancelled or refused at PayPal", "code": "cancelled"})
     if not code or not state:
-        return _to_frontend({"error": "PayPal did not return a login code"})
+        return _to_frontend({"error": "PayPal did not return a login code", "code": "no_code"})
     try:
         st = consume_state(state)
     except ValueError as exc:
-        return _to_frontend({"error": f"login link {exc}; please start again"})
+        return _to_frontend({"error": f"login link {exc}; please start again", "code": "state"})
     try:
         tokens = await exchange_code(code, client=paypal)
         user = await userinfo(tokens["access_token"], client=paypal)
     except (PayPalError, KeyError) as exc:
         log.warning("Log in with PayPal failed: %s", exc)
-        return _to_frontend({"error": "PayPal login failed; please try again", "next": st["next"]})
+        return _to_frontend({"error": "PayPal login failed; please try again", "code": "paypal_failed", "next": st["next"]})
     email = (user.get("email") or "").lower()
     allow = allowed_emails()
     if not allow:
-        return _to_frontend({"error": "no merchant is configured: set MERCHANT_LOGIN_EMAILS on the server"})
+        return _to_frontend({"error": "no merchant is configured: set MERCHANT_LOGIN_EMAILS on the server",
+                             "code": "not_configured"})
     if email not in allow:
         log.warning("login refused for %s (not in MERCHANT_LOGIN_EMAILS)", email or "<no email>")
-        return _to_frontend({"error": f"{email or 'this PayPal account'} is not allowed to manage this store"})
+        return _to_frontend({"error": f"{email or 'this PayPal account'} is not allowed to manage this store",
+                             "code": "not_allowed"})
     sub = user.get("user_id") or user.get("sub") or email
     session = new_session({"sub": sub, "email": email, "name": user.get("name")})
     log.info("merchant %s logged in", email)

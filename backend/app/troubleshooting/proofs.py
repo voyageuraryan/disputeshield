@@ -15,6 +15,8 @@ from __future__ import annotations
 
 import io
 import struct
+import threading
+import warnings
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 
@@ -29,6 +31,8 @@ except ImportError:  # pragma: no cover - listed in requirements
     HEIF_OK = False
 
 MAX_PIXELS = 50_000_000          # decompression-bomb guard (a 48 MP phone photo still fits)
+# At most two full image decodes at once: a 48 MP photo decodes to ~150-200 MB, and the free Render plan has 512 MB.
+_DECODE_SLOTS = threading.BoundedSemaphore(2)
 MAX_SIDE = 2560                  # stored images are scaled down to this
 EVIDENCE_MAX = 10 * 1024 * 1024  # PayPal: 10 MB per evidence file
 NEAR_DUP_BITS = 6                # dHash Hamming distance (of 64) treated as "looks like the same picture"
@@ -121,13 +125,28 @@ def clean_image(data: bytes, mime: str) -> CleanImage:
     if mime == "image/heic" and not HEIF_OK:
         raise ProofRejected("HEIC photos can't be read on this server. Please upload a JPEG or PNG.")
     Image.MAX_IMAGE_PIXELS = MAX_PIXELS
+    too_big = ProofRejected("This photo is too large to process. Please upload a smaller one.")
     try:
-        img = Image.open(io.BytesIO(data))
-        img.load()
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", Image.DecompressionBombWarning)
+            img = Image.open(io.BytesIO(data))  # reads the header only; nothing is decoded yet
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
-        raise ProofRejected("This photo is too large to process. Please upload a smaller one.") from None
+        raise too_big from None
     except Exception:  # noqa: BLE001 - any decoder failure means a broken or disguised file
         raise ProofRejected("We couldn't open this photo. Please take it again or upload another one.") from None
+    # Pillow only *warns* between MAX_PIXELS and 2x MAX_PIXELS (a warning is not an exception), so check the
+    # size from the header ourselves before the full decode, and also turn the warning into an error.
+    if img.width * img.height > MAX_PIXELS:
+        raise too_big
+    with _DECODE_SLOTS:
+        try:
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", Image.DecompressionBombWarning)
+                img.load()
+        except (Image.DecompressionBombError, Image.DecompressionBombWarning):
+            raise too_big from None
+        except Exception:  # noqa: BLE001
+            raise ProofRejected("We couldn't open this photo. Please take it again or upload another one.") from None
     exif = img.getexif()
     gps = exif.get_ifd(0x8825)
     taken = _exif_time(exif)
@@ -269,6 +288,8 @@ def parse_time(value) -> datetime | None:  # noqa: ANN001
 
 # ---- evidence copy of a large video (server-side compression) -------------------------------------------------
 
+_FFMPEG_SLOTS = None  # asyncio.Semaphore, created lazily inside the running event loop
+
 async def compress_video(src: str, dst: str, duration_s: float, *, timeout_s: float = 180.0) -> bool:
     """Re-encode a video over 10 MB to an H.264 MP4 under PayPal's 10 MB evidence limit, without metadata.
     Needs ffmpeg on the PATH; returns False (and leaves no file) when it's missing or fails."""
@@ -285,13 +306,17 @@ async def compress_video(src: str, dst: str, duration_s: float, *, timeout_s: fl
             "-vf", "scale='min(1280,iw)':-2", "-c:v", "libx264", "-preset", "veryfast", "-b:v", f"{video_kbps}k",
             "-maxrate", f"{video_kbps}k", "-bufsize", f"{video_kbps * 2}k", "-c:a", "aac", "-b:a", f"{audio_kbps}k",
             "-movflags", "+faststart", dst]
-    proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.DEVNULL,
-                                                stderr=asyncio.subprocess.DEVNULL)
-    try:
-        ok = await asyncio.wait_for(proc.wait(), timeout_s) == 0
-    except asyncio.TimeoutError:
-        proc.kill()
-        ok = False
+    global _FFMPEG_SLOTS
+    if _FFMPEG_SLOTS is None:
+        _FFMPEG_SLOTS = asyncio.Semaphore(1)  # one re-encode at a time; extra uploads queue instead of piling up
+    async with _FFMPEG_SLOTS:
+        proc = await asyncio.create_subprocess_exec(*args, stdout=asyncio.subprocess.DEVNULL,
+                                                    stderr=asyncio.subprocess.DEVNULL)
+        try:
+            ok = await asyncio.wait_for(proc.wait(), timeout_s) == 0
+        except asyncio.TimeoutError:
+            proc.kill()
+            ok = False
     if ok and os.path.getsize(dst) <= EVIDENCE_MAX:
         return True
     try:

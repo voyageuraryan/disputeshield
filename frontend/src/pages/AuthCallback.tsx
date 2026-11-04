@@ -8,6 +8,22 @@ import { setToken } from "../auth";
  * remembered in a ref, because we wipe it from the address bar right away (the router keeps its own copy,
  * so StrictMode's double effects in development still see it).
  */
+/** Fixed messages per error code from the backend. Free text in the URL is never shown: anyone can craft a
+ *  /auth/callback#error=... link, and showing its text on our domain would let them put words in our mouth. */
+export const LOGIN_ERRORS: Record<string, string> = {
+  cancelled: "Login was cancelled or refused at PayPal.",
+  no_code: "PayPal did not return a login code.",
+  state: "This login link has expired or was already used. Please start again.",
+  paypal_failed: "PayPal login failed. Please try again.",
+  not_configured: "No merchant is configured on the server yet.",
+  not_allowed: "This PayPal account is not allowed to manage this store.",
+};
+
+export const loginError = (params: URLSearchParams | null): string => {
+  const code = params?.get("code") ?? "";
+  return Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, code) ? LOGIN_ERRORS[code] : "Login did not complete.";
+};
+
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { hash, pathname } = useLocation();
@@ -16,7 +32,7 @@ export default function AuthCallback() {
   if (f) last.current = f;
   const params = last.current;
   const token = params?.get("token") ?? null;
-  const error = token ? null : params?.get("error") || "Login did not complete.";
+  const error = token ? null : loginError(params);
 
   useEffect(() => {
     if (window.location.hash) history.replaceState(history.state, "", pathname); // drop the token from the bar
