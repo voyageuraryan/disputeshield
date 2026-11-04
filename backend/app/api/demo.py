@@ -11,11 +11,12 @@ from __future__ import annotations
 
 import hmac
 
-from fastapi import APIRouter, Depends, Header, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from sqlmodel import Session
 
 from app import demo_scenarios as demo
 from app.catalog import PRODUCTS
+from app import ratelimit
 from app.config import get_settings
 from app.db import get_session
 from app.paypal.client import PayPalClient, get_paypal_client
@@ -34,11 +35,13 @@ def demo_status() -> dict:
     return {"enabled": demo.enabled()}
 
 
-def require_demo(x_admin_token: str | None = Header(default=None)) -> None:
+def require_demo(request: Request, x_admin_token: str | None = Header(default=None)) -> None:
     if not demo.enabled():
         raise HTTPException(404, "not found")  # demo mode off: the endpoints don't exist
     expected = get_settings().admin_token.get_secret_value()
+    ratelimit.blocked(request, "admin_fail")
     if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        ratelimit.failed(request, "admin_fail")  # only wrong tokens count: 5 guesses a minute per IP
         raise HTTPException(403, "admin token required")
 
 

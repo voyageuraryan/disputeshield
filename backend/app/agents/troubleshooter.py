@@ -19,6 +19,7 @@ import hashlib
 import json
 import logging
 import re
+import shutil
 from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -976,6 +977,39 @@ class ProofResult:
     reply: str | None = None
 
 
+# Upload quotas (security audit): far above what a real buyer needs (one or two photos per step), low enough that
+# one link can't fill the disk or keep ffmpeg busy. Deleting a proof frees its slot, but every upload counts
+# toward MAX_UPLOADS_PER_SESSION.
+MAX_PROOFS_PER_STEP = 3
+MAX_PROOFS_PER_SESSION = 15
+MAX_UPLOADS_PER_SESSION = 40
+MAX_SESSION_BYTES = 150 * 1024 * 1024
+MIN_FREE_DISK_BYTES = 500 * 1024 * 1024
+
+
+def _check_upload_quota(db: Session, ts: TroubleshootingSession, st: TSStep, mine: list[TSProof], size: int) -> None:
+    if sum(1 for p in mine if p.step_id == st.id) >= MAX_PROOFS_PER_STEP:
+        raise ProofRejected(f"This step already has {MAX_PROOFS_PER_STEP} files. Please remove one before adding "
+                            "another.")
+    if len(mine) >= MAX_PROOFS_PER_SESSION or sum(p.size for p in mine) + size > MAX_SESSION_BYTES:
+        raise ProofRejected("You've uploaded the most files this page allows. Please remove one, or ask the seller "
+                            "for help.")
+    uploads = db.exec(select(TSMessage).where(TSMessage.session_id == ts.id, TSMessage.role == "system",
+                                              TSMessage.body.startswith("Buyer uploaded"))).all()
+    if len(uploads) >= MAX_UPLOADS_PER_SESSION:
+        raise ProofRejected("You've uploaded the most files this page allows. Please ask the seller for help.")
+    root = Path(get_settings().artifacts_dir)
+    while not root.exists() and root != root.parent:
+        root = root.parent
+    try:
+        free = shutil.disk_usage(root).free
+    except OSError:
+        free = None
+    if free is not None and free - size < MIN_FREE_DISK_BYTES:
+        log.error("proof upload refused: only %d MB free on the artifacts disk", free // (1024 * 1024))
+        raise ProofRejected("We can't accept uploads right now. Please try again later or contact the seller.")
+
+
 def record_proof(db: Session, ts: TroubleshootingSession, step_id: int, data: bytes, declared: str = "") -> ProofResult:
     """Validate, clean, fingerprint and store one upload (see app/troubleshooting/proofs.py)."""
     if ts.status not in TS_OPEN_STATUSES:
@@ -999,6 +1033,7 @@ def record_proof(db: Session, ts: TroubleshootingSession, step_id: int, data: by
     for p in mine:
         if p.sha256 == digest and p.step_id == st.id:
             return ProofResult(p, already=True)
+    _check_upload_quota(db, ts, st, mine, len(data))
 
     checks: dict = {"detected_type": P.LABEL[mime], "declared_type": declared or None,
                     "declared_matches": (declared or "").split(";")[0].strip().lower() in

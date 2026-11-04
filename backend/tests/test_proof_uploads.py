@@ -561,3 +561,36 @@ def test_image_bomb_is_rejected_from_the_header_before_any_decode(monkeypatch):
     buf = io.BytesIO()
     Image.new("L", (90, 100)).save(buf, "PNG")             # under the limit: still accepted
     assert P.clean_image(buf.getvalue(), "image/png").width == 90
+
+
+def test_upload_quotas_and_low_disk(client, engine, monkeypatch):
+    sid, h = open_session(client, engine)
+    step = view(client, sid, h)["steps"][0]["id"]
+    for i in range(T.MAX_PROOFS_PER_STEP):
+        assert upload(client, sid, h, step, media.jpeg(pattern=i + 1)).status_code == 200
+    r = upload(client, sid, h, step, media.jpeg(pattern=9))
+    assert r.status_code == 422 and "already has 3 files" in r.json()["detail"]
+    assert upload(client, sid, h, step, media.jpeg(pattern=1)).status_code == 200   # same file again: still a no-op
+
+    other = view(client, sid, h)["steps"][1]["id"]
+    monkeypatch.setattr(T, "MAX_SESSION_BYTES", 1)                                  # session byte quota
+    r = upload(client, sid, h, other, media.jpeg(pattern=4))
+    assert r.status_code == 422 and "most files" in r.json()["detail"]
+    monkeypatch.setattr(T, "MAX_SESSION_BYTES", 150 * 1024 * 1024)
+
+    from collections import namedtuple
+    usage = namedtuple("usage", "total used free")
+    monkeypatch.setattr(T.shutil, "disk_usage", lambda p: usage(1, 1, 10 * 1024 * 1024))  # 10 MB free
+    r = upload(client, sid, h, other, media.jpeg(pattern=5))
+    assert r.status_code == 422 and "can't accept uploads right now" in r.json()["detail"]
+
+
+def test_live_updates_are_capped_per_link(client, engine, monkeypatch):
+    sid, h = open_session(client, engine, plan=False)
+    monkeypatch.setitem(api._open_streams, sid, api.MAX_STREAMS_PER_LINK)
+    r = client.get(f"/api/help/{sid}/events", headers=h, params={"max_seconds": 0.05})
+    assert r.status_code == 429 and "too many tabs" in r.json()["detail"]
+    monkeypatch.setitem(api._open_streams, sid, 0)
+    r = client.get(f"/api/help/{sid}/events", headers=h, params={"max_seconds": 0.05})
+    assert r.status_code == 200 and "event: bye" in r.text
+    assert sid not in api._open_streams                                               # released when it ends

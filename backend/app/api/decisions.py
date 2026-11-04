@@ -41,6 +41,7 @@ from app.agents.resolution import (
 )
 from app.agents.runner import resume_run
 from app.agents.steps import log_step
+from app.auth import require_merchant
 from app.db import get_engine, get_session
 from app.ingest import upsert_dispute
 from app.models import Decision, DecisionStatus, Dispute, Order
@@ -56,7 +57,14 @@ class ApproveIn(BaseModel):
     # Phase 13: SETTLE_PARTIAL: the merchant may edit the offer (checked: 10%-90% and their max-offer setting)
     offer_amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
     note: str | None = Field(default=None, min_length=1, max_length=NOTE_MAX_CHARS)  # edited note
+    # Ignored when sent by a client (kept so older clients don't get a 422): the server sets it from the session.
     approved_by: str | None = Field(default=None, max_length=200)
+
+
+def _who(merchant: dict | None) -> str:
+    """The audit name for an action: the logged-in merchant's email, never a value the client sent."""
+    m = merchant or {}
+    return m.get("email") or m.get("name") or m.get("sub") or "merchant"
 
 
 class RejectIn(BaseModel):
@@ -200,9 +208,10 @@ def evidence_pdf(decision_id: int, session: Session = Depends(get_session)) -> F
 
 @router.post("/{decision_id}/approve", response_model=DecisionOut)
 async def approve(decision_id: int, body: ApproveIn | None = None, session: Session = Depends(get_session),
-                  engine: Engine = Depends(get_engine),
-                  paypal: PayPalClient = Depends(get_paypal_client)) -> DecisionOut:
-    return await approve_core(session, engine, paypal, decision_id, body or ApproveIn())
+                  engine: Engine = Depends(get_engine), paypal: PayPalClient = Depends(get_paypal_client),
+                  merchant: dict = Depends(require_merchant)) -> DecisionOut:
+    body = (body or ApproveIn()).model_copy(update={"approved_by": _who(merchant)})
+    return await approve_core(session, engine, paypal, decision_id, body)
 
 
 async def approve_core(session: Session, engine: Engine, paypal: PayPalClient, decision_id: int,
@@ -247,20 +256,20 @@ async def approve_core(session: Session, engine: Engine, paypal: PayPalClient, d
 
 @router.post("/{decision_id}/reject", response_model=DecisionOut)
 async def reject(decision_id: int, body: RejectIn | None = None, session: Session = Depends(get_session),
-                 engine: Engine = Depends(get_engine),
-                 paypal: PayPalClient = Depends(get_paypal_client)) -> DecisionOut:
-    return await reject_core(session, engine, paypal, decision_id, body)
+                 engine: Engine = Depends(get_engine), paypal: PayPalClient = Depends(get_paypal_client),
+                 merchant: dict = Depends(require_merchant)) -> DecisionOut:
+    return await reject_core(session, engine, paypal, decision_id, body, rejected_by=_who(merchant))
 
 
 async def reject_core(session: Session, engine: Engine, paypal: PayPalClient, decision_id: int,
-                      body: RejectIn | None) -> DecisionOut:
+                      body: RejectIn | None, rejected_by: str | None = None) -> DecisionOut:
     d, dispute = _get(session, decision_id)
     _claim(session, d, DecisionStatus.REJECTED)
     dispute.agent_status = "REJECTED"
     session.add(dispute)
     session.commit()
     log_step(session, dispute.id, "merchant", "Rejected the recommendation",
-             {"decision_id": d.id, "reason": body.reason if body else None})
+             {"decision_id": d.id, "reason": body.reason if body else None, "rejected_by": rejected_by})
     if d.run_key:
         try:
             await resume_run(d.run_key, {"approved": False, "decision_id": d.id}, engine, client=paypal)
@@ -272,11 +281,11 @@ async def reject_core(session: Session, engine: Engine, paypal: PayPalClient, de
 
 @router.post("/{decision_id}/retry", response_model=DecisionOut)
 async def retry(decision_id: int, body: ApproveIn | None = None, session: Session = Depends(get_session),
-                engine: Engine = Depends(get_engine),
-                paypal: PayPalClient = Depends(get_paypal_client)) -> DecisionOut:
+                engine: Engine = Depends(get_engine), paypal: PayPalClient = Depends(get_paypal_client),
+                merchant: dict = Depends(require_merchant)) -> DecisionOut:
     """Retry a FAILED decision that PayPal definitely did not process. This call is the merchant's
     approval of the new attempt (optionally with a different action or note)."""
-    body = body or ApproveIn()
+    body = (body or ApproveIn()).model_copy(update={"approved_by": _who(merchant)})
     old, dispute = _get(session, decision_id)
     if old.status != DecisionStatus.FAILED:
         raise HTTPException(409, f"only FAILED decisions can be retried (this one is {old.status.value})")

@@ -31,3 +31,12 @@ describe("login error messages", () => {
     expect(loginError(null)).toBe("Login did not complete.");
   });
 });
+
+describe("post-login redirect", () => {
+  it("allows app paths only (same rule as the backend)", async () => {
+    const { safeNext } = await import("../pages/AuthCallback");
+    for (const ok of ["/queue", "/cases/PP-D-27803", "/analytics?tab=kpis&x=1"]) expect(safeNext(ok)).toBe(ok);
+    for (const bad of [null, "", "queue", "//evil.com", "/\\evil.com", "/\t/evil.com", "/\n/evil.com", "https://evil.com"])
+      expect(safeNext(bad)).toBe("/queue");
+  });
+});

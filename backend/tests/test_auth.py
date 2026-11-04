@@ -279,3 +279,38 @@ def test_buyer_and_merchant_credentials_never_cross(client):
     assert client.get(f"/api/help/{sid}", params={"token": merchant}).status_code == 403
     assert client.get("/api/disputes/PP-X/troubleshooting",
                       headers={"Authorization": f"Bearer {merchant}"}).status_code == 200
+
+
+def test_login_next_allows_app_paths_only():
+    from app.api.auth import _safe_next
+
+    for ok in ("/queue", "/cases/PP-D-27803", "/analytics?tab=kpis&x=1", "/help/7#step-2"):
+        assert _safe_next(ok) == ok
+    for bad in (None, "", "queue", "//evil.com", "/\\evil.com", "/\\\\evil.com", "/\t/evil.com", "/\n/evil.com",
+                "https://evil.com", "/%0a", "/ x", "/" + "a" * 600):
+        expected = "/queue" if bad != "/%0a" else "/%0a"  # percent-encoded text stays encoded: harmless
+        assert _safe_next(bad) == expected, repr(bad)
+
+
+def test_removing_an_email_ends_its_sessions_at_once(client, env):
+    env(MERCHANT_LOGIN_EMAILS="merchant@business.example.com,judge@example.com")
+    tok = new_session({"sub": "j1", "email": "judge@example.com", "name": "Judge"})
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.get("/api/settings", headers=h).status_code == 200
+    env(MERCHANT_LOGIN_EMAILS="merchant@business.example.com")                   # judging is over
+    r = client.get("/api/settings", headers=h)
+    assert r.status_code == 401 and "no longer allowed" in r.json()["detail"]
+
+
+def test_login_is_rate_limited_per_ip(client, monkeypatch):
+    from app import ratelimit
+    from app.troubleshooting.access import RateLimiter
+
+    monkeypatch.setattr(ratelimit, "EXEMPT", set())
+    monkeypatch.setitem(ratelimit.LIMITS, "login", RateLimiter(capacity=2, refill_per_s=0.01))
+    ip = {"X-Forwarded-For": "198.51.100.7"}
+    codes = [client.get("/api/auth/paypal/start", headers=ip).status_code for _ in range(3)]
+    assert codes == [302, 302, 429]
+    assert client.get("/api/auth/paypal/start", headers={"X-Forwarded-For": "198.51.100.8"}).status_code == 302
+    monkeypatch.setattr(ratelimit, "EXEMPT", {"testclient", "198.51.100.7"})  # this machine is never limited
+    assert client.get("/api/auth/paypal/start", headers=ip).status_code == 302

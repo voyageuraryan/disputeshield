@@ -29,3 +29,13 @@ def test_only_old_unpaid_undisputed_checkouts_are_removed():
         assert delete_orders(s, found) == 1
         assert {o.paypal_order_id for o in s.exec(select(Order)).all()} == {"B", None, "C", "D"}
         assert s.exec(select(Shipment)).all() == []
+
+
+def test_demo_scenario_checkouts_are_kept():
+    eng = create_engine("sqlite://")
+    create_db_and_tables(eng)
+    with Session(eng) as s:
+        s.add(Order(amount=Decimal("1"), currency="USD", created_at=NOW - timedelta(days=2), paypal_order_id="E",
+                    demo_scenario="unauth_history"))
+        s.commit()
+        assert abandoned(s, 3, now=NOW) == []

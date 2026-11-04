@@ -49,6 +49,12 @@ logging.getLogger("uvicorn.access").addFilter(_RedactTokenFilter())
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     s = get_settings()
+    from app.signals import check_key
+
+    check_key()  # on Render, refuse to start with the public dev key for the hashed checkout signals
+    if 0 < len(s.admin_token.get_secret_value()) < 32:
+        # A warning, not a refusal, so an existing deployment keeps booting; rotate it to a long random string.
+        log.warning("ADMIN_TOKEN is shorter than 32 characters; use a long random value")
     from sqlmodel import Session as _S
 
     from app.analytics.outcomes import backfill

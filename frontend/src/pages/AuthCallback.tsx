@@ -19,6 +19,11 @@ export const LOGIN_ERRORS: Record<string, string> = {
   not_allowed: "This PayPal account is not allowed to manage this store.",
 };
 
+/** Same rule as the backend's _safe_next: one leading "/", then URL-safe characters only (no "\\", tabs or
+ *  newlines, which browsers turn into "//evil.com"). Anything else goes to the queue. */
+export const safeNext = (next: string | null | undefined): string =>
+  next && /^\/(?![/\\])[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]{0,500}$/.test(next) ? next : "/queue";
+
 export const loginError = (params: URLSearchParams | null): string => {
   const code = params?.get("code") ?? "";
   return Object.prototype.hasOwnProperty.call(LOGIN_ERRORS, code) ? LOGIN_ERRORS[code] : "Login did not complete.";
@@ -39,7 +44,7 @@ export default function AuthCallback() {
     if (!token) return;
     const next = params?.get("next");
     setToken(token);
-    navigate(next && next.startsWith("/") && !next.startsWith("//") ? next : "/queue", { replace: true });
+    navigate(safeNext(next), { replace: true });
   }, [token, params, pathname, navigate]);
 
   if (!error) return <p className="text-sm text-slate-500">Signing you in…</p>;

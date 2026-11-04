@@ -231,12 +231,17 @@ def test_resolved_event_updates_row_and_skips_agents(client, engine):
         assert s.exec(select(Dispute)).one().agent_status == "RESOLVED"
 
 
-def test_records_raw_webhook_when_enabled(client, tmp_path, monkeypatch):
+def test_records_raw_webhook_when_enabled(client, tmp_path, monkeypatch, paid_order):
     monkeypatch.setenv("WEBHOOK_RECORD_DIR", str(tmp_path))
     get_settings.cache_clear()
-    client.mock.post(VERIFY).respond(200, json={"verification_status": "FAILURE"})
+    verify = client.mock.post(VERIFY)
+    verify.respond(200, json={"verification_status": "FAILURE"})
+    client.mock.get(GET_DISPUTE).respond(200, json=DISPUTE)
     try:
-        post(client)
+        assert post(client).status_code == 401
+        assert not list(tmp_path.iterdir())          # an unverified body (anyone's) is never written to disk
+        verify.respond(200, json={"verification_status": "SUCCESS"})
+        assert post(client).status_code == 200
     finally:
         monkeypatch.undo()
         get_settings.cache_clear()
@@ -252,3 +257,18 @@ def test_no_paypal_credentials_is_503(client, monkeypatch):
     no_creds = PayPalClient(Settings(_env_file=None, paypal_client_id="", paypal_client_secret=""))
     app.dependency_overrides[get_paypal_client] = lambda: no_creds
     assert post(client).status_code == 503
+
+
+def test_junk_is_refused_before_any_paypal_call(client):
+    verify = client.mock.post(VERIFY).respond(200, json={"verification_status": "SUCCESS"})
+    assert post(client, body=b"{" + b" " * (64 * 1024) + b"}").status_code == 413          # too large
+    evil = {k: v for k, v in HEADERS.items() if k.lower() != "paypal-cert-url"} | {
+        "PAYPAL-CERT-URL": "https://evil.example/cert.pem"}
+    r = post(client, headers=evil)
+    assert r.status_code == 400 and "PayPal host" in r.text
+    no_sig = {k: v for k, v in HEADERS.items() if k.lower() != "paypal-transmission-sig"}
+    assert post(client, headers=no_sig).status_code == 400
+    bad_time = {k: v for k, v in HEADERS.items() if k.lower() != "paypal-transmission-time"} | {
+        "PAYPAL-TRANSMISSION-TIME": "yesterday"}
+    assert post(client, headers=bad_time).status_code == 400
+    assert verify.call_count == 0                                                         # PayPal never asked

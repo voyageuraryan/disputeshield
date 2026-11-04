@@ -282,3 +282,27 @@ async def test_mcp_read_tools(mcp, engine, snad_case):
 def test_buyer_written_evidence_is_labelled_untrusted_for_assistants():
     assert mcp_server._trust("buyer_message") == mcp_server._trust("troubleshooting_record") == "untrusted_buyer_text"
     assert mcp_server._trust("tracking") == mcp_server._trust("listing") == "system"
+
+
+def test_mcp_token_expires_after_7_days_and_changes_are_audited(mcp, engine):
+    from datetime import timedelta
+
+    from app.models import AuditLog
+
+    created = mcp.post("/api/settings/mcp-token").json()
+    token = created["token"]
+    assert created["expires_at"] and mcp.get("/api/settings").json()["mcp_token_expires_at"]
+    assert rpc(mcp, "tools/list", token=token).status_code == 200
+    with Session(engine) as s:
+        row = s.get(MerchantSettings, 1)
+        row.mcp_token_created_at = row.mcp_token_created_at - timedelta(days=7, minutes=1)
+        s.add(row); s.commit()
+    assert rpc(mcp, "tools/list", token=token).status_code == 401          # expired: refused
+    assert mcp.put("/api/settings", json={"settle_threshold": "42.00", "alert_email_to": "ops@example.com"}).status_code == 200
+    assert mcp.put("/api/settings", json={"settle_threshold": "42.00"}).status_code == 200   # no change: no row
+    with Session(engine) as s:
+        rows = s.exec(select(AuditLog).order_by(AuditLog.id)).all()
+    assert [r.action for r in rows] == ["MCP token created", "settings changed"]
+    assert all(r.who == "merchant@business.example.com" for r in rows)
+    assert rows[1].detail["settle_threshold"][1] == "42.00"
+    assert rows[1].detail["alerts"][0]["email_to"] is None and rows[1].detail["alerts"][1]["email_to"] == "ops@example.com"

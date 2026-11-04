@@ -361,18 +361,39 @@ G164 [x] Smaller fixes: SMTP STARTTLS verifies the certificate; research sources
         lists public routes exactly (now also checks /api/auth/me), checks every /api/help route without the
         link token, admin routes 404 off / 403 wrong token, docs off on Render, log redaction.
         Local only (not in git): chmod 600 on the .db files. Demo admin token was already in sessionStorage.
-G165 [ ] P1 Open from the audit, Group B (low risk; check first): help-link rate limit after the token check +
-        per-IP; proof caps per step/session/bytes; slowapi limits (store orders, login, admin, Ask; exempt
-        loopback for e2e/evals; check ADMIN_TOKEN length on Render first); webhook 64 KB cap, record only after
-        verification (keeps the dev recorder), cert host + timestamp pre-check; store order cleanup; approved_by
-        from the session + settings audit; allowlist re-check per request (judge account removal, G151); MCP
-        token expiry; react-router update + strict next= filter; right-most XFF; signal key required on Render.
+G165 [x] Group B fixed (one commit):
+        - buyer help link: token checked BEFORE the per-session limit (strangers can't lock a buyer out);
+          wrong tokens limited per IP (20/min)
+        - proof uploads: 3 per step, 15 stored + 40 ever per session, 150 MB per session, refused under 500 MB
+          free disk; at most 1 ffmpeg run at once (G159)
+        - per-IP limits (app/ratelimit.py, in memory, loopback exempt so dev.sh / e2e / evals are untouched):
+          store orders 10/min, login start + callback 20/min, Ask 10/min, webhooks 120/min, wrong admin / demo
+          tokens 5/min (only failures count)
+        - client IP: Cloudflare's CF-Connecting-IP on Render (verified: the live API is served through
+          Cloudflare), else the right-most X-Forwarded-For hop; used for limits and checkout signals
+        - webhooks: 64 KB cap (also for chunked bodies); PayPal-shaped headers + cert URL on a PayPal host
+          checked before calling PayPal; the dev recorder writes only VERIFIED events (still feeds goldens)
+        - abandoned checkouts (never paid, no dispute, not a demo scenario) removed after 24 h by the
+          retention loop
+        - approved_by / rejected_by come from the session (a client value is ignored, not refused); settings and
+          MCP-token changes go to a new audit_log table (who, old -> new)
+        - merchant allowlist re-checked on every request: removing an email from MERCHANT_LOGIN_EMAILS ends its
+          sessions at once (G151 judge account)
+        - MCP tokens expire after 7 days (Settings shows when)
+        - strict same-app next= filter on both sides (no backslash / tab / newline tricks)
+        - SSE: at most 3 open live-update streams per buyer link
+        - Render refuses to start with the built-in signal key; ADMIN_TOKEN under 32 chars logs a warning
+        Deliberately NOT done (would disrupt): react-router 7 (major upgrade; moved to G167; the backslash
+        redirect it fixes is blocked by the strict filter, the SSR advisory doesn't apply), a +-5 min webhook
+        timestamp window (PayPal re-delivers for 3 days and the fixtures replay real recordings),
+        refusing a short ADMIN_TOKEN at startup (can't see the Render value; warning instead), re-confirming
+        alert_email_to changes (a flow change; G167).
 G166 [ ] P1 Group C (changes AI output; run evals before/after): buyer_message justifies moves toward FIGHT only;
         defect_cited must exclude ts_proof_suspect; stronger validate_note (URLs, PII, admissions, insults,
         injection words; re-run at approve / retry / MCP); troubleshooter guard on plans + translations
         (multilingual, URL ban; beware "replace the battery" false positives); DEFECT_CONFIRMED only from button
         presses + unverified-proof flag + dHash duplicates + deleted-proof tombstone.
-G167 [ ] P2 Group D (changes a flow; safe first step first): MCP confirmation shown on the dashboard, not returned
+G167 [ ] P2 Group D (changes a flow; safe first step first): react-router 7 upgrade (run all e2e); re-confirm alert_email_to changes; MCP confirmation shown on the dashboard, not returned
         to the assistant; validate MCP note; remove ?token= (fetch with the header / fetch-event-source); session
         epoch + logout; email_verified + payer-id pinning (log a real sandbox userinfo first); AUTH_MODE=off only
         with ALLOW_INSECURE_LOCAL from loopback (update e2e / dev.sh / CI together); CSP (report-only first).
@@ -1378,3 +1399,9 @@ for the Gemini + Groq quotas (G92).
   extra memory.
 - Needs the user: redeploy to Render (docs off, bomb fix live); check the PayPal webhook URL and Log in with PayPal
   Return URL use disputeshield-api-l7ne.
+
+## 2026-11-04 — Security Group B
+- G165 done in one commit (details in the gap entry). New module app/ratelimit.py; new table audit_log.
+- Found while testing: the Group A login-error change broke one e2e test (it expected URL free text on screen);
+  the test now checks the fixed message and that crafted text is never shown.
+- Tests: backend 770 passed; frontend 159 passed + tsc + build; e2e 37 passed.

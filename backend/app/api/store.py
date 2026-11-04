@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
+from app import ratelimit
 from app.auth import require_merchant
 from app.catalog import PRODUCTS, Product, digital_only, order_item
 from app.config import get_settings
@@ -115,7 +116,7 @@ async def open_paypal_order(session: Session, product, quantity: int, *, paypal:
     return order
 
 
-@router.post("/orders", response_model=CreateOrderOut)
+@router.post("/orders", response_model=CreateOrderOut, dependencies=[Depends(ratelimit.limit("store_order"))])
 async def create_store_order(
     body: CreateOrderIn,
     request: Request,

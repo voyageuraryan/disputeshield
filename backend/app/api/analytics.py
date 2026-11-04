@@ -15,6 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlmodel import Session, select
 
+from app import ratelimit
 from app.agents.llm import LLMError
 from app.analytics import calibration, kpis as K
 from app.analytics.query import AskQuery, QueryError, ask, run
@@ -68,7 +69,7 @@ def query(body: QueryIn, session: Session = Depends(get_session)) -> dict:
         raise HTTPException(422, str(exc)) from exc
 
 
-@router.post("/ask")
+@router.post("/ask", dependencies=[Depends(ratelimit.limit("ask"))])
 async def ask_disputes(body: AskIn, session: Session = Depends(get_session)) -> dict:
     """The LLM fills an AskQuery; it's validated against the whitelist. Invalid -> asked again once with the error
     (rule 7) -> still invalid: 422 with the reason (the merchant can build the query with the chips instead)."""

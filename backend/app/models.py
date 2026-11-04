@@ -169,6 +169,17 @@ class Decision(SQLModel, table=True):
     rule_score: Optional[float] = None
 
 
+class AuditLog(SQLModel, table=True):
+    """Merchant actions that aren't about one dispute (settings, MCP tokens); dispute actions go to agent_steps."""
+    __tablename__ = "audit_log"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    at: datetime = Field(default_factory=utcnow, index=True)
+    who: str = Field(max_length=254)
+    action: str = Field(max_length=100)
+    detail: Optional[dict] = _json_col()
+
+
 class ProcessedEvent(SQLModel, table=True):
     """Idempotency ledger for dispute ingestion.
 

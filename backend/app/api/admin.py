@@ -12,13 +12,14 @@ import asyncio
 import hmac
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.engine import Engine
 from sqlmodel import Session, select
 
 from app.agents.resolution import paypal_issues
 from app.agents.runner import run_agents
+from app import ratelimit
 from app.config import get_settings
 from app.db import get_engine, get_session
 from app.ingest import ingest_dispute
@@ -27,11 +28,13 @@ from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.disputes import get_dispute, sandbox_adjudicate, sandbox_require_evidence
 
 
-def require_admin(x_admin_token: str | None = Header(default=None)) -> None:
+def require_admin(request: Request, x_admin_token: str | None = Header(default=None)) -> None:
     expected = get_settings().admin_token.get_secret_value()
     if not expected:
         raise HTTPException(404, "not found")  # helpers disabled
+    ratelimit.blocked(request, "admin_fail")
     if not x_admin_token or not hmac.compare_digest(x_admin_token, expected):
+        ratelimit.failed(request, "admin_fail")  # only wrong tokens count: 5 guesses a minute per IP
         raise HTTPException(403, "admin token required")
 
 

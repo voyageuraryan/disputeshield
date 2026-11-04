@@ -347,8 +347,23 @@ def test_buyer_rate_limit(client, engine, monkeypatch):
     dev = {"X-Help-Device": first.json()["device_key"]}
     assert [first.status_code] + [client.get(f"/api/help/{sid}", params={"t": token}, headers=dev).status_code
                                   for _ in range(2)] == [200, 200, 429]
-    r = client.get(f"/api/help/{sid}", params={"t": "wrong"})  # bad guesses are throttled too
-    assert r.status_code == 429 and int(r.headers["Retry-After"]) >= 1
+    r = client.get(f"/api/help/{sid}", params={"t": "wrong"})  # a wrong token never reaches the session's bucket
+    assert r.status_code == 404
+
+
+def test_strangers_cannot_lock_a_buyer_out_and_guesses_are_limited_per_ip(client, engine, monkeypatch):
+    from app import ratelimit
+
+    sid, token = invited(client, engine)
+    monkeypatch.setattr(ratelimit, "EXEMPT", set())             # the test client counts as a remote IP here
+    monkeypatch.setitem(ratelimit.LIMITS, "help_fail", RateLimiter(capacity=3, refill_per_s=0.01))
+    attacker = {"X-Forwarded-For": "198.51.100.66"}
+    codes = [client.get(f"/api/help/{sid}", params={"t": f"guess{i}"}, headers=attacker).status_code for i in range(5)]
+    assert codes == [404, 404, 404, 429, 429]                   # guessing is cut off per IP
+    buyer = {"X-Forwarded-For": "203.0.113.20"}
+    assert client.get(f"/api/help/{sid}", params={"t": token}, headers=buyer).status_code == 200  # not locked out
+    # once blocked, the attacker can't even try the right token (no oracle)
+    assert client.get(f"/api/help/{sid}", params={"t": token}, headers=attacker).status_code == 429
 
 
 # ---- settings + auto-invite ---------------------------------------------------------------------

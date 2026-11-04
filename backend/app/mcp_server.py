@@ -19,7 +19,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException
@@ -35,6 +35,13 @@ from app.models import AgentStep, Decision, DecisionStatus, Dispute, MerchantSet
 
 SCOPE = "disputeshield"
 TOKEN_PREFIX = "dsm_"
+TOKEN_TTL = timedelta(days=7)  # a leaked token stops working on its own; Settings shows when, and makes a new one
+
+
+def token_expires_at(created_at: datetime | None) -> datetime | None:
+    if created_at is None:
+        return None
+    return (created_at if created_at.tzinfo else created_at.replace(tzinfo=timezone.utc)) + TOKEN_TTL
 # Tests point these at their own engine / PayPal client (the app uses app.db.engine and the shared client).
 ENGINE_OVERRIDE = None
 PAYPAL_OVERRIDE = None
@@ -88,7 +95,10 @@ class MerchantTokenVerifier:
         with Session(_engine()) as s:
             row = s.get(MerchantSettings, 1)
             stored = row.mcp_token_hash if row else None
+            expires = token_expires_at(row.mcp_token_created_at) if row else None
         if not stored or not hmac.compare_digest(token_hash(token), stored):
+            return None
+        if expires is None or expires <= datetime.now(timezone.utc):
             return None
         return AccessToken(token=token, client_id="merchant", scopes=[SCOPE], resource=resource_url())
 
@@ -243,7 +253,8 @@ def build() -> MCPServer:
         engine = _engine()
         with Session(engine) as session:
             try:
-                out = await reject_core(session, engine, _paypal(), decision_id, RejectIn(reason=reason[:1000]))
+                out = await reject_core(session, engine, _paypal(), decision_id, RejectIn(reason=reason[:1000]),
+                                        rejected_by="merchant via MCP")
             except HTTPException as exc:
                 raise ToolError(str(exc.detail)) from exc
         return {"decision_id": out.id, "status": out.status}

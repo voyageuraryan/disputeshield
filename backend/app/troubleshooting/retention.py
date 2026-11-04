@@ -23,6 +23,7 @@ from app.models import TS_OPEN_STATUSES, Dispute, TroubleshootingSession, TSProo
 
 log = logging.getLogger(__name__)
 RETENTION_INTERVAL_H = 6
+ABANDONED_ORDER_HOURS = 24
 
 
 def _aware(dt: datetime) -> datetime:
@@ -164,6 +165,12 @@ async def retention_loop(engine: Engine, interval_h: float = RETENTION_INTERVAL_
             with Session(engine) as db:
                 ids = purge_expired_proofs(db) + purge_expired_uploads(db)
                 purge_signal_hashes(db)
+                # Abandoned public checkouts (never paid, no dispute): POST /api/store/orders is public, so
+                # rows nobody paid for are removed after a day instead of piling up.
+                from app.scripts.cleanup_orders import abandoned, delete_orders
+
+                if (n := delete_orders(db, abandoned(db, ABANDONED_ORDER_HOURS))):
+                    log.info("retention: removed %d abandoned checkout(s)", n)
             if ids:
                 log.info("retention: purged %d proof file(s)", len(ids))
         except asyncio.CancelledError:

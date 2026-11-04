@@ -402,7 +402,12 @@ function McpAccess({ saved, onChanged }: { saved: MerchantSettings; onChanged: (
         <code className="rounded bg-slate-100 px-1">{saved.mcp_url}</code>. Setup steps are in the README.
       </p>
       <p className="mt-2 text-xs text-slate-500">
-        {saved.mcp_token_created_at ? `A token is active (created ${when(saved.mcp_token_created_at)}).` : "No token: MCP access is off."}
+        {!saved.mcp_token_created_at
+          ? "No token: MCP access is off."
+          : saved.mcp_token_expires_at && new Date(saved.mcp_token_expires_at) <= new Date()
+            ? `The token expired ${when(saved.mcp_token_expires_at)}. Create a new one to use MCP again.`
+            : `A token is active (created ${when(saved.mcp_token_created_at)}` +
+              (saved.mcp_token_expires_at ? `, expires ${when(saved.mcp_token_expires_at)}).` : ").")}
       </p>
       {token && (
         <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900" role="status">

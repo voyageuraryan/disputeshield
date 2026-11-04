@@ -41,6 +41,7 @@ from app.agents.steps import log_step
 from app.catalog import PRODUCTS
 from app.events_bus import help_key, notify, wait
 from app.api.disputes import _find
+from app import ratelimit
 from app.config import get_settings
 from app.db import get_session
 from app.models import (TS_OPEN_STATUSES, Dispute, Order, TroubleshootingSession, TSMessage, TSProof, TSSource,
@@ -353,12 +354,17 @@ def no_merchant_credentials(authorization: str | None = Header(default=None),
         raise HTTPException(403, "Merchant sign-in can't be used on the buyer troubleshooting page.")
 
 
-def _checked(session_id: int, t: str | None, x_help_token: str | None, session: Session) -> TroubleshootingSession:
-    """Every buyer request: rate limit, token (constant-time), dispute still open, expiry."""
-    rate_limit(session_id)
+def _checked(request: Request, session_id: int, t: str | None, x_help_token: str | None,
+             session: Session) -> TroubleshootingSession:
+    """Every buyer request: token (constant-time), then the session's rate limit, dispute still open, expiry.
+    The token comes first: session ids are sequential, so a per-session limit taken before it let anyone lock a
+    real buyer out of their page. Wrong tokens are limited per IP instead (20 a minute)."""
+    ratelimit.blocked(request, "help_fail")
     row = session.get(TroubleshootingSession, session_id)
     if row is None or not token_matches(t or x_help_token, row.token_hash):
+        ratelimit.failed(request, "help_fail")
         raise HTTPException(404, INVALID_LINK)  # same answer for unknown session and wrong token
+    rate_limit(session_id)
     dispute = session.get(Dispute, row.dispute_id)
     if dispute is None or dispute.status == "RESOLVED":
         raise HTTPException(410, "This case is closed, so the troubleshooting page is no longer available.")
@@ -368,13 +374,13 @@ def _checked(session_id: int, t: str | None, x_help_token: str | None, session: 
     return row
 
 
-def buyer_link(session_id: int, t: str | None = Query(default=None, max_length=128),
+def buyer_link(request: Request, session_id: int, t: str | None = Query(default=None, max_length=128),
                x_help_token: str | None = Header(default=None, max_length=128),
                x_help_device: str | None = Header(default=None, max_length=128),
                _: None = Depends(no_merchant_credentials),
                session: Session = Depends(get_session)) -> TroubleshootingSession:
     """For the page load: a valid link, and (once bound) the same device."""
-    row = _checked(session_id, t, x_help_token, session)
+    row = _checked(request, session_id, t, x_help_token, session)
     if row.device_hash and not token_matches(x_help_device, row.device_hash):
         raise HTTPException(403, OTHER_DEVICE)
     return row
@@ -658,6 +664,10 @@ def _state(db: Session, row: TroubleshootingSession) -> dict:
             "sources": [s.model_dump() for s in _sources(db, row)]}
 
 
+MAX_STREAMS_PER_LINK = 3   # one page plus a couple of tabs / reconnects; each open stream polls the DB
+_open_streams: dict[int, int] = {}
+
+
 @buyer_router.get("/{session_id}/events")
 async def buyer_events(request: Request, row: TroubleshootingSession = Depends(buyer_device),
                        session: Session = Depends(get_session), after: int = Query(default=0, ge=0),
@@ -668,10 +678,23 @@ async def buyer_events(request: Request, row: TroubleshootingSession = Depends(b
     `event: bye` when the session ends or the stream times out (the page reconnects). The buyer page uses
     fetch() (not EventSource) so the link token and device key stay in headers, out of URLs and logs."""
     engine, sid = session.get_bind(), row.id
+    if _open_streams.get(sid, 0) >= MAX_STREAMS_PER_LINK:
+        raise HTTPException(429, "This page is open in too many tabs. Please close one and try again.",
+                            headers={"Retry-After": "5"})
     cursor = max(after, int(last_event_id) if last_event_id and last_event_id.isdigit() else 0)
     session.close()  # don't hold a DB connection (SQLite read lock) open for the life of the stream
 
     async def stream():
+        _open_streams[sid] = _open_streams.get(sid, 0) + 1
+        try:
+            async for chunk in _stream():
+                yield chunk
+        finally:
+            _open_streams[sid] -= 1
+            if _open_streams[sid] <= 0:
+                _open_streams.pop(sid, None)
+
+    async def _stream():
         nonlocal cursor
         started = last_beat = time.monotonic()
         last_state = None

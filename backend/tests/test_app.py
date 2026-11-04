@@ -27,6 +27,7 @@ def test_creates_tables():
         "merchant_settings",  # merchant-editable settings (settle threshold)
         "troubleshooting_sessions", "ts_steps", "ts_messages", "ts_proofs", "ts_sources",  # phase 9A
         "research_cache",  # phase 9B: 24 h web research cache
+        "audit_log",  # security audit: settings + MCP token changes
     }
 
 

@@ -98,6 +98,16 @@ class RateLimiter:
                 return 0.0
             return (1 - b.tokens) / self.refill
 
+    def peek(self, key: str) -> float:
+        """Like hit() but takes nothing: 0 when a request would be allowed, else seconds to wait."""
+        now = self.clock()
+        with self._lock:
+            b = self._buckets.get(key)
+            if b is None:
+                return 0.0
+            tokens = min(self.capacity, b.tokens + (now - b.updated) * self.refill)
+            return 0.0 if tokens >= 1 else (1 - tokens) / self.refill
+
     def reset(self) -> None:
         with self._lock:
             self._buckets.clear()

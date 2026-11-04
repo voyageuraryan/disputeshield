@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import os
 import logging
 import re
 from dataclasses import dataclass, field
@@ -43,7 +44,14 @@ WORDS = {"ip": "IP address", "device": "device", "account": "account", "address"
 def _key() -> bytes:
     s = get_settings()
     k = s.signal_hash_key.get_secret_value() or s.auth_secret.get_secret_value()
+    if not k and os.environ.get("RENDER"):  # the public dev key would make the stored hashes reversible
+        raise RuntimeError("SIGNAL_HASH_KEY (or AUTH_SECRET) must be set on Render")
     return (k or DEV_KEY).encode()
+
+
+def check_key() -> None:
+    """Startup check (main.lifespan): refuse to run on Render with the built-in dev key."""
+    _key()
 
 
 def signal_hash(kind: str, value: str | None) -> str | None:
@@ -54,9 +62,17 @@ def signal_hash(kind: str, value: str | None) -> str | None:
 
 
 def client_ip(headers, client_host: str | None) -> str | None:  # noqa: ANN001
-    """First X-Forwarded-For hop (Render's proxy sets it), else the socket peer."""
-    fwd = (headers.get("x-forwarded-for") or "").split(",")[0].strip()
-    return fwd or client_host
+    """The real client's IP. Render sits behind Cloudflare, which sets CF-Connecting-IP itself (a client can't
+    choose it), so that header wins when we're on Render or behind a local tunnel (peer is loopback). Otherwise
+    the RIGHT-most X-Forwarded-For hop (the one our own proxy added; the left-most is whatever the client sent),
+    else the socket peer."""
+    peer = client_host or None
+    if os.environ.get("RENDER") or peer in ("127.0.0.1", "::1"):
+        cf = (headers.get("cf-connecting-ip") or "").strip()
+        if cf:
+            return cf
+    hops = [h.strip() for h in (headers.get("x-forwarded-for") or "").split(",") if h.strip()]
+    return hops[-1] if hops else peer
 
 
 FP_RE = re.compile(r"^[0-9a-f]{64}$")

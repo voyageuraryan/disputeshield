@@ -10,6 +10,7 @@ import pytest
 from sqlmodel import Session, select
 
 from app import signals as S
+from app.config import get_settings
 from app.agents.analyst import validate
 from app.agents.investigator import investigate
 from app.models import AgentStep, Dispute, EvidenceItemRow, Order
@@ -67,9 +68,29 @@ def test_only_a_browser_sha256_is_accepted_as_device_fingerprint():
     assert o.device_hash and o.ip_hash is None
 
 
-def test_client_ip_prefers_the_first_forwarded_hop():
-    assert S.client_ip({"x-forwarded-for": "203.0.113.7, 10.0.0.1"}, "10.0.0.2") == "203.0.113.7"
+def test_client_ip_cannot_be_chosen_by_the_client(monkeypatch):
+    monkeypatch.delenv("RENDER", raising=False)
+    # the left-most hop is whatever the client sent; the right-most is the one our proxy added
+    assert S.client_ip({"x-forwarded-for": "1.1.1.1, 203.0.113.7"}, "10.0.0.2") == "203.0.113.7"
     assert S.client_ip({}, "10.0.0.2") == "10.0.0.2"
+    # CF-Connecting-IP is only trusted where Cloudflare sets it: on Render, or behind the local tunnel
+    assert S.client_ip({"cf-connecting-ip": "9.9.9.9"}, "10.0.0.2") == "10.0.0.2"
+    assert S.client_ip({"cf-connecting-ip": "203.0.113.9"}, "127.0.0.1") == "203.0.113.9"
+    monkeypatch.setenv("RENDER", "true")
+    assert S.client_ip({"cf-connecting-ip": "203.0.113.9", "x-forwarded-for": "1.1.1.1, 172.68.0.1"},
+                       "10.0.0.2") == "203.0.113.9"
+
+
+def test_render_refuses_the_built_in_signal_key(monkeypatch):
+    from pydantic import SecretStr
+
+    s = get_settings()
+    monkeypatch.setattr(s, "signal_hash_key", SecretStr(""))
+    monkeypatch.setattr(s, "auth_secret", SecretStr(""))
+    S.check_key()                                   # local dev: the dev key is fine
+    monkeypatch.setenv("RENDER", "true")
+    with pytest.raises(RuntimeError, match="SIGNAL_HASH_KEY"):
+        S.check_key()
 
 
 def test_checkout_stores_hashes_never_raw_values(client, engine):

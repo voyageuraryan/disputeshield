@@ -137,3 +137,22 @@ def test_access_log_never_shows_tokens():
                             ("1.2.3.4:5", "GET", "/api/help/7?t=LINKTOKEN", "1.1", 200), None)
     _RedactTokenFilter().filter(rec)
     assert "LINKTOKEN" not in rec.getMessage()
+
+
+def test_wrong_admin_tokens_are_limited_but_the_right_one_is_not(monkeypatch):
+    from app import ratelimit
+    from app.troubleshooting.access import RateLimiter
+
+    monkeypatch.setenv("ADMIN_TOKEN", "a" * 40)
+    get_settings.cache_clear()
+    monkeypatch.setattr(ratelimit, "EXEMPT", set())
+    monkeypatch.setitem(ratelimit.LIMITS, "admin_fail", RateLimiter(capacity=2, refill_per_s=0.01))
+    path = "/admin/sandbox/disputes/PP-D-1/require-evidence"
+    ip = {"X-Forwarded-For": "198.51.100.10"}
+    with TestClient(app) as c:
+        codes = [c.post(path, json={}, headers={**ip, "X-Admin-Token": f"guess{i}"}).status_code for i in range(3)]
+        assert codes == [403, 403, 429]
+        other = {"X-Forwarded-For": "198.51.100.11", "X-Admin-Token": "a" * 40}
+        # the real token still gets through the guard (an invalid body then stops it before any PayPal call)
+        assert c.post(path, json={"action": "BOGUS"}, headers=other).status_code == 422
+    get_settings.cache_clear()

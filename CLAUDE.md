@@ -52,7 +52,8 @@ backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, inges
              signals.py (Phase 15: hashed checkout signals, CE 3.0-LIKE prior history, serial disputes),
              trust.py (Phase 16: guardrails -> code refs, counters), demo_scenarios.py (DEMO_MODE + ADMIN_TOKEN only),
              alerts.py (Phase 17: email/Slack, deduped in processed_events), mcp_server.py (Phase 17: MCP at /mcp),
-             merchant_uploads.py (Phase 12: merchant-added evidence: validate, store, Gemini read, confirm, flags)}
+             merchant_uploads.py (Phase 12: merchant-added evidence: validate, store, Gemini read, confirm, flags),
+             ratelimit.py (per-IP limits for public routes; loopback exempt)}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
 backend/app/analytics/ outcomes.py (capture on RESOLVED), kpis.py, query.py (Ask: whitelisted structured query, no SQL),
                       calibration.py (rule_score -> P(win), >= 10 outcomes), demo.py (seed --demo-history)

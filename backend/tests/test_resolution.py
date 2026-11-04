@@ -310,6 +310,9 @@ async def test_fight_flow_approve_executes_provide_evidence(api, engine, demo):
     assert ev_sent["evidence_info"]["tracking_info"][0]["tracking_number"] == "9400111899223344556677"
     steps = actions(engine, did)
     assert ("merchant", "Approved FIGHT") in steps
+    with Session(engine) as s:  # the audit name comes from the session, not from the client's "approved_by"
+        step = s.exec(select(AgentStep).where(AgentStep.dispute_id == did, AgentStep.action == "Approved FIGHT")).one()
+        assert step.detail["approved_by"] == "merchant@business.example.com"
     assert ("executor", "PayPal accepted provide-evidence for PP-D-A") == steps[-1]
     with Session(engine) as s:
         assert s.get(Dispute, did).agent_status == "EXECUTED"

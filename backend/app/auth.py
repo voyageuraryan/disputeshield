@@ -115,7 +115,13 @@ def require_merchant(authorization: str | None = Header(default=None),
     if not raw:
         raise HTTPException(401, "login required", headers={"WWW-Authenticate": "Bearer"})
     try:
-        return verify(raw, "session")
+        claims = verify(raw, "session")
     except ValueError as exc:
         raise HTTPException(401, f"session {exc}; please log in again",
                             headers={"WWW-Authenticate": "Bearer"}) from exc
+    # Re-checked on every request: removing an email from MERCHANT_LOGIN_EMAILS (e.g. the judges' account after
+    # judging) ends that account's sessions at once, instead of when the token expires.
+    if (claims.get("email") or "").lower() not in allowed_emails():
+        raise HTTPException(401, "this account is no longer allowed to manage this store; please log in again",
+                            headers={"WWW-Authenticate": "Bearer"})
+    return claims

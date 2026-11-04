@@ -324,6 +324,7 @@ export type MerchantSettings = {
   fee_sources?: { country: string; standard: string; high_volume: string; url: string }[];
   alerts?: AlertToggles;
   mcp_token_created_at?: string | null;
+  mcp_token_expires_at?: string | null;
   mcp_url?: string;
 };
 

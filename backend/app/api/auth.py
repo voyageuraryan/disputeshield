@@ -9,12 +9,15 @@ GET /api/auth/me                -> the logged-in merchant
 
 from __future__ import annotations
 
+import re
+
 import logging
 from urllib.parse import quote, urlencode
 
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 
+from app import ratelimit
 from app.auth import allowed_emails, auth_disabled, consume_state, new_session, new_state, require_merchant
 from app.config import get_settings
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
@@ -24,11 +27,14 @@ log = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+# A same-app path: starts with ONE "/", then only URL-safe characters. Browsers treat a backslash like "/" and drop
+# tabs and newlines, so "/<backslash>evil.com" or "/<TAB>/evil.com" would become "//evil.com" (an open redirect);
+# none of those characters are allowed. The frontend applies the same rule (pages/AuthCallback.tsx safeNext).
+SAFE_NEXT = re.compile(r"/(?![/\\])[A-Za-z0-9\-._~!$&'()*+,;=:@%/?#]{0,500}")
+
+
 def _safe_next(path: str | None) -> str:
-    # Only same-app relative paths: no "//evil.com", no "https://..." (open redirect).
-    if not path or not path.startswith("/") or path.startswith("//") or "\\\\" in path:
-        return "/queue"
-    return path
+    return path if path and SAFE_NEXT.fullmatch(path) else "/queue"
 
 
 def _to_frontend(fragment: dict[str, str]) -> RedirectResponse:
@@ -41,12 +47,12 @@ def auth_config() -> dict:
     return {"mode": "off" if auth_disabled() else "paypal"}
 
 
-@router.get("/paypal/start")
+@router.get("/paypal/start", dependencies=[Depends(ratelimit.limit("login"))])
 def start(next: str | None = Query(default=None)) -> RedirectResponse:
     return RedirectResponse(authorize_url(new_state(_safe_next(next))), status_code=302)
 
 
-@router.get("/paypal/callback")
+@router.get("/paypal/callback", dependencies=[Depends(ratelimit.limit("login"))])
 async def callback(code: str | None = None, state: str | None = None, error: str | None = None,
                    error_description: str | None = None,
                    paypal: PayPalClient = Depends(get_paypal_client)) -> RedirectResponse:

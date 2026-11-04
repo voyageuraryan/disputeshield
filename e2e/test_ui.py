@@ -250,9 +250,14 @@ def test_callback_signs_in_and_logout(auth_stack, browser):
 def test_callback_error_and_expired_session(auth_stack, browser):
     ctx = browser.new_context()
     pg = ctx.new_page()
-    pg.goto(f"{auth_stack.base}/auth/callback#error=sb-x%40personal.example.com%20is%20not%20allowed")
+    pg.goto(f"{auth_stack.base}/auth/callback#code=not_allowed&error=sb-x%40personal.example.com%20is%20not%20allowed")
     pg.wait_for_selector("text=Couldn't sign you in")
-    assert "is not allowed" in pg.inner_text("[role=alert]")
+    alert = pg.inner_text("[role=alert]")
+    assert "This PayPal account is not allowed to manage this store." in alert and "sb-x@" not in alert
+    # free text in the URL is never shown (anyone can craft this link)
+    pg.goto(f"{auth_stack.base}/auth/callback#error=Call%20%2B1-555-0100%20to%20unlock%20your%20account")
+    pg.wait_for_selector("text=Couldn't sign you in")
+    assert "555" not in pg.inner_text("[role=alert]")
     # A session that expires while the page is open: the next API call sends the merchant to login.
     tok = auth_stack.session_token(exp_offset=10)  # minting takes ~2 s; leave room to load the page
     pg.goto(f"{auth_stack.base}/auth/callback#token={tok}&next=%2Fsettings")

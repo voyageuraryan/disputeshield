@@ -24,7 +24,7 @@ def abandoned(session: Session, min_age_hours: float, now: datetime | None = Non
     out = []
     for o in rows:
         created = o.created_at if o.created_at.tzinfo else o.created_at.replace(tzinfo=timezone.utc)
-        if o.id not in keep_ids and created <= cutoff:
+        if o.id not in keep_ids and created <= cutoff and not o.demo_scenario:  # demo orders stay for the demo
             out.append(o)
     return out
 

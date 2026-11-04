@@ -170,3 +170,15 @@ def test_create_transport_failure_leaves_no_row(client, engine):
         client.post("/api/store/orders", json={"sku": "LAMP-01"})
     with Session(engine) as s:
         assert s.exec(select(Order)).all() == []
+
+
+def test_new_orders_are_rate_limited_per_ip(client, monkeypatch):
+    from app import ratelimit
+    from app.troubleshooting.access import RateLimiter
+
+    client.mock.post(f"{BASE}/v2/checkout/orders").respond(201, json={"id": "5O190127TN364715T", "status": "CREATED"})
+    monkeypatch.setattr(ratelimit, "EXEMPT", set())
+    monkeypatch.setitem(ratelimit.LIMITS, "store_order", RateLimiter(capacity=2, refill_per_s=0.01))
+    ip = {"X-Forwarded-For": "198.51.100.9"}
+    codes = [client.post("/api/store/orders", json={"sku": "LAMP-01"}, headers=ip).status_code for _ in range(3)]
+    assert codes == [200, 200, 429]
