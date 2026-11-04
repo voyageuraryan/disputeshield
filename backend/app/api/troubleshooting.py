@@ -197,6 +197,21 @@ def _brief(row: TroubleshootingSession) -> SessionBrief:
                         merchant_active=agent.merchant_active(row))
 
 
+@merchant_router.get("/api/troubleshooting/windows")
+def troubleshooting_windows(session: Session = Depends(get_session)) -> list[dict]:
+    """Phase 18 (Deadlines view): each buyer troubleshooting window: invited -> finished (or the link's expiry)."""
+    out = []
+    for ts in session.exec(select(TroubleshootingSession)).all():
+        d = session.get(Dispute, ts.dispute_id)
+        if d is None:
+            continue
+        out.append({"dispute_id": d.paypal_dispute_id, "status": ts.status.value,
+                    "start": (ts.invited_at or ts.created_at).isoformat() if (ts.invited_at or ts.created_at) else None,
+                    "end": (ts.finished_at or ts.expires_at).isoformat() if (ts.finished_at or ts.expires_at) else None,
+                    "finished": ts.finished_at is not None})
+    return out
+
+
 @merchant_router.get("/api/disputes/{dispute_id}/troubleshooting", response_model=TroubleshootingOut)
 def troubleshooting_status(dispute_id: str, session: Session = Depends(get_session)) -> TroubleshootingOut:
     d = _find(session, dispute_id)

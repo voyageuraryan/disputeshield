@@ -62,6 +62,7 @@ export default function Layout() {
           <nav className="flex gap-1 sm:gap-2">
             {merchant && <NavLink to="/queue" className={link}>Disputes</NavLink>}
             {merchant && <NavLink to="/orders" className={link}>Orders</NavLink>}
+            {merchant && <NavLink to="/deadlines" className={link}>Deadlines</NavLink>}
             {merchant && <NavLink to="/analytics" className={link}>Analytics</NavLink>}
             {merchant && <NavLink to="/trust" className={link}>Trust</NavLink>}
             <NavLink to="/store" className={link}>Store</NavLink>

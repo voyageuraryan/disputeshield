@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { settingsApi, type MerchantSettings } from "../api";
+import { settingsApi, type AlertRow, type MerchantSettings } from "../api";
 import { money, when } from "../format";
 
 const MAX = 10000;
@@ -114,6 +114,8 @@ export default function Settings() {
       {saved && <RefundPolicy initial={saved.refund_policy ?? ""} onSaved={setSaved} />}
       {saved && <AutoInvite value={saved.auto_invite_troubleshooting} onSaved={setSaved} />}
       {saved && <MoneyInputs saved={saved} onSaved={setSaved} />}
+      {saved && <Alerts saved={saved} onSaved={setSaved} />}
+      {saved && <McpAccess saved={saved} onChanged={() => settingsApi.get().then(setSaved)} />}
     </div>
   );
 }
@@ -323,3 +325,113 @@ export function moneyProblem(v: { dispute_fee: string; handling_minutes: string;
   if (!/^\d+$/.test(v.max_offer_pct.trim()) || pct < 10 || pct > 90) return "Max offer must be between 10 and 90 (%).";
   return null;
 }
+
+/** Phase 17: alerts by email / Slack. */
+function Alerts({ saved, onSaved }: { saved: MerchantSettings; onSaved: (s: MerchantSettings) => void }) {
+  const a = saved.alerts;
+  const [email, setEmail] = useState(a?.email_to ?? "");
+  const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "error"; text?: string }>({ kind: "idle" });
+  const [recent, setRecent] = useState<AlertRow[]>([]);
+  useEffect(() => {
+    settingsApi.alerts().then(setRecent, () => setRecent([]));
+  }, []);
+  if (!a) return null;
+  const save = async (patch: Parameters<typeof settingsApi.save>[0], ok = "Saved.") => {
+    setStatus({ kind: "saving" });
+    try {
+      onSaved(await settingsApi.save(patch));
+      setStatus({ kind: "ok", text: ok });
+    } catch (e) {
+      setStatus({ kind: "error", text: (e as Error).message });
+    }
+  };
+  const toggle = (key: "alert_on_proposed" | "alert_on_troubleshooting" | "alert_on_deadlines" | "alert_slack", value: boolean, label: string) => (
+    <label className="flex items-center gap-2 text-sm">
+      <input type="checkbox" checked={value} disabled={status.kind === "saving"} onChange={(e) => save({ [key]: e.target.checked })}
+        className="h-4 w-4 rounded border-slate-300 text-indigo-600" />
+      {label}
+    </label>
+  );
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" data-testid="alerts-settings">
+      <h2 className="font-semibold">Alerts</h2>
+      <p className="mt-1 text-sm text-slate-600">Get told where you already are. Each alert is sent once.</p>
+      <div className="mt-3 space-y-2">
+        {toggle("alert_on_proposed", a.proposed, "A new recommendation is waiting for your approval")}
+        {toggle("alert_on_troubleshooting", a.troubleshooting, "A buyer finished the troubleshooting page")}
+        {toggle("alert_on_deadlines", a.deadlines, "48 h and 12 h before a response is due, if nothing is approved")}
+      </div>
+      <form className="mt-4 flex flex-wrap items-end gap-2" onSubmit={(e) => (e.preventDefault(), save({ alert_email_to: email.trim() }, email.trim() ? "Alerts go to this address." : "Email alerts off."))}>
+        <label className="text-sm">
+          <span className="block font-medium text-slate-700">Email alerts to</span>
+          <input type="email" aria-label="Alert email address" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@shop.com" className="mt-1 w-64 rounded-md border border-slate-300 px-2 py-1.5" />
+        </label>
+        <button className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white">Save</button>
+      </form>
+      <p className="mt-1 text-xs text-slate-500">
+        {a.email_ready ? "Email is configured on the server." : "Email isn't configured on the server yet (SMTP_HOST): alerts are recorded below until it is."}
+      </p>
+      <div className="mt-3">
+        {a.slack_ready ? toggle("alert_slack", a.slack, "Also post to Slack") : <p className="text-xs text-slate-500">Slack: set SLACK_WEBHOOK_URL on the server to post alerts to a channel.</p>}
+      </div>
+      {status.kind === "ok" && <p className="mt-2 text-sm text-indigo-700" role="status">{status.text}</p>}
+      {status.kind === "error" && <p className="mt-2 text-sm text-red-700" role="alert">Couldn't save: {status.text}</p>}
+      {recent.length > 0 && (
+        <details className="mt-3 text-xs text-slate-600">
+          <summary className="cursor-pointer">Recent alerts ({recent.length})</summary>
+          <ul className="mt-1 space-y-0.5">
+            {recent.map((r) => (
+              <li key={r.key}>{r.subject} · {r.status}{r.channels?.length ? ` (${r.channels.join(", ")})` : ""}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** Phase 17: a token for the MCP server (Claude Desktop etc.). Shown once; only its hash is stored. */
+function McpAccess({ saved, onChanged }: { saved: MerchantSettings; onChanged: () => void }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm" data-testid="mcp-settings">
+      <h2 className="font-semibold">Use from Claude (MCP)</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        Let an AI assistant list your disputes, explain recommendations and, only with your exact confirmation, approve them. MCP endpoint:{" "}
+        <code className="rounded bg-slate-100 px-1">{saved.mcp_url}</code>. Setup steps are in the README.
+      </p>
+      <p className="mt-2 text-xs text-slate-500">
+        {saved.mcp_token_created_at ? `A token is active (created ${when(saved.mcp_token_created_at)}).` : "No token: MCP access is off."}
+      </p>
+      {token && (
+        <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2 text-xs text-amber-900" role="status">
+          Copy it now, it won't be shown again: <code className="break-all font-mono" data-testid="mcp-token">{token}</code>
+        </div>
+      )}
+      {err && <p className="mt-2 text-xs text-red-700" role="alert">{err}</p>}
+      <div className="mt-3 flex gap-2">
+        <button
+          onClick={async () => {
+            setErr(null);
+            try {
+              setToken((await settingsApi.createMcpToken()).token);
+              onChanged();
+            } catch (e) {
+              setErr((e as Error).message);
+            }
+          }}
+          className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white"
+        >
+          {saved.mcp_token_created_at ? "Create a new token (replaces the old one)" : "Create token"}
+        </button>
+        {saved.mcp_token_created_at && (
+          <button onClick={async () => (await settingsApi.revokeMcpToken(), setToken(null), onChanged())} className="rounded-md border border-slate-300 px-3 py-1.5 text-sm">
+            Revoke
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+

@@ -125,7 +125,9 @@ def test_dispute_created_full_flow(client, engine, paid_order):
         assert d.raw["dispute_id"] == "PP-D-27803"
         keys = {e.key for e in s.exec(select(ProcessedEvent)).all()}
         run = {k for k in keys if k.startswith("run:PP-D-27803:")}
-        assert keys == {f"evt:{EVENT['id']}"} | run and len(run) == 1  # one run per material version
+        alerts = {k for k in keys if k.startswith("alert:")}
+        assert keys - alerts == {f"evt:{EVENT['id']}"} | run and len(run) == 1  # one run per material version
+        assert len(alerts) == 1 and next(iter(alerts)).startswith("alert:proposed:")  # Phase 17: one merchant alert
     assert steps(engine) == [("orchestrator", "run_started"), ("orchestrator", "Waiting for merchant approval"),
                              ("orchestrator", "run_finished")]
 

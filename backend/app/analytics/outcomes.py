@@ -82,3 +82,16 @@ def record_outcome(session: Session, dispute: Dispute) -> DisputeOutcome:
     row.resolved_at = _ts(raw.get("update_time")) or datetime.now(timezone.utc)
     session.add(row)
     return row
+
+
+def backfill(session: Session) -> int:
+    """Disputes that resolved before outcome capture existed (or while it failed) get their row now. Idempotent;
+    run at startup. Returns how many rows were written."""
+    done = {o.dispute_id for o in session.exec(select(DisputeOutcome).where(DisputeOutcome.dispute_id.is_not(None))).all()}
+    n = 0
+    for d in session.exec(select(Dispute).where(Dispute.status == "RESOLVED")).all():
+        if d.id not in done:
+            record_outcome(session, d)
+            n += 1
+    session.commit()
+    return n

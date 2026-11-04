@@ -10,6 +10,8 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@bryntum/scheduler": "npm:@bryntum/scheduler-trial@7.3.7",
+    "@bryntum/scheduler-react": "7.3.7",
     "ag-charts-community": "14.2.0",
     "ag-charts-react": "14.2.0",
     "ag-grid-community": "^36.2.0",

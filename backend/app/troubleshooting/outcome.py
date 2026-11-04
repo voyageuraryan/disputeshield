@@ -175,6 +175,15 @@ def finished(db: Session, ts: TroubleshootingSession) -> str | None:
         ts.finished_at = datetime.now(timezone.utc)
         db.add(ts)
         db.commit()
+    if is_final(ts):  # Phase 17: tell the merchant (deduplicated per session + final status)
+        try:
+            from app.alerts import on_troubleshooting_finished
+
+            d = db.get(Dispute, ts.dispute_id)
+            if d is not None:
+                on_troubleshooting_finished(db, d, ts)
+        except Exception:  # never break the buyer's request over an alert
+            log.exception("couldn't queue the troubleshooting alert for session %s", ts.id)
     if not is_final(ts) or _scheduler is None or not get_settings().troubleshooting_reanalyse:
         return None
     dispute = db.get(Dispute, ts.dispute_id)

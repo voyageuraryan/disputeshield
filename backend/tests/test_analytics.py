@@ -298,3 +298,19 @@ def test_demo_generator_is_deterministic_and_plausible():
     assert [(x.ref, x.amount, x.outcome) for x in a] == [(x.ref, x.amount, x.outcome) for x in b]
     k = kpis([fact(o) for o in generate(now=T0)])
     assert 0.3 < k["win_rate"] < 0.9 and k["accuracy"]["scored"] > 20 and k["money"]["USD"]["protected"] > 0
+
+
+def test_backfill_records_disputes_resolved_before_capture_existed(engine):
+    """Found in the Phase 17/18 live regression: real sandbox disputes resolved before Phase 14 had no outcome row,
+    so real analytics stayed empty. The startup backfill writes them once."""
+    from app.analytics.outcomes import backfill
+
+    with Session(engine) as s:
+        s.add(Dispute(paypal_dispute_id="PP-OLD-RES", reason=INR, status="RESOLVED", amount=D("45"), currency="USD",
+                      raw={"dispute_outcome": {"outcome_code": "RESOLVED_BUYER_FAVOUR",
+                                               "amount_refunded": {"currency_code": "USD", "value": "45.00"}}}))
+        s.add(Dispute(paypal_dispute_id="PP-OPEN", reason=INR, status="OPEN", amount=D("10"), currency="USD"))
+        s.commit()
+        assert backfill(s) == 1 and backfill(s) == 0
+        row = s.exec(select(DisputeOutcome)).one()
+    assert (row.ref, row.outcome, row.amount_refunded) == ("PP-OLD-RES", "BUYER_FAVOUR", D("45.00"))

@@ -53,6 +53,8 @@ class DisputeRow(BaseModel):
     updated_at: str | None
     latest_decision: DecisionBrief | None
     troubleshooting: str | None = None  # buyer troubleshooting session status (Phase 9D), if there is one
+    opened_at: str | None = None        # Phase 18: PayPal create_time (Deadlines view)
+    responded_at: datetime | None = None  # first response sent to PayPal (an executed decision)
 
 
 class StepOut(BaseModel):
@@ -136,7 +138,11 @@ def _row(session: Session, d: Dispute) -> DisputeRow:
         latest_decision=DecisionBrief(id=dec.id, recommendation=dec.recommendation, confidence=dec.confidence,
                                       status=dec.status.value) if dec else None,
         troubleshooting=ts.status.value if (ts := session.exec(select(TroubleshootingSession).where(
-            TroubleshootingSession.dispute_id == d.id)).first()) else None)
+            TroubleshootingSession.dispute_id == d.id)).first()) else None,
+        opened_at=(d.raw or {}).get("create_time"),
+        responded_at=session.exec(select(Decision.executed_at).where(
+            Decision.dispute_id == d.id, Decision.status == DecisionStatus.EXECUTED)
+            .order_by(Decision.executed_at)).first())
 
 
 def _find(session: Session, dispute_id: str) -> Dispute:

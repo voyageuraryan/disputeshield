@@ -202,7 +202,13 @@ def evidence_pdf(decision_id: int, session: Session = Depends(get_session)) -> F
 async def approve(decision_id: int, body: ApproveIn | None = None, session: Session = Depends(get_session),
                   engine: Engine = Depends(get_engine),
                   paypal: PayPalClient = Depends(get_paypal_client)) -> DecisionOut:
-    body = body or ApproveIn()
+    return await approve_core(session, engine, paypal, decision_id, body or ApproveIn())
+
+
+async def approve_core(session: Session, engine: Engine, paypal: PayPalClient, decision_id: int,
+                       body: ApproveIn) -> DecisionOut:
+    """THE approval path (dashboard and MCP alike): PROPOSED -> APPROVED atomically after re-checking the dispute with
+    PayPal, then execution (which checks APPROVED again, rule 5). Raises HTTPException on refusal."""
     d, dispute = _get(session, decision_id)
     if d.status != DecisionStatus.PROPOSED:
         raise HTTPException(409, f"decision is {d.status.value}; only PROPOSED decisions can be approved or rejected")
@@ -243,6 +249,11 @@ async def approve(decision_id: int, body: ApproveIn | None = None, session: Sess
 async def reject(decision_id: int, body: RejectIn | None = None, session: Session = Depends(get_session),
                  engine: Engine = Depends(get_engine),
                  paypal: PayPalClient = Depends(get_paypal_client)) -> DecisionOut:
+    return await reject_core(session, engine, paypal, decision_id, body)
+
+
+async def reject_core(session: Session, engine: Engine, paypal: PayPalClient, decision_id: int,
+                      body: RejectIn | None) -> DecisionOut:
     d, dispute = _get(session, decision_id)
     _claim(session, d, DecisionStatus.REJECTED)
     dispute.agent_status = "REJECTED"

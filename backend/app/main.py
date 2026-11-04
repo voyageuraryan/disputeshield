@@ -32,12 +32,22 @@ log = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     create_db_and_tables()
     s = get_settings()
+    from sqlmodel import Session as _S
+
+    from app.analytics.outcomes import backfill
+
+    with _S(engine) as _s:  # Phase 14 fix: disputes resolved before outcome capture existed get their analytics row
+        if (n := backfill(_s)):
+            log.info("analytics: backfilled %d resolved dispute outcome(s)", n)
     from app.troubleshooting import outcome
 
     outcome.install(asyncio.get_running_loop())  # 9D: a finished buyer session starts a new analysis
     from app.troubleshooting.retention import retention_loop
 
     retention = asyncio.create_task(retention_loop(engine), name="proof-retention")  # G44
+    from app.alerts import alerts_loop
+
+    alerts = asyncio.create_task(alerts_loop(engine), name="alerts")  # Phase 17
     poller = None
     if s.poll_disputes and s.paypal_client_id and s.paypal_client_secret.get_secret_value():
         from app.scripts.poll_disputes import poll_forever
@@ -45,14 +55,18 @@ async def lifespan(app: FastAPI):
         poller = asyncio.create_task(poll_forever(engine, s.poll_interval_s), name="dispute-poller")
     elif s.poll_disputes:
         log.warning("dispute poller disabled: PayPal credentials not configured")
-    yield
+    from app.mcp_server import mount as mcp_mount
+
+    async with mcp_mount.start():  # Phase 17: the MCP server's session manager (fresh per lifespan)
+        yield
     if poller:
         poller.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await poller
-    retention.cancel()
-    with contextlib.suppress(asyncio.CancelledError):
-        await retention
+    for task in (retention, alerts):
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
     outcome.set_scheduler(None)
     await close_paypal_client()
 
@@ -88,3 +102,10 @@ app.include_router(evals_router, dependencies=merchant)  # Phase 10B: latest eva
 @app.get("/health")
 def health() -> dict:
     return {"status": "ok"}
+
+# Phase 17: the MCP server (streamable HTTP at /mcp + its OAuth protected-resource metadata). Mounted LAST at "/" so
+# every API route above matches first; unknown paths fall through to it and get its 404.
+from app.mcp_server import mount as _mcp_mount  # noqa: E402
+
+app.mount("/", _mcp_mount)
+

@@ -660,6 +660,10 @@ def test_analytics_page_demo_data(stack, page):
     page.route("**/api/analytics/ask", lambda route: route.fulfill(status=200, content_type="application/json",
                                                                    body=json.dumps(real_query(asked))))
     page.goto(f"{stack.base}/analytics")
+    # the seeded resolved case (PP-DEMO-R) is backfilled as a real outcome: real data is the default, demo is a toggle
+    page.locator("[role=group][aria-label=Dataset] button:has-text('Your cases')").wait_for()
+    assert page.locator("[data-testid=demo-badge]").count() == 0
+    page.locator("[role=group][aria-label=Dataset] button:has-text('Demo data')").click()
     page.wait_for_selector("[data-testid=demo-badge]")
     kpis = page.locator("[data-testid=kpis]").inner_text()
     for name in ("MONEY PROTECTED", "WIN RATE", "AGENT ACCURACY", "BEFORE DEADLINE", "YOUR OVERRIDES"):
@@ -752,4 +756,42 @@ def test_guided_tour_five_steps(stack, page):
     assert "/cases/" in page.url
     tour.locator("button:has-text('Finish')").click()
     assert page.locator("[data-testid=tour]").count() == 0
+    assert not real_errors(page)
+
+
+# ---- Phase 17 + 18 ----------------------------------------------------------------------------------------------
+
+def test_deadlines_view_renders_and_opens_a_case(stack, page):
+    page.goto(f"{stack.base}/deadlines")
+    sched = page.locator("[data-testid=scheduler]")
+    sched.wait_for()
+    page.wait_for_selector(".b-sch-event", timeout=15000)               # bars rendered (not an empty timeline)
+    assert page.locator(".b-grid-row").count() >= 10                    # one row per open dispute
+    box = sched.bounding_box()
+    assert box and box["height"] > 300                                  # filled the page, not a collapsed strip
+    assert "PP-DEMO-A" in sched.inner_text()
+    _shot(page, "deadlines.png")
+    page.locator(".b-sch-event").first.click()
+    page.wait_for_url(re.compile(r".*/cases/PP-DEMO-"))
+
+
+def test_settings_alerts_and_mcp_token(stack, page):
+    page.goto(f"{stack.base}/settings")
+    alerts = page.locator("[data-testid=alerts-settings]")
+    alerts.wait_for()
+    assert "isn't configured on the server yet" in alerts.inner_text()
+    page.get_by_label("Alert email address").fill("me@shop.example")
+    alerts.locator("button:has-text('Save')").click()
+    page.wait_for_selector("text=Alerts go to this address.")
+    mcp = page.locator("[data-testid=mcp-settings]")
+    mcp.locator("button:has-text('Create token')").click()
+    token = page.locator("[data-testid=mcp-token]")
+    token.wait_for()
+    assert token.inner_text().startswith("dsm_")
+    page.wait_for_selector("text=A token is active")
+    mcp.locator("button:has-text('Revoke')").click()
+    page.wait_for_selector("text=No token: MCP access is off.")
+    page.get_by_label("Alert email address").fill("")
+    alerts.locator("button:has-text('Save')").click()
+    page.wait_for_selector("text=Email alerts off.")
     assert not real_errors(page)

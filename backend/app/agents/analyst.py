@@ -318,6 +318,12 @@ def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: Chec
     session.add_all([decision, dispute])
     session.commit()
     session.refresh(decision)
+    from app.alerts import on_proposed
+
+    try:  # Phase 17: queue the merchant alert (deduplicated per decision; delivered by the alerts loop)
+        on_proposed(session, dispute, decision)
+    except Exception:  # an alert must never fail the analysis
+        log.exception("couldn't queue the proposal alert for decision %s", decision.id)
     moved = "" if rec.action == baseline.action else f" (moved from {baseline.action})"
     offered = f" of {offer} {case.currency}" if offer is not None else ""
     log_step(session, dispute.id, AGENT,

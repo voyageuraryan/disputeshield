@@ -49,8 +49,8 @@ def update_settings(session: Session, *, settle_threshold: Decimal | None = None
                     refund_policy: str | None = None, clear_refund_policy: bool = False,
                     auto_invite_troubleshooting: bool | None = None, money: dict | None = None) -> MerchantSettings:
     row = get_merchant_settings(session)
-    for k, v in (money or {}).items():  # Phase 13: dispute_fee, handling_minutes, hourly_value, max_offer_pct
-        if v is not None:
+    for k, v in (money or {}).items():  # Phase 13 money fields, Phase 17 alert fields
+        if v is not None or k == "alert_email_to":
             setattr(row, k, v)
     if settle_threshold is not None:
         row.settle_threshold = settle_threshold

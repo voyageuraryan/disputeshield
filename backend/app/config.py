@@ -49,6 +49,16 @@ class Settings(BaseSettings):
     # Phase 16: the Scenarios drawer (one-click demo orders). Needs DEMO_MODE=true AND ADMIN_TOKEN; off by default.
     demo_mode: bool = False
     demo_buyer_email: str = ""   # the sandbox US personal (buyer) account to name in the checklists
+    # Phase 17: alerts. Email via SMTP when SMTP_HOST is set (else recorded only); Slack via an incoming webhook.
+    smtp_host: str = ""
+    smtp_port: int = 587
+    smtp_user: str = ""
+    smtp_password: SecretStr = SecretStr("")
+    smtp_from: str = "disputeshield@localhost"
+    slack_webhook_url: SecretStr = SecretStr("")
+    alerts_interval_s: int = 60
+    # Phase 17: this backend's public URL (MCP resource URL; links in alerts use FRONTEND_URL)
+    public_api_url: str = "http://localhost:8000"
 
     # LLMs: tried in LLM_PROVIDERS order; a provider without a key is skipped.
     llm_providers: str = "groq,gemini"

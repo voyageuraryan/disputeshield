@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-04, Phase 16
+## Open items (tracked) — updated 2026-11-04, Phases 17-18 + full regression
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -309,6 +309,40 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phases 17-18 and the full regression (2026-11-04)
+G140 [x] MCP server verified LIVE with the official SDK client (streamable HTTP) on a dev-DB copy:
+        - the 5 tools; list / get_case / explain_recommendation on real cases
+        - a wrong confirmation is refused and logged on the timeline (the decision stays PROPOSED)
+        - forged or missing token -> 401
+        The correct-confirmation approval was NOT run live: it would really refund 45 USD in the sandbox (the
+        user's call). Tests cover it with PayPal mocked.
+G141 [ ] P2 Neither SMTP nor Slack is configured, so alerts are recorded only (verified live: alert:proposed:19
+        "recorded"). Set SMTP_* and/or SLACK_WEBHOOK_URL to send them (DEPLOY.md section 6).
+G142 [ ] P3 PayPal Agent Toolkit (Python) NOT used. It was optional in the brief. Its read-only overlap is
+        list_disputes / get_dispute / get_order / get_shipment_tracking. It targets agent frameworks (OpenAI Agents,
+        LangChain, CrewAI, Bedrock) with its own HTTP calls, without our retry / PayPal-Debug-Id logging, and the
+        investigator already has tested wrappers. Revisit only if a judge wants it.
+G143 [ ] P3 MCP tools give the connected assistant the case data (evidence summaries can include the buyer's
+        email). The README warns about this; consider redacting for MCP.
+G144 [ ] P3 Alerts go out from a 60 s loop (a deadline alert can be up to a minute late). SMTP is STARTTLS only (no
+        port-465 SSL).
+G145 [ ] P1 USER DECISION (Bryntum): the Deadlines view uses the PUBLIC TRIAL package
+        (@bryntum/scheduler-trial 7.3.7 via npm alias). Its README says "evaluation use only" and the trial watermark
+        shows. Devpost's rules page is behind login (403 for automated fetches), so the exact "Best Use of Bryntum"
+        wording and licence terms are unconfirmed. Check the rules, or ask Bryntum for a hackathon licence (then
+        only the alias in package.json changes). The trial's postinstall (it stamps a per-install UUID into the
+        bundle, used with bryntum.com/verify) was NOT run, because npm's install-scripts policy blocked it; the
+        component works without it.
+G146 [ ] P2 AG Grid's own blog names its prize "Best Use of AG Studio" (not AG Grid). Phase 14 uses AG Grid + AG
+        Charts Community; check what AG Studio is and whether the entry needs it.
+G147 [ ] P3 The Deadlines chunk is 3.8 MB (1.5 MB gzip), lazy-loaded on /deadlines only.
+G148 [ ] P3 The "PayPal reviewing" bar's end is an estimate (now + 7 days): PayPal gives no review end date.
+G149 [x] P1 Found in the live regression: real disputes that resolved before Phase 14 had no outcome row, so real
+        Analytics stayed empty. A startup backfill (analytics/outcomes.backfill, idempotent) writes them; tested.
+G150 [x] Deadlines: real dispute ids were truncated in the first column -> wider.
+Observation (G112): the real sandbox inquiry PP-R-MJZ allows escalate / accept_claim / send_message but not
+make_offer, so no partial offer is proposed there: correct.
+
 ### Found in Phase 16 (2026-11-04)
 G135 [ ] P2 Demo scenarios not run live. Check with DEMO_MODE=true + ADMIN_TOKEN:
         - the real sandbox order is created
@@ -343,10 +377,10 @@ G134 [x] The buyer-history summary said "serial disputer" in a sentence that rea
         now neutral ("N other dispute(s) by this buyer in the last 12 months"); the framing stays merchant-side.
 
 ### Found in Phase 14 (2026-11-04)
-G121 [ ] P2 Outcome capture not seen live yet. The mapping follows the spec's dispute_outcome.outcome_code enum +
+G121 [x] P2 (verified 2026-11-04 on the 2 real resolved sandbox disputes, via the backfill G149: RESOLVED_BUYER_FAVOUR + amount_refunded) Outcome capture not seen live yet. The mapping follows the spec's dispute_outcome.outcome_code enum +
         amount_refunded, and offer.history for an accepted offer. It needs a sandbox dispute that resolves (e.g. after
         an approved accept-claim / offer) to confirm the GET carries dispute_outcome.
-G122 [ ] P2 "Ask your disputes" not run against the real LLMs (tests and e2e use a scripted LLM / stub; Groq quota,
+G122 [x] P2 (verified 2026-11-04: real Groq turned "which SNAD cases did I settle under $25" into the right whitelisted query in 1.4 s) "Ask your disputes" not run against the real LLMs (tests and e2e use a scripted LLM / stub; Groq quota,
         G100). Check that Groq/Gemini accept the AskQuery schema (bounds now stripped from strict schemas, G128).
 G123 [ ] P3 The Analytics chunk is 1.46 MB (438 KB gzip), lazy-loaded on /analytics only. AG Charts' core dominates
         even with only the needed modules registered.
@@ -1217,4 +1251,47 @@ for the Gemini + Groq quotas (G92).
   - e2e: public /demo with real login on, /trust, the 5-step tour (screenshots reviewed: the diagram was
     re-laid out so arrows don't cross)
 - Regression: backend 730 passed, frontend 152 passed + tsc + build, e2e 35 passed.
+
+## 2026-11-04 — Phase 17 (act where you are) + Phase 18 (Deadlines) + full end-to-end regression
+
+- Alerts (app/alerts.py):
+  - email (SMTP) / Slack (incoming webhook, per docs.slack.dev) when a decision is PROPOSED, when a buyer finishes
+    troubleshooting, and 48 h / 12 h before seller_response_due with nothing approved
+  - deduplicated in processed_events (alert:proposed:<id>, alert:ts:<id>:<status>, alert:due48|due12:<id>:<due>)
+  - triggers only queue; a 60 s loop delivers, with retries up to 3
+  - Settings toggles, alert address and recent alerts; no buyer personal data in alerts
+- MCP server (app/mcp_server.py; official Python SDK mcp 2.3.0, MCPServer, streamable HTTP at /mcp):
+  - auth through the SDK's bearer middleware with our TokenVerifier (a Settings-issued token, SHA-256 stored,
+    replace / revoke)
+  - tools: list_open_disputes, get_case, explain_recommendation, approve_decision, reject_decision
+  - approve goes through decisions.approve_core, the dashboard's own code (atomic PROPOSED -> APPROVED after a PayPal
+    re-check, then execution), and needs confirm = "APPROVE <ACTION> <id> <amount> <currency>" exactly
+  - README: "Use DisputeShield from Claude Desktop" (mcp-remote 0.15.1, header via env var as its README advises)
+- PayPal Agent Toolkit: checked its tool list; not used (G142).
+- Deadlines (/deadlines):
+  - Bryntum Scheduler trial 7.3.7 + React wrapper; trial terms checked (G145); Bryntum's AGENTS.md followed:
+    three CSS imports, explicit height, encodeHtml in the renderer, render verified in a browser
+  - rows = open disputes; bars = gathering evidence (opened -> response / deadline), buyer troubleshooting window
+    (new GET /api/troubleshooting/windows), the response deadline (red milestone), PayPal reviewing (estimate)
+  - click a bar to open the case; mapping is pure (src/deadlines/mapping.ts)
+- Tests:
+  - backend test_alerts_mcp.py (14): dedupe, toggles, 48/12 h windows, troubleshooting alert, delivery
+    email + Slack, retries, recorded, settings, MCP auth (none / wrong / replaced / revoked), hash only, approve
+    needs the exact echo and obeys rule 5, GATHER_MORE / rejected refused, read tools
+  - backend backfill test
+  - frontend deadlines.test.ts (5)
+  - e2e: Deadlines renders and opens a case; Settings alerts + MCP token
+- Full end-to-end regression:
+  - automated: backend 745 passed, frontend 157 passed + tsc + build, e2e 37 passed
+  - LIVE on a copy of the dev DB (own port, poller off, real PayPal sandbox + real Groq):
+    - a fresh re-analysis of a real dispute (PayPal GET, investigator incl. Phase 15 signals, rules, LLM SETTLE,
+      calculator options, accept-claim prepared, paused for approval, proposal alert recorded)
+    - an MCP session with the official client (G140)
+    - a demo scenario and a Store order creating real (unpaid) sandbox orders; a wrong admin token -> 403
+    - trust counters, analytics backfill (G149), a real-LLM Ask (G122)
+    - a browser walk-through of all 10 pages on live data (0 console errors), the Scenarios drawer, the 5-step
+      tour
+  - Fixed: G149, G150, and the analytics e2e (real data is the default once a resolved case exists).
+  - Not run: approving a decision live (money moves in the sandbox: the user's call); buyer steps (pay, open a
+    dispute) that need the sandbox buyer's login; real-LLM evals (quota, G100).
 

@@ -72,3 +72,12 @@ It is not Visa CE 3.0 itself, and PayPal disputes don't follow it.
   This is shown to the merchant as context only; it never decides a case, and the wording sent to PayPal is
   neutral.
 
+## 6. Alerts and MCP (Phase 17)
+
+- **Alerts:** set `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` for email (STARTTLS) and/or
+  `SLACK_WEBHOOK_URL` for Slack. The merchant picks the address and the alert kinds in Settings. Each alert is sent
+  once (processed_events key) by a 60-second background loop (`ALERTS_INTERVAL_S`).
+- **MCP:** set `PUBLIC_API_URL` to the backend's public https URL. The MCP endpoint is `<PUBLIC_API_URL>/mcp`. The
+  merchant creates the bearer token in Settings (only its hash is stored). See README, "Use DisputeShield from
+  Claude Desktop".
+

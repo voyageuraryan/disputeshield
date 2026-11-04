@@ -94,7 +94,9 @@ export type DisputeRow = {
   buyer_email: string | null;
   updated_at: string | null;
   latest_decision: DecisionBrief | null;
-  troubleshooting?: string | null; // buyer troubleshooting session status (Phase 9D)
+  troubleshooting?: string | null;
+  opened_at?: string | null; // Phase 18: PayPal create_time
+  responded_at?: string | null; // first response sent to PayPal
 };
 
 export type Evidence = { id: number; type: string; source: string; source_ref: string; summary: string; flags: string[] };
@@ -320,7 +322,16 @@ export type MerchantSettings = {
   hourly_value?: string;
   max_offer_pct?: number;
   fee_sources?: { country: string; standard: string; high_volume: string; url: string }[];
+  alerts?: AlertToggles;
+  mcp_token_created_at?: string | null;
+  mcp_url?: string;
 };
+
+export type AlertToggles = {
+  proposed: boolean; troubleshooting: boolean; deadlines: boolean; email_to: string | null;
+  email_ready: boolean; slack_ready: boolean; slack: boolean;
+};
+export type AlertRow = { key: string; kind: string; subject: string; status: string; channels: string[] | null; at: string | null };
 
 export type SettingsPatch = {
   settle_threshold?: string;
@@ -330,10 +341,19 @@ export type SettingsPatch = {
   handling_minutes?: number;
   hourly_value?: string;
   max_offer_pct?: number;
+  alert_email_to?: string;
+  alert_slack?: boolean;
+  alert_on_proposed?: boolean;
+  alert_on_troubleshooting?: boolean;
+  alert_on_deadlines?: boolean;
 };
 
 export const settingsApi = {
   get: () => req<MerchantSettings>("/api/settings"),
+  createMcpToken: () => req<{ token: string; mcp_url: string; note: string }>("/api/settings/mcp-token", { method: "POST" }),
+  revokeMcpToken: () =>
+    fetch(`${API_BASE}/api/settings/mcp-token`, { method: "DELETE", headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {} }),
+  alerts: () => req<AlertRow[]>("/api/settings/alerts"),
   save: (patch: SettingsPatch) =>
     req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(patch) }),
 };
@@ -717,5 +737,11 @@ export const demoApi = {
   scenarios: (token: string) => req<Scenario[]>("/api/demo/scenarios", { headers: adminHeaders(token) }),
   create: (key: string, token: string) =>
     req<CreatedScenario>(`/api/demo/scenarios/${encodeURIComponent(key)}`, { method: "POST", headers: adminHeaders(token) }),
+};
+
+// ---- Phase 18: deadlines ------------------------------------------------------------------------------------
+export type TroubleshootingWindow = { dispute_id: string; status: string; start: string | null; end: string | null; finished: boolean };
+export const deadlinesApi = {
+  windows: () => req<TroubleshootingWindow[]>("/api/troubleshooting/windows"),
 };
 

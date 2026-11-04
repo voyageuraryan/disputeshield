@@ -60,7 +60,7 @@ describe("top navigation", () => {
   });
   it("shows Disputes and Settings to a signed-in merchant", async () => {
     setToken(tok(Date.now() / 1000 + 3600));
-    expect(await navLabels()).toEqual(["Disputes", "Orders", "Analytics", "Trust", "Store", "Settings", "About"]);
+    expect(await navLabels()).toEqual(["Disputes", "Orders", "Deadlines", "Analytics", "Trust", "Store", "Settings", "About"]);
   });
   it("hides merchant tabs when the session has expired", async () => {
     setToken(tok(Date.now() / 1000 - 1));
@@ -81,6 +81,6 @@ describe("top navigation", () => {
   });
   it("shows everything when login is switched off (local dev)", async () => {
     mode.value = "off";
-    expect(await navLabels()).toEqual(["Disputes", "Orders", "Analytics", "Trust", "Store", "Settings", "About"]);
+    expect(await navLabels()).toEqual(["Disputes", "Orders", "Deadlines", "Analytics", "Trust", "Store", "Settings", "About"]);
   });
 });

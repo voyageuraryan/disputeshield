@@ -208,6 +208,14 @@ class MerchantSettings(SQLModel, table=True):
     handling_minutes: Optional[int] = None
     hourly_value: Optional[Decimal] = Field(default=None, max_digits=10, decimal_places=2)
     max_offer_pct: Optional[int] = None
+    # Phase 17: alerts (None = default) and the MCP access token (only its SHA-256 is stored)
+    alert_email_to: Optional[str] = None
+    alert_slack: Optional[bool] = None            # default on when SLACK_WEBHOOK_URL is set
+    alert_on_proposed: Optional[bool] = None      # default on
+    alert_on_troubleshooting: Optional[bool] = None
+    alert_on_deadlines: Optional[bool] = None
+    mcp_token_hash: Optional[str] = Field(default=None, max_length=64)
+    mcp_token_created_at: Optional[datetime] = None
 
 
 # ---- Phase 9A: buyer troubleshooting portal ------------------------------------
