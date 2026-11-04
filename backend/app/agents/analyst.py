@@ -241,7 +241,10 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
                             [f"No evidence rule for PayPal reason {case.reason}; a person should review this case"])
 
     money = money_settings(session)
-    baseline, opts, suggested = full_baseline(checklist, case, threshold, money)
+    from app.analytics.calibration import win_table_for
+
+    calibration = win_table_for(session, case.reason)  # Phase 14: P(win) from real outcomes once there are >= 10
+    baseline, opts, suggested = full_baseline(checklist, case, threshold, money, calibration)
     log_step(session, dispute.id, AGENT, f"Economic rule suggests {baseline.action}: {baseline.why}",
              {"baseline": baseline.action, "why": baseline.why, "amount": str(case.amount),
               "threshold": str(threshold), "allowed_actions": case.allowed_actions,
@@ -282,7 +285,7 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
             problems = validate(rec, case, baseline, checklist, money)
             if not problems:
                 return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold,
-                                money)
+                                money, calibration)
         log_step(session, dispute.id, AGENT, f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS})",
                  {"problems": problems})
     return _needs_human(session, dispute, checklist, baseline, problems)
@@ -290,18 +293,18 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
 
 def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
              rec: Recommendation, run_key: str | None, attempt: int, threshold: Decimal,
-             money: MoneySettings | None = None) -> AnalysisResult:
+             money: MoneySettings | None = None, calibration: tuple | None = None) -> AnalysisResult:
     superseded = _supersede_proposals(session, dispute.id)
     offer = parse_offer(rec.offer_amount) if rec.action == "SETTLE_PARTIAL" else None
     opts = options(checklist.rule_score, case.amount, case.currency, can_fight=case.can_fight,
                    can_accept_claim=case.can_accept_claim, offer_types=case.offer_types,
-                   s=money or MoneySettings(), offer=offer)
+                   s=money or MoneySettings(), offer=offer, calibration=calibration)
     decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
                         reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
                         economic_note=rec.economic_note, missing_items=rec.missing_items,
                         analysed_threshold=threshold, data_as_of=case.data_as_of,
                         stale_sources=case.stale_sources or [], offer_amount=offer,
-                        options=[o.as_dict() for o in opts],
+                        options=[o.as_dict() for o in opts], rule_score=checklist.rule_score,
                         status=DecisionStatus.PROPOSED, run_key=run_key)
     dispute.agent_status = PROPOSED
     session.add_all([decision, dispute])

@@ -159,6 +159,8 @@ class Decision(SQLModel, table=True):
     # Phase 13: partial offers and the money calculator
     offer_amount: Optional[Decimal] = Field(default=None, max_digits=12, decimal_places=2)  # SETTLE_PARTIAL
     options: Optional[list[dict]] = _json_col()      # calculator output at analysis time (rules/money.py)
+    # Phase 14: the deterministic rule score behind this decision (calibration: rule_score -> P(win))
+    rule_score: Optional[float] = None
 
 
 class ProcessedEvent(SQLModel, table=True):
@@ -351,4 +353,32 @@ class MerchantUpload(SQLModel, table=True):
     summary: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
     confirmed_at: Optional[datetime] = None
+
+
+class DisputeOutcome(SQLModel, table=True):
+    """Phase 14: one row per resolved dispute (the analytics fact table). is_demo rows are the labelled demo history
+    (seed --demo-history): they have no dispute row, never appear in the queue and are never used for real decisions."""
+    __tablename__ = "dispute_outcomes"
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    dispute_id: Optional[int] = Field(default=None, foreign_key="disputes.id", index=True, unique=True)
+    is_demo: bool = Field(default=False, index=True)
+    ref: str                                    # PayPal dispute id, or DEMO-#### for demo rows
+    reason: str
+    stage: Optional[str] = None
+    amount: Decimal = Field(max_digits=12, decimal_places=2)
+    currency: str
+    outcome_code: Optional[str] = None          # PayPal dispute_outcome.outcome_code, verbatim
+    outcome: str                                # normalised: WON / LOST / CANCELLED / OFFER_ACCEPTED / PAYOUT / NONE
+    amount_refunded: Optional[Decimal] = Field(default=None, max_digits=12, decimal_places=2)  # dispute_outcome
+    offer_amount: Optional[Decimal] = Field(default=None, max_digits=12, decimal_places=2)
+    final_action: str                           # what was sent: FIGHT / SETTLE / SETTLE_PARTIAL / REPLACEMENT / NONE
+    recommended_action: Optional[str] = None    # the agent's recommendation for the decision that was acted on
+    followed: Optional[bool] = None             # final action == recommendation (None: nothing was recommended)
+    rule_score: Optional[float] = None
+    created_at: Optional[datetime] = None       # PayPal create_time
+    due_at: Optional[datetime] = None
+    response_at: Optional[datetime] = None      # when our response went to PayPal (first executed decision)
+    resolved_at: Optional[datetime] = None
+    recorded_at: datetime = Field(default_factory=utcnow)
 

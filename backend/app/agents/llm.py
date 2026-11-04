@@ -68,6 +68,11 @@ def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
         if isinstance(node, dict):
             node.pop("title", None)  # the schema's own "title" annotation
             node.pop("default", None)  # strict mode: every field is required anyway ("default" isn't supported)
+            # length/size/pattern bounds aren't reliably accepted by strict modes; Pydantic still enforces them
+            # when the answer is parsed (and invalid output is retried once, rule 7)
+            for k in ("maxLength", "minLength", "maxItems", "minItems", "pattern"):
+                if isinstance(node.get(k), (int, str)) and "type" in node:
+                    node.pop(k)
             if node.get("type") == "object" and "properties" in node:
                 node["required"] = list(node["properties"])
                 node["additionalProperties"] = False

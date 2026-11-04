@@ -138,6 +138,9 @@ def close_pending_decisions(session: Session, dispute: Dispute, why: str) -> lis
     dispute.agent_status = "RESOLVED"
     session.add(dispute)
     close_for_resolved_dispute(session, dispute)
+    from app.analytics.outcomes import record_outcome
+
+    record_outcome(session, dispute)  # Phase 14: the analytics fact row (idempotent per dispute)
     session.add(AgentStep(dispute_id=dispute.id, agent="orchestrator",
                           action=f"{why}" + (f" ({outcome})" if outcome else "")
                           + (f"; closed pending decision(s) {[d.id for d in pending]}" if pending else ""),

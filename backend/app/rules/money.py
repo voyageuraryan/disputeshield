@@ -64,9 +64,10 @@ class Option:
         return {k: (str(v) if isinstance(v, Decimal) else v) for k, v in d.items()}
 
 
-def win_probability(rule_score: float | Decimal) -> Decimal:
+def win_probability(rule_score: float | Decimal, table=None) -> Decimal:  # noqa: ANN001
+    """table: a calibrated (bound, p) table (Phase 14, analytics/calibration.py); default WIN_TABLE."""
     s = Decimal(str(rule_score))
-    for bound, p in WIN_TABLE:
+    for bound, p in table or WIN_TABLE:
         if s >= bound:
             return p
     return WIN_TABLE[-1][1]
@@ -135,12 +136,18 @@ def best_offer(amount: Decimal, fight: Decimal, s: MoneySettings) -> Decimal | N
 
 
 def options(rule_score: float, amount: Decimal, currency: str, *, can_fight: bool, can_accept_claim: bool,
-            offer_types: list[str], s: MoneySettings, offer: Decimal | None = None) -> list[Option]:
-    """Every way to resolve, with its expected net. `offer`: evaluate this partial offer instead of the best one."""
-    p_win = win_probability(rule_score)
+            offer_types: list[str], s: MoneySettings, offer: Decimal | None = None,
+            calibration: tuple | None = None) -> list[Option]:
+    """Every way to resolve, with its expected net. `offer`: evaluate this partial offer instead of the best one.
+    calibration: (table, n) from analytics/calibration.win_table_for; table None -> the default table."""
+    table, n_cal = calibration or (None, 0)
+    p_win = win_probability(rule_score, table)
     fight = fight_net(p_win, amount, s)
+    source = (f"calibrated from {n_cal} of your resolved cases" if table else
+              "starting estimate" + (f"; {n_cal} resolved case(s) so far, calibration starts at 10" if n_cal else ""))
     out = [Option("FIGHT", "Fight", can_fight, fight, p_win, None,
-                  f"{int(p_win * 100)}% estimated chance to win (rule score {rule_score:.2f}); if you lose you also "
+                  f"{int(p_win * 100)}% estimated chance to win ({source}; rule score {rule_score:.2f}); if you lose "
+                  f"you also "
                   f"pay the {s.dispute_fee} {currency} dispute fee; your time ~{s.handling_cost} {currency}"
                   + ("" if can_fight else ". PayPal doesn't allow contesting right now")),
            Option("SETTLE", "Full refund", can_accept_claim, settle_net(amount), Decimal(1), None,
@@ -172,7 +179,7 @@ def best(opts: list[Option]) -> Option | None:
     return max(usable, key=lambda o: o.net) if usable else None
 
 
-def full_baseline(checklist, case, threshold: Decimal, s: MoneySettings):  # noqa: ANN001, ANN201
+def full_baseline(checklist, case, threshold: Decimal, s: MoneySettings, calibration=None):  # noqa: ANN001, ANN201
     """The rules' baseline (evidence_rules.economic_baseline) refined by the calculator: when the rules say SETTLE,
     the settling option with the best expected net wins: a partial offer if PayPal lists one and it beats a full
     refund (or a full refund isn't allowed). Returns (Baseline, options, suggested offer or None)."""
@@ -181,7 +188,8 @@ def full_baseline(checklist, case, threshold: Decimal, s: MoneySettings):  # noq
     base = economic_baseline(checklist, case.amount, threshold, can_fight=case.can_fight,
                              can_settle=case.can_accept_claim or case.can_offer)
     opts = options(checklist.rule_score, case.amount, case.currency, can_fight=case.can_fight,
-                   can_accept_claim=case.can_accept_claim, offer_types=case.offer_types, s=s)
+                   can_accept_claim=case.can_accept_claim, offer_types=case.offer_types, s=s,
+                   calibration=calibration)
     by = {o.action: o for o in opts}
     partial, full = by.get("SETTLE_PARTIAL"), by["SETTLE"]
     if base.action == "SETTLE" and partial is not None and partial.available and partial.net is not None and (

@@ -98,4 +98,7 @@ with Session(engine) as s:
                    draft_note="We're sorry this order didn't work out. To resolve dispute PP-DEMO-O, we offer a refund "
                               "of 80.00 USD (the disputed amount is 200.00 USD)."))
     s.commit()
+    # Phase 14: the labelled demo outcome history (is_demo rows only; never in the queue)
+    from app.analytics.demo import replace_demo_history
+    replace_demo_history(s)
 print("seeded")

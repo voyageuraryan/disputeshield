@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-04, Phase 13
+## Open items (tracked) — updated 2026-11-04, Phase 14
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -309,6 +309,25 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 14 (2026-11-04)
+G121 [ ] P2 Outcome capture not seen live yet. The mapping follows the spec's dispute_outcome.outcome_code enum +
+        amount_refunded, and offer.history for an accepted offer. It needs a sandbox dispute that resolves (e.g. after
+        an approved accept-claim / offer) to confirm the GET carries dispute_outcome.
+G122 [ ] P2 "Ask your disputes" not run against the real LLMs (tests and e2e use a scripted LLM / stub; Groq quota,
+        G100). Check that Groq/Gemini accept the AskQuery schema (bounds now stripped from strict schemas, G128).
+G123 [ ] P3 The Analytics chunk is 1.46 MB (438 KB gzip), lazy-loaded on /analytics only. AG Charts' core dominates
+        even with only the needed modules registered.
+G124 [ ] P3 Accuracy only scores cases PayPal decided (contested). Settled cases have no counterfactual, and
+        GATHER_MORE isn't a prediction. RESOLVED_WITH_PAYOUT is excluded from win rate and money (the spec doesn't
+        say who was covered). Documented in analytics/kpis.py and outcomes.py.
+G125 [ ] P3 Money tiles show the first currency when outcomes span several (the KPIs are per currency).
+G126 [x] AG Charts 14 takes axes as an object keyed x/y. An array was silently ignored (no % / $ axis labels), and
+        `as never` casts hid it. Now the options are typed against AG Charts' types; a unit test pins it.
+G127 [x] Monthly accuracy swung 0% <-> 100% on months with 1-2 checkable cases: the chart shows months with >= 3,
+        with the count in the tooltip.
+G128 [x] Strict JSON schemas now drop maxLength / minLength / maxItems / minItems / pattern (not reliably accepted by
+        strict modes); Pydantic still enforces them on the parsed answer (invalid -> retried once, rule 7).
+
 ### Found in Phase 13 (2026-11-04)
 G111 [ ] P2 make-offer not run live. Shapes come from the v1 OpenAPI (offer_type enum REFUND / REFUND_WITH_RETURN /
         REFUND_WITH_REPLACEMENT / REPLACEMENT_WITHOUT_REFUND; offer_amount money; note 1-2000; invoice_id). It needs
@@ -323,7 +342,7 @@ G113 [ ] P2 USER DECISION. The brief's fight formula "P(win) x amount - (1-P(win
         keep-the-sale baseline: fight = -(1-P(win)) x (amount+fee) - handling (documented in rules/money.py). The
         partial-offer formula uses + (1-P(accept)) x fight (fight is already a net value). Say if you want the
         literal formula instead.
-G114 [ ] P3 P(win) (rule_score table) and P(accept) (0.1 + 0.8 x offer share) are starting assumptions, not calibrated:
+G114 [~] P3 (P(win) calibrated in Phase 14 once a reason has >= 10 real outcomes; P(accept) still an assumption) P(win) (rule_score table) and P(accept) (0.1 + 0.8 x offer share) are starting assumptions, not calibrated:
         Phase 14 recalibrates from real outcomes. The UI says they're estimates.
 G115 [ ] P3 REPLACEMENT has no expected net (item + shipping cost unknown); a "replacement cost" setting would let the
         calculator rank it.
@@ -1045,4 +1064,50 @@ for the Gemini + Groq quotas (G92).
   - frontend offers.test.tsx (9)
   - e2e test_options_card_and_editing_the_offer
 - Regression: backend 661 passed, frontend 133 passed + tsc + build, e2e 31 passed.
+
+## 2026-11-04 — Phase 14: Analytics (outcomes, KPIs, Ask, calibration)
+
+- Outcome capture: when a dispute resolves, ingest's close_pending_decisions writes one dispute_outcomes row per
+  dispute (idempotent). It holds:
+  - PayPal's outcome_code verbatim plus a normalised outcome: SELLER_FAVOUR / BUYER_FAVOUR / CANCELLED /
+    OFFER_ACCEPTED / PAYOUT / NONE; the deprecated ACCEPTED/DENIED are mapped, with comments
+  - amount_refunded, the final action sent, the agent's recommendation, followed / overridden
+  - the rule score (decisions now store rule_score)
+  - created / due / response / resolved times
+- KPIs (analytics/kpis.py, pure, every definition in the docstring):
+  - money protected (won + cancelled + partial-offer savings) and money refunded
+  - win rate (won / contested), overall and by reason
+  - agent accuracy where the outcome reveals the truth
+  - median hours to response, % answered before the deadline
+  - overrides and how they turned out
+- Ask your disputes (analytics/query.py): the LLM fills a structured AskQuery {filters, group_by, metric, chart,
+  title}; the question goes in as JSON data.
+  - Columns, operators and values are checked against a whitelist (types, enums, aliases like SNAD/INR, sizes).
+  - It is evaluated in Python over the fact rows: no SQL anywhere.
+  - Invalid -> asked again once with the reason -> 422. LLM down -> 503, and the merchant edits the chips.
+- Calibration (analytics/calibration.py): per reason, binned win share per rule-score band, shrunk toward the
+  starting table (2 pseudo-cases), then isotonic (pool adjacent violators).
+  - The Phase 13 calculator uses it once a reason has >= 10 real contested outcomes; until then the starting
+    table, and the option's "why" says which.
+  - Demo rows are never used for real decisions.
+- Demo data: `python -m app.scripts.seed --demo-history` (or `--clear-demo-history`) writes 140 deterministic
+  outcome rows. They are is_demo, labelled DEMO-####, have no dispute rows (never in the queue) and are never mixed
+  with real cases. The page shows a "Demo data" badge and a Your cases / Demo data toggle when both exist.
+- /analytics: AG Grid Community + AG Charts Community 14.2.0 (MIT): no Enterprise features, no licence key, no
+  watermark.
+  - 7 KPI tiles.
+  - Charts: money protected vs refunded by month, win rate by reason, accuracy by month, calibration (fitted vs
+    starting table vs observed).
+  - Disputes fact grid with Group by reason / month / outcome (aggregated client-side; row grouping is
+    Enterprise).
+  - Ask box with example questions; the interpreted query shows as editable chips (value inputs, remove, group,
+    metric, chart) that re-run the whitelisted /query.
+  - Colours: the app's indigo + teal, validated with the dataviz palette checker (all checks pass).
+- Tests:
+  - backend tests/test_analytics.py (35): KPI math table, outcome normalisation + capture, whitelist rejects
+    unknown columns / SQL-looking input / bad ops / extra fields, the two example questions, ask retry/422/503,
+    PAV, fit, the calibration fallback below 10 (and demo exclusion), demo separation and badge
+  - frontend analytics.test.ts (8)
+  - e2e test_analytics_page_demo_data (screenshot reviewed)
+- Regression: backend 696 passed, frontend 141 passed + tsc + build, e2e 32 passed.
 

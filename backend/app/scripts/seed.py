@@ -11,6 +11,7 @@ Demo cases (look them up by buyer_email):
   D) case-d@demo.test  $59 wireless earbuds (electronics), delivered, buyer says one earbud won't charge
 
 Usage: cd backend && python -m app.scripts.seed [--reset]
+       python -m app.scripts.seed --demo-history | --clear-demo-history   (Analytics demo data only)
 """
 
 from __future__ import annotations
@@ -138,8 +139,21 @@ def main(argv: list[str] | None = None) -> int:
 
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--reset", action="store_true", help="delete existing orders/shipments/messages first")
+    ap.add_argument("--demo-history", action="store_true",
+                    help="ONLY (re)write the labelled demo outcome history for the Analytics page (is_demo rows, "
+                         "never mixed with real cases); nothing else is seeded")
+    ap.add_argument("--clear-demo-history", action="store_true", help="remove the demo outcome history")
     args = ap.parse_args(argv)
     create_db_and_tables()
+    if args.demo_history or args.clear_demo_history:
+        from app.analytics.demo import clear_demo_history, replace_demo_history
+
+        with Session(engine) as session:
+            if args.clear_demo_history:
+                print(f"Removed {clear_demo_history(session)} demo outcome(s).")
+            else:
+                print(f"Wrote {replace_demo_history(session)} demo outcomes (labelled DEMO-####, is_demo).")
+        return 0
     with Session(engine) as session:
         try:
             ids = seed(session, reset=args.reset)

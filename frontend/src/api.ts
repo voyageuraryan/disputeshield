@@ -637,3 +637,50 @@ export const helpApi = {
     helpReq(sessionId, token, `/proofs/${proofId}`, { method: "DELETE" }),
   stream: helpStream,
 };
+
+// ---- Phase 14: analytics ---------------------------------------------------------------------------------
+
+export type Fact = {
+  id: number; ref: string; is_demo: boolean; reason: string; reason_label: string; stage: string | null;
+  amount: number; currency: string; outcome: string; outcome_code: string | null; final_action: string;
+  recommended_action: string | null; followed: boolean | null; overridden: boolean; won: boolean; contested: boolean;
+  correct: boolean | null; rule_score: number | null; offer_amount: number | null; money_protected: number;
+  money_refunded: number; created_at: string | null; response_at: string | null; resolved_at: string | null;
+  due_at: string | null; month: string | null; hours_to_response: number | null; before_deadline: boolean | null;
+};
+export type Kpis = {
+  count: number;
+  money: Record<string, { protected: number; refunded: number }>;
+  win_rate: number | null;
+  contested: number;
+  win_rate_by_reason: { reason: string; label: string; won: number; contested: number; win_rate: number | null; accuracy: number | null; count: number }[];
+  accuracy: { rate: number | null; correct: number; scored: number };
+  median_hours_to_response: number | null;
+  before_deadline: { pct: number | null; on_time: number; answered: number };
+  overrides: { count: number; outcomes: Record<string, number>; won: number; accuracy_when_overridden: number | null };
+};
+export type CalibrationBin = { lower: number; upper: number; n: number; wins: number; raw: number | null; default: number; p: number };
+export type AnalyticsSummary = {
+  dataset: "real" | "demo";
+  demo: boolean;
+  has_real: boolean;
+  has_demo: boolean;
+  kpis: Kpis;
+  by_month: { month: string; money_protected: number; money_refunded: number; win_rate: number | null; accuracy: number | null; count: number; scored?: number }[];
+  calibration: { min_outcomes: number; applies_to_decisions: boolean; reasons: { reason: string; n: number; used: boolean; bins: CalibrationBin[] }[] };
+  facts: Fact[];
+};
+export type QFilter = { column: string; op: string; value: string };
+export type AskQuery = { filters: QFilter[]; group_by: string[]; metric: string; chart: "bar" | "line" | "pie" | "table"; title: string };
+export type QueryResult = {
+  dataset: string; question?: string; query: AskQuery; kind: "rows" | "groups" | "value";
+  columns: string[]; matched: number; rows: Record<string, unknown>[]; value: number | null;
+};
+
+export const analyticsApi = {
+  summary: (dataset?: "real" | "demo") => req<AnalyticsSummary>(`/api/analytics${dataset ? `?dataset=${dataset}` : ""}`),
+  query: (dataset: string, query: AskQuery) =>
+    req<QueryResult>("/api/analytics/query", { method: "POST", body: JSON.stringify({ dataset, query }) }),
+  ask: (dataset: string, question: string) =>
+    req<QueryResult>("/api/analytics/ask", { method: "POST", body: JSON.stringify({ dataset, question }) }),
+};

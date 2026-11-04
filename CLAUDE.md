@@ -17,6 +17,7 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 - Backend tests: cd backend && pytest -q
 - Frontend dev: cd frontend && npm run dev
 - Seed demo data: cd backend && python -m app.scripts.seed
+- Analytics demo history (labelled is_demo rows only): cd backend && python -m app.scripts.seed --demo-history
 - Frontend unit tests: cd frontend && npm test
 - E2E UI tests: see e2e/README.md (or `make e2e`)
 - LLM evals (REAL models, uses API quota, cached): `make evals` = scripts/run_evals.sh [--refresh] [--only ids]
@@ -50,6 +51,8 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, ingest.py, merchant.py, auth.py, events_bus.py,
              merchant_uploads.py (Phase 12: merchant-added evidence: validate, store, Gemini read, confirm, flags)}
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
+backend/app/analytics/ outcomes.py (capture on RESOLVED), kpis.py, query.py (Ask: whitelisted structured query, no SQL),
+                      calibration.py (rule_score -> P(win), >= 10 outcomes), demo.py (seed --demo-history)
 backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py,
                       troubleshooter.py (buyer troubleshooting agent), web_research.py (grounded search), redact.py
 backend/app/rules/    evidence_rules.py, coach.py ("What would win this?": hypothetical scores, pure),
@@ -70,7 +73,8 @@ backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_gold
                       buyers vs the real agent), metrics/conversational.py, checks_conv.py, record_research.py
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
-frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
+frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page),
+                      Analytics.tsx (AG Grid + AG Charts Community; helpers in src/analytics/logic.ts)
 frontend/src/offers/    logic.ts (Phase 13: offer math mirroring rules/money.py; Options card is in CaseDetail)
 frontend/src/evidence/  AddEvidence.tsx (add/confirm evidence, coach panel), logic.ts (pure)
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is

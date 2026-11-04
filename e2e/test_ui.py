@@ -639,3 +639,53 @@ def test_options_card_and_editing_the_offer(stack, page):
     assert page.get_by_label("Offer amount").count() == 0
     assert not real_errors(page)
 
+
+# ---- Phase 14: analytics ----------------------------------------------------------------------------------------
+
+def test_analytics_page_demo_data(stack, page):
+    """KPIs, charts, the fact grid with grouping, Ask -> editable chips (the LLM call is stubbed with the real query
+    endpoint's answer: the UI suite never calls an LLM), calibration. Demo data is badged."""
+    import json
+    import os
+    import urllib.request
+
+    def real_query(query):
+        req = urllib.request.Request(f"http://localhost:{stack.api_port}/api/analytics/query", method="POST",
+                                     data=json.dumps({"dataset": "demo", "query": query}).encode(),
+                                     headers={"Content-Type": "application/json"})
+        return json.loads(urllib.request.urlopen(req).read())
+
+    asked = {"filters": [{"column": "created_at", "op": "last_days", "value": "120"}], "group_by": ["reason"],
+             "metric": "win_rate", "chart": "bar", "title": "Win rate by reason"}
+    page.route("**/api/analytics/ask", lambda route: route.fulfill(status=200, content_type="application/json",
+                                                                   body=json.dumps(real_query(asked))))
+    page.goto(f"{stack.base}/analytics")
+    page.wait_for_selector("[data-testid=demo-badge]")
+    kpis = page.locator("[data-testid=kpis]").inner_text()
+    for name in ("MONEY PROTECTED", "WIN RATE", "AGENT ACCURACY", "BEFORE DEADLINE", "YOUR OVERRIDES"):
+        assert name in kpis.upper()
+    page.wait_for_function("document.querySelectorAll('canvas').length >= 4")  # 3 charts + calibration
+
+    grid = page.locator("[data-testid=facts-grid]")
+    assert grid.locator(".ag-row").count() > 5
+    page.get_by_label("Group the table by").select_option("reason")
+    page.wait_for_function("document.querySelectorAll('[data-testid=facts-grid] .ag-row').length === 3")
+    assert "Not received" in grid.inner_text()
+
+    page.get_by_label("Ask a question about your disputes").fill("win rate by reason last 120 days")
+    page.locator("button:has-text('Ask')").click()
+    chips = page.locator("[data-testid=query-chips]")
+    chips.wait_for()
+    assert "Opened in the last" in chips.inner_text()
+    assert page.get_by_label("Metric").input_value() == "win_rate"
+    page.get_by_label("Remove filter Opened in the last 120 days").click()   # edited chips run the real query
+    page.wait_for_function("!document.querySelector('[data-testid=query-chips]').innerText.includes('Opened')")
+    page.get_by_label("Metric").select_option("money_protected")
+    page.wait_for_selector("text=Money protected:")
+
+    status = page.locator("[data-testid=calibration-status]").inner_text()
+    assert "never used for real decisions" in status
+    os.makedirs(os.environ.get("E2E_SHOTS", "/tmp"), exist_ok=True)
+    page.screenshot(path=os.path.join(os.environ.get("E2E_SHOTS", "/tmp"), "analytics.png"), full_page=True)
+    assert not real_errors(page)
+
