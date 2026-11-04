@@ -41,7 +41,7 @@ MAX_PIXELS = 50_000_000
 TIMEOUT_S = 45.0
 EXT = {"application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png"}
 # Types the merchant can add: everything the rules know except what only we can produce.
-NOT_UPLOADABLE = {"troubleshooting_record", "buyer_history"}
+NOT_UPLOADABLE = {"troubleshooting_record", "buyer_history", "prior_undisputed_history"}
 UPLOAD_TYPES: tuple[str, ...] = tuple(dict.fromkeys(
     t for r in RULES.values() for t in (*r.required, *r.supporting) if t not in NOT_UPLOADABLE))
 

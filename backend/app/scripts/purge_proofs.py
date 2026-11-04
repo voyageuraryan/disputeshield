@@ -8,7 +8,7 @@ import argparse
 from sqlmodel import Session
 
 from app.db import create_db_and_tables, engine
-from app.troubleshooting.retention import purge_expired_proofs, purge_expired_uploads
+from app.troubleshooting.retention import purge_expired_proofs, purge_expired_uploads, purge_signal_hashes
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -19,7 +19,8 @@ def main(argv: list[str] | None = None) -> int:
     with Session(engine) as db:
         ids = purge_expired_proofs(db, days=args.days)
         ups = purge_expired_uploads(db, days=args.days)
-    print(f"purged {len(ids)} proof file(s), {len(ups)} merchant upload file(s)")
+        sig = purge_signal_hashes(db)
+    print(f"purged {len(ids)} proof file(s), {len(ups)} merchant upload file(s), signal hashes of {sig} order(s)")
     return 0
 
 

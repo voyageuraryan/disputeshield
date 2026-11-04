@@ -120,6 +120,7 @@ class CaptureResult:
     custom_id: str | None
     payer_email: str | None
     shipping_address: dict | None
+    payer_id: str | None = None  # Orders v2 payer.payer_id (seen in the recorded sandbox capture)
 
 
 def parse_capture(order: dict[str, Any]) -> CaptureResult:
@@ -137,4 +138,5 @@ def parse_capture(order: dict[str, Any]) -> CaptureResult:
         custom_id=cap.get("custom_id") or pu.get("custom_id"),
         payer_email=payer_email,
         shipping_address=(pu.get("shipping") or {}).get("address"),
+        payer_id=(order.get("payer") or {}).get("payer_id"),
     )

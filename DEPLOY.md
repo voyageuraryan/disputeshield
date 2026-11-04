@@ -46,3 +46,29 @@ It re-points the existing webhook (or creates one). Put the printed id in Render
 - Open the static site → **Log in with PayPal** with the allowed account → the queue loads.
 - Live updates (SSE) through Render's proxy: open a case and watch the timeline status say **Live**
   (PROGRESS G11: not yet verified on Render).
+
+## 5. Privacy: buyer signals and retention (Phase 15)
+
+DisputeShield compares a disputed order with the buyer's earlier orders: same device, network, shipping address
+or PayPal account. This gives evidence similar to Visa Compelling Evidence 3.0 for unauthorised-payment claims.
+It is not Visa CE 3.0 itself, and PayPal disputes don't follow it.
+
+- **What is stored:** at checkout the server keeps only keyed hashes (HMAC-SHA256, truncated to 128 bits) of:
+  - the client IP (the first `X-Forwarded-For` hop on Render)
+  - a device fingerprint: the browser hashes user agent + screen size/colour depth + time zone before sending,
+    and the server hashes it again
+  - the PayPal payer id
+  Raw IPs, fingerprints and payer ids are never written to the database or logs. Shipping addresses are kept on
+  the order anyway (needed to ship); they are compared through the same normalised hash.
+- **Key:** set `SIGNAL_HASH_KEY` (a long random string, kept secret like `AUTH_SECRET`). Unset, it falls back to
+  `AUTH_SECRET`, then to a development key. Changing it makes old and new hashes incomparable (no matches across
+  the change), and nothing else.
+- **What the merchant sees:** which kinds of identifiers matched ("matched on device + address", "CE 3.0-like
+  match"), never the values or hashes.
+- **Retention:** the hashes are cleared from orders `SIGNAL_RETENTION_DAYS` after the order (default 400: the
+  365-day comparison window plus margin), by the app's 6-hourly retention job or `python -m app.scripts.purge_proofs`.
+  Buyer proof files and merchant uploads follow `PROOF_RETENTION_DAYS` after the dispute is resolved.
+- **Serial disputes:** counted from the store's own dispute records (same buyer email or payer id, 12 months).
+  This is shown to the merchant as context only; it never decides a case, and the wording sent to PayPal is
+  neutral.
+

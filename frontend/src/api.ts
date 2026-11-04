@@ -64,8 +64,11 @@ async function req<T>(path: string, init?: RequestInit): Promise<T> {
 export const api = {
   storeConfig: () => req<StoreConfig>("/api/store/config"),
   products: () => req<Product[]>("/api/store/products"),
-  createOrder: (sku: string) =>
-    req<{ id: string; order_id: number }>("/api/store/orders", { method: "POST", body: JSON.stringify({ sku }) }),
+  createOrder: (sku: string, deviceFp?: string | null) =>
+    req<{ id: string; order_id: number }>("/api/store/orders", {
+      method: "POST",
+      body: JSON.stringify({ sku, ...(deviceFp ? { device_fp: deviceFp } : {}) }),
+    }),
   captureOrder: (paypalOrderId: string) =>
     req<{ order_id: number; paypal_order_id: string; capture_id: string; status: string }>(
       `/api/store/orders/${encodeURIComponent(paypalOrderId)}/capture`,

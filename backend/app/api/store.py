@@ -8,7 +8,8 @@ import logging
 import uuid
 from datetime import date, datetime, time, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from app.signals import capture_checkout, client_ip, signal_hash
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sqlmodel import Session, select
 
@@ -62,6 +63,8 @@ def list_products() -> list[Product]:
 class CreateOrderIn(BaseModel):
     sku: str
     quantity: int = Field(default=1, ge=1, le=10)
+    # Phase 15: SHA-256 hex the browser computed from user agent + screen + timezone (never the raw values)
+    device_fp: str | None = Field(default=None, max_length=64)
 
 
 class CreateOrderOut(BaseModel):
@@ -72,6 +75,7 @@ class CreateOrderOut(BaseModel):
 @router.post("/orders", response_model=CreateOrderOut)
 async def create_store_order(
     body: CreateOrderIn,
+    request: Request,
     session: Session = Depends(get_session),
     paypal: PayPalClient = Depends(get_paypal_client),
 ) -> CreateOrderOut:
@@ -85,6 +89,9 @@ async def create_store_order(
         currency=product.currency,
         product_listing=product.listing,
     )
+    # Phase 15: only keyed hashes of the IP and the device fingerprint are kept (app/signals.py)
+    capture_checkout(order, ip=client_ip(request.headers, request.client.host if request.client else None),
+                     device_fp=body.device_fp)
     session.add(order)
     session.commit()
     session.refresh(order)
@@ -149,6 +156,7 @@ async def capture_store_order(
     order.capture_id = result.capture_id
     order.buyer_email = result.payer_email
     order.shipping_address = result.shipping_address
+    order.payer_hash = signal_hash("payer", result.payer_id)  # Phase 15: PayPal payer.payer_id, hashed
     session.add(order)
     session.commit()
     return CaptureOut(order_id=order.id, paypal_order_id=paypal_order_id,

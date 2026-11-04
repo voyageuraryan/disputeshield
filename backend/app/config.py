@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     # when running on Render (RENDER env var set).
     auth_mode: str = "paypal"
     auth_secret: SecretStr = SecretStr("")          # HMAC key for session tokens + OAuth state
+    # Phase 15: key for the checkout signal hashes (IP, device, PayPal payer id). Unset -> AUTH_SECRET -> a dev key.
+    signal_hash_key: SecretStr = SecretStr("")
+    signal_retention_days: int = 400   # hashes are cleared from orders this long after the order (CE window: 365)
     auth_redirect_uri: str = "http://localhost:8000/api/auth/paypal/callback"  # must match the PayPal app setting
     frontend_url: str = "http://localhost:5173"
     merchant_login_emails: str = ""                 # comma-separated PayPal emails allowed to log in

@@ -148,6 +148,12 @@ def default_note(case: CaseFile, action: str, amount=None) -> str:  # noqa: ANN0
 
 # ---- PDF evidence summary (ReportLab) -------------------------------------------------------
 
+# Phase 15: how the prior-history evidence is described to PayPal: similar evidence, never a compliance claim.
+CE3_PDF_NOTE = ("About the earlier orders: the buyer's earlier paid orders with this store that were never disputed "
+                "match this order on the same device or network plus another identifier (account or shipping "
+                "address). This is offered as supporting evidence similar in kind to Visa Compelling Evidence 3.0; "
+                "it is not a claim that Visa CE 3.0 applies. Matching was done on hashed identifiers; no raw IP "
+                "addresses or device data are kept.")
 PDF_IMAGE_SIDE = 1000      # px: proof photos are shrunk for the PDF (stored copies are up to 2560 px)
 PDF_MAX_BYTES = 10 * 1024 * 1024  # PayPal: each file < 10 MB
 
@@ -250,6 +256,8 @@ def _build_pdf(path: Path, case: CaseFile, note: str, order: Order | None, ts, *
              Paragraph("Seller statement", styles["Heading3"]), p(note), Spacer(1, 8),
              Paragraph("Evidence", styles["Heading3"]), table, Spacer(1, 6),
              *([p("Documents attached to this response: " + "; ".join(attached)), Spacer(1, 6)] if attached else []),
+             *([p(CE3_PDF_NOTE), Spacer(1, 6)] if any(e.type == "prior_undisputed_history"
+                                                      and "ce3_like_match" in e.flags for e in case.evidence) else []),
              p(f"Generated {datetime.now(timezone.utc):%Y-%m-%d %H:%M} UTC by DisputeShield from the merchant's "
                f"PayPal and store records.")]
     doc = SimpleDocTemplate(str(path), pagesize=LETTER, leftMargin=0.6 * inch, rightMargin=0.6 * inch,

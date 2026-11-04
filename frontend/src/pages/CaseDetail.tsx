@@ -510,6 +510,17 @@ function SourceDialog({ ev, onClose }: { ev: Evidence; onClose: () => void }) {
   );
 }
 
+/** Phase 15: which kinds of identifiers matched, in words (never the hashed values). */
+export function signalChips(flags: string[]): string[] {
+  const out: string[] = [];
+  if (flags.includes("ce3_like_match")) out.push("CE 3.0-like match");
+  else if (flags.includes("partial_match")) out.push("partial match");
+  const on = ["device", "ip", "address"].filter((k) => flags.includes(`${k}_reused`)).map((k) => (k === "ip" ? "IP" : k));
+  if (on.length) out.push(`matched on ${on.join(" + ")}`);
+  if (flags.includes("buyer_serial_disputes")) out.push("serial disputer");
+  return out;
+}
+
 const sourceName = (s: string) => (s === "paypal" ? "PayPal" : s === "merchant_upload" ? "Your upload" : s === "buyer_portal" ? "Buyer" : "Store");
 
 /** Phase 12: evidence the merchant adds (pending confirmation and confirmed), plus the upload form. */
@@ -636,6 +647,9 @@ function EvidencePanel({ detail, cited, onDone }: { detail: DisputeDetail; cited
                   .map((f) => (
                     <Chip key={f} text={f.replace("_", " ")} tone="danger" />
                   ))}
+                {signalChips(e.flags).map((s) => (
+                  <Chip key={s} text={s} tone="accent" />
+                ))}
               </div>
               <p className="text-slate-700">{e.summary}</p>
               <button onClick={() => setOpen(e)} className="mt-1 text-xs font-medium text-indigo-700 hover:underline">

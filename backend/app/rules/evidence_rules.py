@@ -76,6 +76,11 @@ DEFECT_CONFIRMED = RedFlag("defect_confirmed", "0.3",
                            "The buyer tried every troubleshooting step and showed the fault: a case for settling "
                            "or offering a replacement")
 TS_RECORD = "troubleshooting_record"
+PRIOR_HISTORY = "prior_undisputed_history"  # Phase 15
+SERIAL_NOTE = ("the buyer opened {n} other dispute(s) in the last 12 months (serial-dispute context for the merchant; "
+               "never a reason to fight by itself)")
+CE3_NOTE = ("earlier undisputed orders by this buyer match on device or IP plus another identifier (similar to Visa "
+            "CE 3.0 evidence; not a compliance claim)")
 TS_FIXED_NOTE = "buyer confirmed the item works after troubleshooting"
 TS_NOT_ATTEMPTED_NOTE = "the buyer was invited to troubleshoot but didn't try the steps"
 TS_PARTIAL_NOTE = "the buyer started troubleshooting but didn't finish"
@@ -108,6 +113,9 @@ RULES: dict[str, ReasonRule] = {
         # Proof of delivery to the transaction's address and seller protection for unauthorized payments.
         required=("tracking", "delivery_confirmation", "invoice"),
         supporting=("order", "buyer_history", "buyer_message"),
+        # Phase 15: earlier undisputed orders matching device/IP + another identifier (Visa CE 3.0-LIKE); counts
+        # only when present with the full pattern (ce3_like_match), so a buyer without history isn't penalised.
+        optional_supporting=(PRIOR_HISTORY,),
         protection_category="UNAUTHORIZED_TRANSACTION",  # PayPal's category enum uses the Z spelling
         red_flags=(ADDRESS_MISMATCH, TRACKER_CANCELLED,
                    RedFlag("not_protected", "0.3", "PayPal seller protection does not cover unauthorized payments here")),
@@ -146,6 +154,8 @@ def evaluate(case: CaseFile) -> ChecklistResult:
         return ChecklistResult(required=[], present=sorted({e.type for e in case.evidence}), missing=[],
                                rule_score=0.0, red_flags=[], reason_supported=False)
     have = {e.type for e in case.evidence}
+    if PRIOR_HISTORY in have and "ce3_like_match" not in _flags(case, PRIOR_HISTORY):
+        have.discard(PRIOR_HISTORY)  # a partial match is shown, but only the full pattern counts as evidence
     supporting = rule.supporting + tuple(t for t in rule.optional_supporting if t in have)
     present = [t for t in rule.required + supporting if t in have]
     missing = [t for t in rule.required if t not in have]
@@ -155,6 +165,7 @@ def evaluate(case: CaseFile) -> ChecklistResult:
     score = REQUIRED_WEIGHT * req + SUPPORTING_WEIGHT * sup - sum((Decimal(f.penalty) for f in flags), Decimal(0))
     score = min(Decimal(1), max(Decimal(0), score)).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
     notes, merchant_notes, safety = troubleshooting_notes(rule, case)
+    notes = notes + signal_notes(rule, case)
     return ChecklistResult(required=list(rule.required), present=present, missing=missing,
                            rule_score=float(score), red_flags=[f.code for f in flags], notes=notes,
                            merchant_notes=merchant_notes, safety_review=safety)
@@ -176,6 +187,22 @@ def troubleshooting_notes(rule: ReasonRule, case: CaseFile) -> tuple[list[str], 
         notes.append(TS_DEFECT_NOTE)
     merchant = [TS_SUSPECT_NOTE] if "ts_proof_suspect" in ts else []
     return notes, merchant, "ts_safety_stop" in ts
+
+
+def signal_notes(rule: ReasonRule, case: CaseFile) -> list[str]:
+    """Phase 15: buyer signals as plain facts for the baseline's why (SNAD and UNAUTHORISED only). They never change
+    the score: the serial-dispute count is context, and the CE3-like history already counts as supporting."""
+    if rule.reason not in (SNAD, UNAUTHORISED):
+        return []
+    notes = []
+    serial = [e for e in case.evidence if e.type == "buyer_history" and "buyer_serial_disputes" in e.flags]
+    if serial:
+        import re
+        m = re.search(r"; (\d+) other dispute\(s\) by this buyer in the last 12 months", serial[0].summary)
+        notes.append(SERIAL_NOTE.format(n=m.group(1) if m else "2+"))
+    if rule.reason == UNAUTHORISED and "ce3_like_match" in _flags(case, PRIOR_HISTORY):
+        notes.append(CE3_NOTE)
+    return notes
 
 
 def red_flag_description(reason: str, code: str) -> str:

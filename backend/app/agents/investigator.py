@@ -202,6 +202,7 @@ class Investigator:
             self._messages(order)
             self._listing(order)
             self._buyer_history(order)
+            self._prior_undisputed(order)
         self._troubleshooting_eligibility(order)
         self._troubleshooting_record()
         self._refund_policy()
@@ -454,12 +455,36 @@ class Investigator:
                             .order_by(Order.created_at)).all()
         prior_ids = [o.id for o in prior]
         disputes = self.s.exec(select(Dispute).where(Dispute.order_id.in_(prior_ids))).all() if prior_ids else []
+        from app.signals import SERIAL_MIN, serial_disputes
+
+        serial = serial_disputes(self.s, order, self.d)  # Phase 15: same buyer (email / payer id), 12 months
         summary = (f"Buyer {order.buyer_email} has {len(prior)} earlier order(s) with this store"
                    + (f" (#{', #'.join(map(str, prior_ids))})" if prior_ids else "")
-                   + f" and {len(disputes)} previous dispute(s)")
+                   + f" and {len(disputes)} previous dispute(s)"
+                   + (f"; {len(serial)} other dispute(s) by this buyer in the last 12 months"
+                      if len(serial) >= SERIAL_MIN else ""))  # neutral wording: this text can reach PayPal (PDF)
+        flags = (["buyer_prior_disputes"] if disputes else []) + (["buyer_serial_disputes"]
+                                                                  if len(serial) >= SERIAL_MIN else [])
         row = self.evidence(type="buyer_history", source="store", source_ref=f"store:buyer/{order.buyer_email}",
-                            summary=summary, flags=["buyer_prior_disputes"] if disputes else [])
-        self.step(f"Buyer has {len(prior)} prior order(s), {len(disputes)} prior dispute(s)", {"evidence_id": row.id})
+                            summary=summary, flags=flags)
+        self.step(f"Buyer has {len(prior)} prior order(s), {len(disputes)} prior dispute(s)"
+                  + (f", {len(serial)} other dispute(s) in 12 months" if serial else ""),
+                  {"evidence_id": row.id, "serial_dispute_ids": serial})
+
+    def _prior_undisputed(self, order: Order) -> None:
+        """Phase 15: earlier undisputed orders sharing device / IP / address / account (Visa CE 3.0-LIKE, not CE)."""
+        from app.signals import prior_undisputed
+
+        hist = prior_undisputed(self.s, order, self.d)
+        if not hist.priors:
+            self.step("No earlier paid, undisputed orders by this buyer to compare with")
+            return
+        row = self.evidence(type="prior_undisputed_history", source="store",
+                            source_ref=f"store:signals/order/{order.id}", summary=hist.summary, flags=hist.flags)
+        self.step(("Earlier undisputed orders match this one like Visa CE 3.0 evidence (similar, not compliance)"
+                   if "ce3_like_match" in hist.flags else "Earlier undisputed orders partly match this one")
+                  + f": {', '.join(hist.flags) or 'account only'}",
+                  {"evidence_id": row.id, "priors": hist.priors})  # ids, day gaps and match kinds; never hashes
 
 
 @observe(type="agent")

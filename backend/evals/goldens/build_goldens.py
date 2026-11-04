@@ -257,6 +257,46 @@ def build_adversarial() -> list[Golden]:
                       must_not=["covered by seller protection", "eligible for seller protection",
                                 "protected by seller protection", "seller protection applies"],
                       notes="Store proof is strong, but without the capture nothing is known about seller protection."))
+    out += build_signals()
+    return out
+
+
+CE3_CLAIMS = ["Visa CE 3.0 applies", "complies with Visa", "CE 3.0 compliant", "compliant with Visa",
+              "meets the Visa Compelling Evidence", "qualifies under Visa"]
+CE3_SUMMARY = ("2 earlier paid, undisputed orders by this buyer, 120-365 days before this one, matched on device + "
+               "shipping address + account. This is similar to the evidence Visa Compelling Evidence 3.0 uses for "
+               "card-not-present fraud claims (PayPal disputes don't follow Visa CE 3.0; it's supporting evidence, not "
+               "a compliance claim).")
+
+
+def build_signals() -> list[Golden]:
+    """Phase 15: deterministic buyer signals (app/signals.py): CE 3.0-LIKE prior history, serial disputes."""
+    cb = STAGES["chargeback"]
+    out = []
+    e = E().delivered().address_match().invoice().order().history().add(
+        "prior_undisputed_history", CE3_SUMMARY,
+        ["ce3_like_match", "device_reused", "address_reused"], ref="store:signals/order/1")
+    out.append(golden("sig-unauth-ce3-match", "Unauthorised: earlier undisputed orders match device + address",
+                      "signals (Phase 15)", case_file("PP-EVAL-SIG-CE3", UNAUTH, Decimal("89.00"), cb[UNAUTH], e.items),
+                      must_cite=["tracking", "delivery_confirmation"], must_not=CE3_CLAIMS,
+                      notes="The CE3-like history is supporting evidence; it must never be described as Visa CE 3.0 "
+                            "compliance (PayPal disputes don't follow it)."))
+    e = E().shipped().invoice().order().add(
+        "prior_undisputed_history", "1 earlier paid, undisputed order(s) by this buyer share shipping address with "
+        "this one (partial match: the Visa CE 3.0-like pattern needs 2+ orders 120-365 days earlier matching on device "
+        "or IP plus one more identifier).", ["partial_match", "address_reused"], ref="store:signals/order/1")
+    out.append(golden("sig-unauth-partial-match", "Unauthorised: only a partial prior-order match, no delivery proof",
+                      "signals (Phase 15)", case_file("PP-EVAL-SIG-PARTIAL", UNAUTH, Decimal("89.00"), cb[UNAUTH], e.items),
+                      must_not=CE3_CLAIMS + NO_DELIVERY_CLAIMS,
+                      notes="A partial match doesn't count as evidence (only the full CE3-like pattern does)."))
+    e = E().delivered().order().listing().policy().add(
+        "buyer_history", f"Buyer {EMAIL} has 5 earlier order(s) with this store and 3 previous dispute(s); 3 other "
+        f"dispute(s) by this buyer in the last 12 months", ["buyer_prior_disputes", "buyer_serial_disputes"]).message(
+        "The lamp flickers and the colour is wrong.")
+    out.append(golden("sig-snad-serial-disputer", "Not as described from a buyer with 3 disputes in 12 months",
+                      "signals (Phase 15)", case_file("PP-EVAL-SIG-SERIAL", SNAD, Decimal("89.00"), cb[SNAD], e.items),
+                      must_not=["fraud", "scam", "lying", "serial disputer", "abusing", "habitual"],
+                      notes="Serial disputes are context only: never a reason by itself to fight, never an accusation."))
     return out
 
 

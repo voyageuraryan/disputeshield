@@ -16,6 +16,7 @@ EvidenceType = Literal[
     "refund_policy",
     "buyer_history",
     "troubleshooting_record",  # Phase 9D: result of the buyer troubleshooting page
+    "prior_undisputed_history",  # Phase 15: earlier undisputed orders sharing device/IP/address/account
 ]
 
 

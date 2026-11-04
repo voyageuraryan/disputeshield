@@ -32,6 +32,10 @@ class Order(SQLModel, table=True):
     shipping_address: Optional[dict] = _json_col()
     product_listing: Optional[str] = None
     created_at: datetime = Field(default_factory=utcnow)
+    # Phase 15: checkout signals, stored ONLY as keyed hashes (app/signals.py); never raw IPs or fingerprints
+    ip_hash: Optional[str] = Field(default=None, max_length=32, index=True)
+    device_hash: Optional[str] = Field(default=None, max_length=32, index=True)
+    payer_hash: Optional[str] = Field(default=None, max_length=32, index=True)   # PayPal payer.payer_id
 
 
 class Shipment(SQLModel, table=True):

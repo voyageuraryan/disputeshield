@@ -35,6 +35,7 @@ export const LABELS: Record<string, string> = {
   buyer_message: "Buyer message",
   buyer_history: "Buyer history",
   refund_policy: "Refund policy",
+  prior_undisputed_history: "Prior undisputed orders",
 };
 
 export const label = (v: string | null | undefined) => (v ? LABELS[v] ?? v.replaceAll("_", " ").toLowerCase() : "-");

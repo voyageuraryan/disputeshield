@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-04, Phase 14
+## Open items (tracked) — updated 2026-11-04, Phase 15
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -309,6 +309,21 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 15 (2026-11-04)
+G129 [ ] P2 Checkout signal capture not run live: needs one sandbox purchase from the Store page. The fingerprint
+        uses crypto.subtle, which needs https or localhost; the tunnel is https. Check the order gets
+        ip/device/payer hashes.
+G130 [ ] P3 Sandbox fact: every real sandbox dispute comes from the same test buyer, so each one shows 2-4 "other
+        disputes in 12 months" (serial disputer). Correct behaviour; mention it in the demo, or use a second buyer.
+G131 [ ] P3 Orders from before Phase 15 have no IP/device hashes, so they can only match partially (address /
+        account). A real CE 3.0-like match needs purchases 120-365 days apart with hashes. Tests and goldens cover
+        the logic; live data can't show it within the hackathon.
+G132 [ ] P3 Visa CE 3.0's "same card" becomes "same buyer account" (email or PayPal payer id): PayPal doesn't
+        expose the funding card to the merchant. Documented in app/signals.py and the summaries.
+G133 [ ] P3 The 3 new signal goldens (sig-*) haven't run against the real LLM (with the G100 batch).
+G134 [x] The buyer-history summary said "serial disputer" in a sentence that reaches PayPal through the evidence PDF:
+        now neutral ("N other dispute(s) by this buyer in the last 12 months"); the framing stays merchant-side.
+
 ### Found in Phase 14 (2026-11-04)
 G121 [ ] P2 Outcome capture not seen live yet. The mapping follows the spec's dispute_outcome.outcome_code enum +
         amount_refunded, and offer.history for an accepted offer. It needs a sandbox dispute that resolves (e.g. after
@@ -1110,4 +1125,42 @@ for the Gemini + Groq quotas (G92).
   - frontend analytics.test.ts (8)
   - e2e test_analytics_page_demo_data (screenshot reviewed)
 - Regression: backend 696 passed, frontend 141 passed + tsc + build, e2e 32 passed.
+
+## 2026-11-04 — Phase 15: deterministic buyer signals (UNAUTHORISED, serial disputes)
+
+- Checkout capture (app/signals.py; store API + frontend/src/fingerprint.ts):
+  - Keyed HMAC-SHA256 hashes of the client IP (first X-Forwarded-For hop) and a device fingerprint. The
+    browser sends SHA-256(user agent | screen | time zone); anything else is ignored.
+  - The PayPal payer id (Orders v2 payer.payer_id, as in the recorded sandbox capture) is hashed the same way.
+  - No raw values are stored; tests check the order row, the summaries and the timeline.
+- Prior undisputed history, modelled on Visa CE 3.0 (checked on the Airwallex page): 2+ paid, undisputed
+  orders by the same buyer account, 120-365 days earlier, each matching on IP or device plus one more
+  identifier (IP, device, account, address).
+  - Evidence type prior_undisputed_history, with flags ce3_like_match or partial_match, plus device_reused /
+    ip_reused / address_reused.
+  - The summary says "similar to ... Visa CE 3.0 ... not a compliance claim".
+- Serial disputer: other disputes by the same email or payer id (also unmatched disputes' own buyer fields),
+  12 months, >= 2 -> buyer_serial_disputes on buyer_history.
+- Address reuse: address_reused when earlier paid, undisputed orders shipped to the same (normalised) address.
+- Rules:
+  - prior_undisputed_history is an optional supporting item for UNAUTHORISED. It counts only with the full
+    pattern, so a partial match or no history never lowers the score.
+  - Serial disputes and the CE3-like match add notes to the baseline's "why" (SNAD and UNAUTHORISED) but never
+    change the score.
+  - The analyst prompt explains the signals, and the validator rejects a FIGHT that cites only buyer history /
+    prior-order signals.
+- Evidence PDF: a CE3-like paragraph ("similar in kind to Visa CE 3.0 ... not a claim that Visa CE 3.0 applies;
+  hashed identifiers") only when the full pattern matched.
+- UI: evidence chips "CE 3.0-like match", "matched on device + address", "serial disputer" (never values); a label
+  for the new type.
+- Privacy: DEPLOY.md section 5 covers what is stored, the key (SIGNAL_HASH_KEY), what merchants see and retention.
+  Hashes are cleared SIGNAL_RETENTION_DAYS (400) after the order by the retention job / purge_proofs.
+- Evals: 3 new goldens (54 total; the existing 51 unchanged): sig-unauth-ce3-match (must not claim CE 3.0
+  compliance), sig-unauth-partial-match, sig-snad-serial-disputer (must not accuse).
+- Tests: backend tests/test_signals.py (18): keyed hashing, checkout stores hashes only, CE3-like vs partial
+  (window, primary element, count), exclusions (disputed / unpaid / other buyer), payer-id link, serial counting,
+  investigator end to end without raw values, rules and notes, validator, PDF wording, retention. Frontend
+  signals.test.ts (3).
+- Regression: backend 714 passed, frontend 144 passed + tsc + build, e2e 32 passed. Migration checked on a copy of
+  the dev DB.
 

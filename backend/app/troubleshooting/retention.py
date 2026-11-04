@@ -113,6 +113,25 @@ def purge_expired_uploads(db: Session, *, now: datetime | None = None, days: int
     return [i for ids in done.values() for i in ids]
 
 
+def purge_signal_hashes(db: Session, *, now: datetime | None = None, days: int | None = None) -> int:
+    """Phase 15: clear the checkout hashes (IP, device, payer id) from orders older than SIGNAL_RETENTION_DAYS
+    (default 400: the 365-day CE-like window plus margin). Returns how many orders were cleared."""
+    from app.models import Order
+
+    days = get_settings().signal_retention_days if days is None else days
+    if days <= 0:
+        return 0
+    cutoff = (now or datetime.now(timezone.utc)) - timedelta(days=days)
+    rows = [o for o in db.exec(select(Order).where((Order.ip_hash.is_not(None)) | (Order.device_hash.is_not(None))
+                                                   | (Order.payer_hash.is_not(None)))).all()
+            if _aware(o.created_at) < cutoff]  # compared in Python: stored datetimes may lack an offset
+    for o in rows:
+        o.ip_hash = o.device_hash = o.payer_hash = None
+        db.add(o)
+    db.commit()
+    return len(rows)
+
+
 class DeleteRefused(ValueError):
     pass
 
@@ -144,6 +163,7 @@ async def retention_loop(engine: Engine, interval_h: float = RETENTION_INTERVAL_
         try:
             with Session(engine) as db:
                 ids = purge_expired_proofs(db) + purge_expired_uploads(db)
+                purge_signal_hashes(db)
             if ids:
                 log.info("retention: purged %d proof file(s)", len(ids))
         except asyncio.CancelledError:

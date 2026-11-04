@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type Product } from "../api";
+import { deviceFingerprint } from "../fingerprint";
 import { initPayPal, type SdkInstance } from "../paypal";
 
 type Status = { kind: "idle" | "working" | "ok" | "error"; text?: string };
@@ -24,7 +25,9 @@ function BuyButton({ sdk, product }: { sdk: SdkInstance; product: Product }) {
     });
     try {
       // v6 expects a promise resolving to { orderId }; the server sets the price.
-      await session.start({ presentationMode: "auto" }, api.createOrder(product.sku).then((o) => ({ orderId: o.id })));
+      // Phase 15: only a hash of the device fingerprint is sent (see fingerprint.ts)
+      const order = deviceFingerprint().then((fp) => api.createOrder(product.sku, fp)).then((o) => ({ orderId: o.id }));
+      await session.start({ presentationMode: "auto" }, order);
     } catch (e) {
       setStatus({ kind: "error", text: (e as Error).message });
     }

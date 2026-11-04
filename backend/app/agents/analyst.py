@@ -48,6 +48,7 @@ AGENT = "analyst"
 MAX_ATTEMPTS = 2  # first try + one retry (rule 7)
 MAX_REASONING_WORDS = 150  # asked for ~120; small slack
 JUSTIFYING_TYPES = {"buyer_message", "listing"}  # unstructured evidence that can move the call one step
+CONTEXT_ONLY = {"buyer_history", "prior_undisputed_history"}  # Phase 15: never a reason by itself to FIGHT
 
 NEEDS_HUMAN = "NEEDS_HUMAN"
 PROPOSED = "PROPOSED"
@@ -81,6 +82,10 @@ How the decision works (the rules already applied it; you explain it):
   proofs). If the checklist says safety_review, the answer is GATHER_MORE: a person must review it; put
   "{SAFETY_REVIEW_ITEM}" in missing_items. That is DisputeShield's own safety rule, not a PayPal requirement:
   never say PayPal requires it.
+- Buyer signals (computed by code from hashed identifiers): prior_undisputed_history (earlier undisputed orders by
+  this buyer matching on device / IP / address; "ce3_like_match" = similar to Visa CE 3.0 evidence, never call it
+  CE 3.0 compliance) and buyer_history flag buyer_serial_disputes (2+ other disputes in 12 months). They are
+  supporting context: never the only reason to FIGHT, and a serial-dispute flag never proves this claim false.
 - Data freshness: the case file says when the PayPal data was fetched and which sources couldn't be refreshed
   this run (their items are the last good copy, flagged "stale:<time>"). Never FIGHT on stale required
   evidence: recommend GATHER_MORE and name the source to refresh in missing_items.
@@ -207,6 +212,9 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
                                                     f"{baseline.action}"))
     if rec.action == "FIGHT" and not rec.cited_evidence_ids:
         problems.append("FIGHT must cite the evidence it relies on")
+    elif rec.action == "FIGHT" and all(by_id[i].type in CONTEXT_ONLY for i in rec.cited_evidence_ids if i in by_id):
+        problems.append("FIGHT can't rest on buyer history / prior-order signals alone: cite the evidence about "
+                        "this order (tracking, delivery, invoice, listing...)")
     if rec.action == "GATHER_MORE" and not rec.missing_items:
         problems.append("GATHER_MORE must name the missing items")
     if len(rec.reasoning.split()) > MAX_REASONING_WORDS:
