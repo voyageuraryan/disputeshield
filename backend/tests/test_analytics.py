@@ -314,3 +314,16 @@ def test_backfill_records_disputes_resolved_before_capture_existed(engine):
         assert backfill(s) == 1 and backfill(s) == 0
         row = s.exec(select(DisputeOutcome)).one()
     assert (row.ref, row.outcome, row.amount_refunded) == ("PP-OLD-RES", "BUYER_FAVOUR", D("45.00"))
+
+
+def test_auto_seed_rebuilds_demo_data_only_when_missing(engine):
+    """Render free plan: the database is empty after every sleep; AUTO_SEED refills the demo data, idempotently."""
+    from app.analytics.demo import auto_seed
+    from app.models import Order
+
+    with Session(engine) as s:
+        first = auto_seed(s)
+        n_orders = len(s.exec(select(Order)).all())
+        again = auto_seed(s)
+        assert first == {"store": True, "demo_history": 140} and n_orders == 16
+        assert again == {"store": False, "demo_history": 0} and len(s.exec(select(Order)).all()) == 16

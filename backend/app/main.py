@@ -36,6 +36,11 @@ async def lifespan(app: FastAPI):
 
     from app.analytics.outcomes import backfill
 
+    if s.auto_seed:  # Render free plan: the disk is ephemeral, so rebuild the demo data on an empty database
+        from app.analytics.demo import auto_seed
+
+        with _S(engine) as _s:
+            log.info("auto-seed: %s", auto_seed(_s))
     with _S(engine) as _s:  # Phase 14 fix: disputes resolved before outcome capture existed get their analytics row
         if (n := backfill(_s)):
             log.info("analytics: backfilled %d resolved dispute outcome(s)", n)

@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     admin_token: SecretStr = SecretStr("")
     # Phase 16: the Scenarios drawer (one-click demo orders). Needs DEMO_MODE=true AND ADMIN_TOKEN; off by default.
     demo_mode: bool = False
+    # Render free plan (no disk): the database starts empty after every sleep / restart / deploy. AUTO_SEED=true
+    # recreates the demo store data and the labelled demo analytics history on startup when they're missing; the
+    # poller re-imports the sandbox disputes from PayPal. Off by default.
+    auto_seed: bool = False
     demo_buyer_email: str = ""   # the sandbox US personal (buyer) account to name in the checklists
     # Phase 17: alerts. Email via SMTP when SMTP_HOST is set (else recorded only); Slack via an incoming webhook.
     smtp_host: str = ""

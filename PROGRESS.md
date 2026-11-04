@@ -309,6 +309,27 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Self-check + submission readiness (2026-11-04)
+G151 [ ] P1 (for the user, at the end) Judge access to the deployed app: login is Log in with PayPal (AUTH_MODE=off is
+        refused on Render). Add a dedicated sandbox BUSINESS account to MERCHANT_LOGIN_EMAILS and put its sandbox
+        login in Devpost's testing instructions (sandbox only, no real money), or rely on the README run
+        instructions (verified on a fresh clone, G152).
+G152 [x] Fresh-clone check of the README instructions: clone, venv + pip install -r requirements.txt, .env from
+        .env.example, seed + demo history, uvicorn /health + Analytics, npm ci + build. All passed. MIT LICENSE added
+        (the rules need a detectable open-source licence).
+G153 [x] Auth coverage self-check (tests/test_auth_coverage.py): with real login on, every API route listed in
+        OpenAPI except the public storefront / webhooks / login / buyer help page answers 401 without a session.
+        /mcp needs its own token; the catch-all MCP mount serves nothing else (404).
+
+### Deployment choice (2026-11-04)
+G154 [x] User chose Render's FREE plan. render.yaml: plan free, no disk, local SQLite paths, AUTO_SEED=true (new
+        setting: rebuilds the demo store + demo analytics history on an empty DB at startup; idempotent; tested and
+        verified with a simulated cold start + restart). DEPLOY.md section 7 covers the trade-offs: sleeps after 15
+        min, the DB is empty after every sleep / deploy, the poller re-imports the sandbox disputes.
+G155 [x] render.yaml covers every Phase 13-18 setting (role Gemini keys, BUYER_PORTAL_URL, SIGNAL_HASH_KEY,
+        UPLOAD_EXTRACTION, PUBLIC_API_URL, SMTP / Slack, DEMO_MODE). Full git history scanned before going public: no
+        secrets; the user's note file is excluded locally (.git/info/exclude).
+
 ### Found in Phases 17-18 and the full regression (2026-11-04)
 G140 [x] MCP server verified LIVE with the official SDK client (streamable HTTP) on a dev-DB copy:
         - the 5 tools; list / get_case / explain_recommendation on real cases

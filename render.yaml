@@ -5,24 +5,27 @@ services:
     name: disputeshield-api
     runtime: python
     rootDir: backend
-    # starter (paid) because Free web services spin down after 15 min idle and have
-    # an ephemeral filesystem (no persistent disks), which would wipe the SQLite DB.
-    plan: starter
+    # FREE plan (user decision 2026-11-04): sleeps after 15 min idle (~30 s cold start) and has NO persistent disk, so
+    # the SQLite DB is empty after every sleep / restart / deploy. AUTO_SEED rebuilds the demo data on startup and the
+    # poller re-imports the sandbox disputes from PayPal. For persistence switch to `plan: starter` + the disk below.
+    plan: free
     buildCommand: pip install -r requirements.txt
     # One process only: the dispute poller runs inside it, and SQLite is single-writer.
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /health
-    disk:
-      name: data
-      mountPath: /var/data
-      sizeGB: 1
+    # disk:                 # paid plans only; with `plan: starter`, uncomment and point the paths below at /var/data
+    #   name: data
+    #   mountPath: /var/data
+    #   sizeGB: 1
     envVars:
       - key: PYTHON_VERSION
         value: 3.11.14
-      - key: DATABASE_URL
-        value: sqlite:////var/data/disputeshield.db
-      - key: CHECKPOINT_DB  # paused agent runs (LangGraph) must survive restarts too
-        value: /var/data/checkpoints.db
+      - key: DATABASE_URL       # ephemeral on the free plan (starter + disk: sqlite:////var/data/disputeshield.db)
+        value: sqlite:///./disputeshield.db
+      - key: CHECKPOINT_DB      # paused agent runs (approval falls back to direct execution if lost)
+        value: ./checkpoints.db
+      - key: AUTO_SEED          # free plan: rebuild the demo store + demo analytics history on an empty DB
+        value: "true"
       - key: PAYPAL_BASE_URL
         value: https://api-m.sandbox.paypal.com
       - key: PAYPAL_CLIENT_ID
@@ -52,13 +55,50 @@ services:
       - key: FRONTEND_URL           # https://<static-site-host>
         sync: false
       - key: ARTIFACTS_DIR
-        value: /var/data/artifacts
+        value: ./artifacts
       - key: CORS_ORIGINS  # the static site's URL, e.g. https://disputeshield-web.onrender.com
         sync: false
       - key: POLL_DISPUTES
         value: "true"
       - key: POLL_INTERVAL_S
         value: "60"
+      # One dedicated Gemini key per role (unset -> GEMINI_API_KEY; never fails over to another role's key)
+      - key: RESEARCH_GEMINI_API_KEY
+        sync: false
+      - key: EVALS_JUDGE_GEMINI_API_KEY
+        sync: false
+      - key: EVALS_SIMULATOR_GEMINI_API_KEY
+        sync: false
+      # Phase 9B: buyer help-page links point here (the static site's URL, same as FRONTEND_URL)
+      - key: BUYER_PORTAL_URL
+        sync: false
+      # Phase 15: key for the hashed checkout signals (IP / device / payer id); keep it stable once set
+      - key: SIGNAL_HASH_KEY
+        generateValue: true
+      # Phase 12: Gemini reads merchant uploads to prefill fields (user decision G103: on)
+      - key: UPLOAD_EXTRACTION
+        value: "true"
+      # Phase 17: this API's own public URL (MCP endpoint = <PUBLIC_API_URL>/mcp), e.g. https://disputeshield-api.onrender.com
+      - key: PUBLIC_API_URL
+        sync: false
+      # Phase 17: alerts (optional). Email via SMTP (STARTTLS) and/or a Slack incoming webhook.
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        value: "587"
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASSWORD
+        sync: false
+      - key: SMTP_FROM
+        sync: false
+      - key: SLACK_WEBHOOK_URL
+        sync: false
+      # Phase 16: demo mode (Scenarios drawer) needs DEMO_MODE=true AND ADMIN_TOKEN. Keep false unless demoing.
+      - key: DEMO_MODE
+        value: "false"
+      - key: DEMO_BUYER_EMAIL
+        sync: false
 
   - type: web
     name: disputeshield-web

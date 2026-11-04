@@ -81,3 +81,15 @@ It is not Visa CE 3.0 itself, and PayPal disputes don't follow it.
   merchant creates the bearer token in Settings (only its hash is stored). See README, "Use DisputeShield from
   Claude Desktop".
 
+## 7. Free plan (current choice, 2026-11-04)
+
+`render.yaml` deploys the API on Render's **free** plan: $0, 750 instance-hours/month. The costs:
+- it sleeps after 15 minutes idle (the first request then takes ~30 s)
+- it has no persistent disk, so the SQLite database is empty after every sleep, restart or deploy
+
+`AUTO_SEED=true` rebuilds the demo store data and the labelled demo analytics history on startup, and the poller
+re-imports the sandbox disputes from PayPal (the agents then analyse them again, which uses some LLM quota).
+Approvals, uploads, settings and MCP tokens from a previous session are gone after a sleep. Render Shell isn't
+available on the free plan, which is why seeding is automatic. For persistence switch to `plan: starter` and
+uncomment the disk (see the comments in `render.yaml`).
+

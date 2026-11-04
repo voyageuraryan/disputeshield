@@ -94,3 +94,21 @@ def clear_demo_history(session: Session) -> int:
     res = session.exec(delete(DisputeOutcome).where(DisputeOutcome.is_demo == True))  # noqa: E712
     session.commit()
     return res.rowcount or 0
+
+
+def auto_seed(session: Session) -> dict:
+    """AUTO_SEED (Render free plan): seed the demo store and the demo outcome history if they're missing.
+    Idempotent: never touches existing orders or real data."""
+    from sqlmodel import select
+
+    from app.models import Order
+    from app.scripts.seed import seed
+
+    out = {"store": False, "demo_history": 0}
+    if session.exec(select(Order).limit(1)).first() is None:
+        seed(session)
+        out["store"] = True
+    if session.exec(select(DisputeOutcome).where(DisputeOutcome.is_demo == True).limit(1)).first() is None:  # noqa: E712
+        out["demo_history"] = replace_demo_history(session)
+    return out
+
