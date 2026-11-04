@@ -309,6 +309,20 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Evals 2026-11-04 (real Groq gpt-oss-120b at t=0, judge gemini-2.5-flash)
+- ActionCorrectness 50/51 (98%); Citation / Allowed actions / Baseline distance / No over-claim / Length / Tool
+  correctness 51/51; Faithfulness 49/50; Decision explanation 44/50; Seller note 18/20; Economic reasoning 39/49; PII
+  leakage, Step efficiency, Task completion 8/8. Report: backend/evals/reports/2026-11-04.md (= latest).
+G156 [ ] P2 3 goldens skipped (Groq daily quota at the end: grid-inr-partial-above-chargeback,
+        grid-snad-weak-above-inquiry, ts-fixed). Re-run with `scripts/run_evals.sh --only <ids> --merge` after the
+        quota resets. The 14 troubleshooting conversations still wait for search grounding (G92).
+G157 [x] Found by these evals: ts-defect -> NEEDS_HUMAN. The model's GATHER_MORE -> SETTLE cited the troubleshooting
+        record, and the validator only accepted buyer messages / listings as a reason to move. A record where the buyer
+        PROVED the fault now justifies a move toward settling, never toward FIGHT (G75). Tested; ts-defect is re-run
+        with G156.
+G158 [ ] P3 Economic reasoning [GEval] 39/49: the judge wants the settle threshold compared explicitly in more cases;
+        a prompt wording item, not a decision error.
+
 ### Self-check + submission readiness (2026-11-04)
 G151 [ ] P1 (for the user, at the end) Judge access to the deployed app: login is Log in with PayPal (AUTH_MODE=off is
         refused on Render). Add a dedicated sandbox BUSINESS account to MERCHANT_LOGIN_EMAILS and put its sandbox
@@ -374,7 +388,7 @@ G135 [ ] P2 Demo scenarios not run live. Check with DEMO_MODE=true + ADMIN_TOKEN
 G136 [ ] P3 Whether the sandbox "Report a problem" offers an "unauthorised" option for a store payment isn't
         verified; the scenario's checklist says to use "item not received" if not (the earlier-orders evidence shows
         either way).
-G137 [ ] P3 The Trust page shows the latest eval report as it is: 2 Nov, partial run, gates not passed (G100: the
+G137 [x] P3 (the Trust page now shows the 2026-11-04 report) The Trust page shows the latest eval report as it is: 2 Nov, partial run, gates not passed (G100: the
         prompts changed since, so it needs a full re-run). The page says so instead of hiding it.
 G138 [ ] P3 Tour step 4 highlights the Recommendation card when the chosen case has no Options card (cases analysed
         before Phase 13, seeded demo decisions). It prefers a case awaiting approval.
@@ -481,7 +495,7 @@ G98 [x] P2 (fixed Phase 13: runner.PENDING, one fresh follow-up run) Runs that a
 G99 [ ] P3 One-run-at-a-time is an in-process set plus the run_started marker on the timeline: two processes could both
         pass the check in the same instant, and a crashed run blocks re-analyse for up to 15 min (STARTED_STALE).
         Fine for the single Render instance; use a DB lock row if it's ever scaled out.
-G100 [ ] P2 The Phase 11 prompt change (freshness rule + "Data freshness" line) invalidates the eval cache: the next
+G100 [x] P2 (done 2026-11-04: full real-model re-run, report 2026-11-04) The Phase 11 prompt change (freshness rule + "Data freshness" line) invalidates the eval cache: the next
         `make evals` re-runs all 51 analyst goldens against real models (Groq quota). Run it together with the G74
         final check. (The freshness line has only the relative age, so the cache key stays stable between runs.)
 G101 [x] Stale-required check: a required type that also has a fresh item (store tracking while PayPal's tracker
@@ -498,7 +512,7 @@ G96 [ ] P2 On the new keys: gemini-2.5-flash is "no longer available to new user
         10C research fixture therefore still needs the original key's grounding (after reset), Tavily, or billing.
 
 ### Found in Phase 10C (2026-11-03)
-G74 [~] P1 APPROVED + fixed in the analyst prompt (moves are directional: evidence that weakens the claim moves only
+G74 [x] P1 (verified 2026-11-04 on the real model: ActionCorrectness 50/51 = 98%, up from 40/51; SETTLE expected -> SETTLE 18/19) APPROVED + fixed in the analyst prompt (moves are directional: evidence that weakens the claim moves only
         toward FIGHT, evidence that strengthens it only toward SETTLE; missing evidence / repeated complaints /
         red flags never justify a move; the meaning of SETTLE vs FIGHT spelled out). Verified live on the first
         version: 8/9 G74 failures fixed (all weak/partial-below-threshold cells now SETTLE), guards held
@@ -531,7 +545,7 @@ G82 [x] StepEfficiency called the full investigation "redundant store tools" -> 
 G83 [x] Traces held live objects (sessions, investigator) -> "Circular reference" when caching -> plain() converter.
 G84 [x] The judge kept retrying a DAILY quota 429 for minutes per metric -> fails fast and skips that model.
 G85 [x] SETTLE "notes" (our fixed accept-claim template) were graded as AI writing -> note quality on FIGHT only.
-G86 [ ] P2 The committed report (51 goldens) is incomplete: 38 judged results unmeasured (both free judge quotas,
+G86 [x] P2 (done 2026-11-04: re-judged with gemini-2.5-flash; Decision explanation now 44/50 measured, 0 errored) The committed report (51 goldens) is incomplete: 38 judged results unmeasured (both free judge quotas,
         gemini-2.5-flash and 3.5-flash-lite, ran out on 2026-11-02) and it was judged by flash-lite. Next: rerun
         `scripts/run_evals.sh --merge` after the quota resets (cache resumes), ideally EVALS_JUDGE_MODEL=gemini-2.5-flash.
 G87 [ ] P3 CI isn't active: no git remote yet (your call), and the repo needs GROQ_API_KEY + GEMINI_API_KEY secrets

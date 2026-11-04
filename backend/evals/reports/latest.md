@@ -1,58 +1,53 @@
-# Eval report 2026-11-02
+# Eval report 2026-11-04
 
 **Gates: PARTIAL / FAILED**
 
-- ActionCorrectness 40/51 = 78% < 90%
-- incomplete run: 0 golden(s) skipped, 38 metric result(s) errored (set EVALS_ALLOW_PARTIAL=1 to accept a partial run)
+- incomplete run: 3 golden(s) skipped, 1 metric result(s) errored (set EVALS_ALLOW_PARTIAL=1 to accept a partial run)
 
-Model under test: groq:openai/gpt-oss-120b (providers: groq:openai/gpt-oss-120b); judge: gemini-judge (gemini-3.5-flash-lite). Goldens 51, ran 51.
-Latency per golden p50 30.9 s, p95 72.58 s. Tokens (model under test): 21484 in / 9808 out over 11 golden(s) with usage data.
+Model under test: groq:openai/gpt-oss-120b:t0.0:s7 (providers: groq:openai/gpt-oss-120b); judge: gemini-judge (gemini-2.5-flash). Goldens 54, ran 51, skipped 3.
+Latency per golden p50 59.4 s, p95 90.72 s. Tokens (model under test): 175140 in / 58838 out over 51 golden(s) with usage data.
 
 | Metric | Kind | Passed | Average | Not measured |
 |---|---|---|---|---|
-| ActionCorrectness | deterministic | 40/51 (78%) | 0.784 | 0 |
+| ActionCorrectness | deterministic | 50/51 (98%) | 0.98 | 0 |
 | CitationValidity | deterministic | 51/51 (100%) | 1.0 | 0 |
 | AllowedActionRespected | deterministic | 51/51 (100%) | 1.0 | 0 |
 | BaselineDistance | deterministic | 51/51 (100%) | 1.0 | 0 |
 | NoOverclaim | deterministic | 51/51 (100%) | 1.0 | 0 |
 | LengthLimits | deterministic | 51/51 (100%) | 1.0 | 0 |
 | Tool Correctness | agentic | 51/51 (100%) | 1.0 | 0 |
-| Faithfulness | judged | 49/49 (100%) | 0.954 | 1 |
-| Economic reasoning [GEval] | judged | 40/49 (82%) | 0.865 | 1 |
-| Decision explanation [DAG] | judged | 8/14 (57%) | 0.743 | 36 |
-| Seller note quality [GEval] | judged | 18/19 (95%) | 0.879 | 0 |
+| Faithfulness | judged | 49/50 (98%) | 0.967 | 0 |
+| Economic reasoning [GEval] | judged | 39/49 (80%) | 0.831 | 1 |
+| Decision explanation [DAG] | judged | 44/50 (88%) | 0.932 | 0 |
+| Seller note quality [GEval] | judged | 18/20 (90%) | 0.895 | 0 |
 | PII Leakage | judged | 8/8 (100%) | 1.0 | 0 |
 | Step Efficiency | agentic | 8/8 (100%) | 1.0 | 0 |
-| Task Completion | agentic | 8/8 (100%) | 0.963 | 0 |
+| Task Completion | agentic | 8/8 (100%) | 0.988 | 0 |
 
 | Reason | Goldens | Action correct | Failed metric results |
 |---|---|---|---|
-| Not received | 21 | 17/21 (81%) | 9 |
-| Not as described | 18 | 11/18 (61%) | 14 |
-| Unauthorised | 12 | 12/12 (100%) | 4 |
+| Not received | 20 | 20/20 (100%) | 4 |
+| Not as described | 17 | 16/17 (94%) | 8 |
+| Unauthorised | 14 | 14/14 (100%) | 8 |
 
 Confusion matrix (rows: expected, columns: recommended)
 
-| expected \ got | FIGHT | SETTLE | GATHER_MORE | NEEDS_HUMAN |
-|---|---|---|---|---|
-| FIGHT | 19 | 0 | 0 | 0 |
-| SETTLE | 0 | 11 | 9 | 0 |
-| GATHER_MORE | 1 | 4 | 6 | 1 |
+| expected \ got | FIGHT | SETTLE | SETTLE_PARTIAL | REPLACEMENT | GATHER_MORE | NEEDS_HUMAN |
+|---|---|---|---|---|---|---|
+| FIGHT | 20 | 0 | 0 | 0 | 0 | 0 |
+| SETTLE | 0 | 18 | 0 | 0 | 1 | 0 |
+| GATHER_MORE | 0 | 2 | 0 | 0 | 9 | 1 |
 
 ## Worst cases
 
-- **grid-snad-partial-below-inquiry** (expected SETTLE, got GATHER_MORE)
-  - ActionCorrectness (0.0): got GATHER_MORE, expected SETTLE
-  - Economic reasoning [GEval] (0.5): The output partially follows the evaluation steps. It correctly identifies the missing evidence (refund policy), uses plain English, and weighs the small 15 USD dispute amount against the chances of winning. However, it fails to compare the disputed amount with the merchant's settle threshold of 25 USD where that matters for the decision, and it hallucinates an internal rule score (0.53) and thres
-  - Decision explanation [DAG] (0.4): The score is 0.4 because the BinaryJudgementNode at Level == 0 successfully identified the recommended action as 'GATHER_MORE', but the BinaryJudgementNode at Level == 1 failed the criteria for naming decisive specific evidence, resulting in a final VerdictNode of False.
-- **ts-defect** (expected GATHER_MORE/SETTLE, got FIGHT)
-  - ActionCorrectness (0.0): got FIGHT, expected GATHER_MORE/SETTLE
-  - Seller note quality [GEval] (0.3): The output violates step 5 by explicitly admitting that the buyer completed all required troubleshooting and provided proof of the fault, which directly weakens the merchant's case against a 'not as described' dispute. Additionally, it misinterprets the refund policy from evidence 3 by claiming the buyer has not satisfied the conditions when the text states faulty items are repaired, replaced, or 
-- **grid-inr-weak-below-inquiry** (expected SETTLE, got GATHER_MORE)
-  - ActionCorrectness (0.0): got GATHER_MORE, expected SETTLE
-  - Decision explanation [DAG] (0.4): The score is 0.4 because the Level 0 BinaryJudgementNode verified that the explanation states the recommended action, but the Level 1 BinaryJudgementNode found that it failed to name specific evidence that decided the outcome, leading to a False verdict at the VerdictNode.
-- **grid-snad-partial-below-chargeback** (expected SETTLE, got GATHER_MORE)
-  - ActionCorrectness (0.0): got GATHER_MORE, expected SETTLE
-  - Economic reasoning [GEval] (0.3): The output fails to recommend SETTLE despite the dispute amount of 15.00 USD being below the merchant settle threshold of 25.00 USD, ignoring the baseline rule from the context. It also fails to properly weigh the cost against fighting, missing the core threshold logic.
-- **adv-address-mismatch** (expected GATHER_MORE, got NEEDS_HUMAN)
-  - ActionCorrectness (0.0): got NEEDS_HUMAN, expected GATHER_MORE; problems: ['GATHER_MORE must name the missing items']
+- **grid-unauth-strong-above-inquiry** (expected FIGHT, got FIGHT)
+  - Faithfulness (0.625): 
+  - Seller note quality [GEval] (0.6): The output maintains a professional and calm tone, references specific tracking and invoice evidence without inventing facts, and correctly avoids including sensitive personal data like the buyer email or full address. However, it minorly overstates seller protection coverage by mentioning item not received eligibility when the dispute is actually an unauthorized transaction inquiry, and it includ
+- **ts-defect** (expected GATHER_MORE/SETTLE, got NEEDS_HUMAN)
+  - ActionCorrectness (0.0): got NEEDS_HUMAN, expected GATHER_MORE/SETTLE; problems: ['moving from GATHER_MORE to SETTLE must cite a buyer_message or listing item that justifies it']
+- **grid-unauth-strong-below-chargeback** (expected FIGHT, got FIGHT)
+  - Economic reasoning [GEval] (0.3): The output completely fails to compare the disputed amount of 15.00 USD with the merchant's settle threshold of 25 USD, violating the first evaluation step. Furthermore, it incorrectly states that fighting costs about $18.50, which is an external number not present in the retrieval context, violating the penalty for hallucinations.
+- **adv-address-mismatch** (expected GATHER_MORE, got GATHER_MORE)
+  - Decision explanation [DAG] (0.6): The score is 0.6 because while the Level 0 and Level 1 nodes confirmed the explanation states the recommended action and specific evidence, and the Level 2 node identified the action as GATHER_MORE, the Level 3 node failed because the explanation does not concretely state what the merchant themselves should collect or check next, resulting in a False verdict at Level 4.
+- **grid-unauth-weak-below-chargeback** (expected SETTLE, got SETTLE)
+  - Decision explanation [DAG] (0.4): The score is 0.4 because the DAG traversal shows that while the BinaryJudgementNode at Level 0 correctly verified the recommended action as 'SETTLE', the subsequent BinaryJudgementNode at Level 1 failed because the explanation did not name a specific piece of deciding evidence, resulting in a final VerdictNode of False.

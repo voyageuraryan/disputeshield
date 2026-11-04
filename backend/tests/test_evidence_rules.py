@@ -218,3 +218,19 @@ def test_g75_validator_rejects_fight_on_a_confirmed_defect():
     assert any("never recommend FIGHT for a confirmed defect" in p for p in validate(fight, case, Baseline("FIGHT", "r")))
     ok = _defect_case(["ts_fixed"])
     assert not any("confirmed defect" in p for p in validate(fight, ok, Baseline("FIGHT", "r")))
+
+
+def test_g75_proven_defect_justifies_a_move_toward_settling_only():
+    """Evals 2026-11-04: ts-defect went NEEDS_HUMAN because the model's GATHER_MORE -> SETTLE cited the record."""
+    from app.agents.analyst import validate
+    from app.rules.evidence_rules import Baseline
+    from app.schemas import Recommendation
+    case = _defect_case(["ts_defect_confirmed"])
+    settle = Recommendation(action="SETTLE", confidence="medium", reasoning="The buyer proved the fault.",
+                            cited_evidence_ids=[99], missing_items=[], economic_note="n")
+    assert validate(settle, case, Baseline("GATHER_MORE", "r")) == []
+    fight = settle.model_copy(update={"action": "FIGHT"})
+    assert validate(fight, case, Baseline("GATHER_MORE", "r"))           # never toward FIGHT
+    not_proven = _defect_case(["ts_partial"])
+    assert any("must cite a buyer_message or listing" in p
+               for p in validate(settle, not_proven, Baseline("GATHER_MORE", "r")))

@@ -40,6 +40,7 @@ from app.rules.evidence_rules import (
     evaluate,
     red_flag_description,
     steps_apart,
+    RUNG,
 )
 from app.rules.money import MoneySettings, full_baseline, offer_bounds, offer_problems, options
 from app.schemas import CaseFile, ChecklistResult, EvidenceItem, Recommendation
@@ -210,7 +211,12 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
         # (same rung = ways of settling: SETTLE / SETTLE_PARTIAL / REPLACEMENT; picking one isn't a move)
         # (stepping down from FIGHT because required evidence is stale is justified by the staleness itself)
         cited_types = {by_id[i].type for i in rec.cited_evidence_ids if i in by_id}
-        if not cited_types & JUSTIFYING_TYPES:
+        # A troubleshooting record in which the buyer PROVED the fault strengthens the claim: it may justify a move
+        # toward settling (never toward FIGHT, G75). Found by the 2026-11-04 evals (ts-defect -> NEEDS_HUMAN).
+        defect_cited = any(by_id[i].type == "troubleshooting_record" and "ts_defect_confirmed" in by_id[i].flags
+                           for i in rec.cited_evidence_ids if i in by_id)
+        toward_settling = RUNG[rec.action] < RUNG[baseline.action]
+        if not (cited_types & JUSTIFYING_TYPES or (defect_cited and toward_settling)):
             available = sorted({e.type for e in case.evidence} & JUSTIFYING_TYPES)
             problems.append(f"moving from {baseline.action} to {rec.action} must cite a buyer_message or listing "
                             f"item that justifies it"
