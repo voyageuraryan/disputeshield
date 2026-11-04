@@ -108,7 +108,8 @@ def decision_dag(judge) -> DAGMetric:
         criteria="Does the explanation name the specific evidence that decided it (e.g. tracking, delivery "
                  "confirmation, listing, refund policy, a buyer message, a red flag)?", evaluation_params=seen)
     which = NonBinaryJudgementNode(
-        criteria="Which action does the explanation recommend? Answer exactly one of: FIGHT, SETTLE, GATHER_MORE.",
+        criteria="Which action does the explanation recommend? Answer exactly one of: FIGHT, SETTLE, GATHER_MORE "
+                 "(a full refund, a partial refund offer or a replacement all count as SETTLE).",
         evaluation_params=seen)
     collect = BinaryJudgementNode(
         criteria="Does the explanation name concretely what the merchant should collect or check next?",
@@ -128,7 +129,7 @@ def decision_dag(judge) -> DAGMetric:
 
 def judged_cases(golden: dict, out: dict, judge, *, deep: bool) -> list[tuple[object, LLMTestCase]]:
     """(metric, its test case) for one golden. `deep` adds the costlier PII check (sampled; see conftest)."""
-    if out.get("action") not in ("FIGHT", "SETTLE", "GATHER_MORE"):
+    if out.get("action") not in ("FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE"):
         return []
     ctx, c = context(golden, out), golden["case_file"]
     question = f"Recommend FIGHT, SETTLE or GATHER_MORE for dispute {c['dispute_id']} ({c['reason']}, {c['amount']} " \

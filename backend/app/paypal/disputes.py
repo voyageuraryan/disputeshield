@@ -299,6 +299,73 @@ async def escalate(decision, dispute_id: str, note: str, *, client: PayPalClient
                                                       json={"note": note})
 
 
+# ---- make-offer (Phase 13) ---------------------------------------------------------------
+# Checked 2026-11-03 against the Disputes v1 OpenAPI (github.com/paypal/paypal-rest-api-specifications,
+# openapi/customer_disputes_v1.json, operation "Make offer to resolve dispute"):
+#   POST /v1/customer/disputes/{id}/make-offer   JSON schema make_offer:
+#     note (required, 1-2000), offer_type (required, enum below), offer_amount (money {currency_code, value}),
+#     return_shipping_address (address_portable; for REFUND_WITH_RETURN), invoice_id (optional, 1-127).
+#   "To make this call, the stage in the dispute lifecycle must be INQUIRY. If the customer accepts the offer,
+#   PayPal automatically makes a refund. Allowed offer_type values ... allowed_response_options" ->
+#   dispute.allowed_response_options.make_offer.offer_types.
+#   offer_type enum: REFUND (include offer_amount, omit return address; buyer acceptance needed for a partial
+#   refund, auto-closed for a full one), REFUND_WITH_RETURN (offer_amount + return_shipping_address),
+#   REFUND_WITH_REPLACEMENT (offer_amount), REPLACEMENT_WITHOUT_REFUND (omit offer_amount).
+#   Outcomes: dispute.offer.history[] {actor BUYER|SELLER, event_type PROPOSED|ACCEPTED|DENIED, offer_type,
+#   offer_amount, offer_time}; dispute_outcome.outcome_code includes ACCEPTED / DENIED. They arrive through
+#   CUSTOMER.DISPUTE.UPDATED / CUSTOMER.DISPUTE.RESOLVED (the only dispute webhooks; event-names page).
+OFFER_TYPES = ("REFUND", "REFUND_WITH_RETURN", "REFUND_WITH_REPLACEMENT", "REPLACEMENT_WITHOUT_REFUND")
+OFFER_NOTE_MAX = 2000
+
+
+def offer_types(raw: dict | None) -> list[str]:
+    """Offer types PayPal allows now (allowed_response_options.make_offer.offer_types), only when make_offer is
+    allowed. Not listed -> none assumed (we don't guess which types PayPal would take)."""
+    raw = raw or {}
+    if "make_offer" not in allowed_actions(raw):
+        return []
+    listed = (((raw.get("allowed_response_options") or {}).get("make_offer") or {}).get("offer_types")) or []
+    return [t for t in OFFER_TYPES if t in listed]
+
+
+def offer_events(raw: dict | None) -> list[dict]:
+    """The offer history, oldest first: [{actor, event_type, offer_type, amount, currency, time}]."""
+    hist = (((raw or {}).get("offer") or {}).get("history")) or []
+    out = []
+    for h in hist:
+        amt = h.get("offer_amount") or {}
+        out.append({"actor": h.get("actor"), "event_type": h.get("event_type"), "offer_type": h.get("offer_type"),
+                    "amount": amt.get("value"), "currency": amt.get("currency_code"), "time": h.get("offer_time")})
+    return sorted(out, key=lambda e: e["time"] or "")
+
+
+async def make_offer(decision, dispute_id: str, *, note: str, offer_type: str, amount: str | None = None,
+                     currency: str | None = None, invoice_id: str | None = None,
+                     return_address: dict | None = None, client: PayPalClient | None = None) -> dict:
+    """Money-moving (PayPal refunds automatically if the buyer accepts): requires an APPROVED decision (rule 5)."""
+    require_approved(decision)
+    _check_id(dispute_id)
+    if offer_type not in OFFER_TYPES:
+        raise ValueError(f"offer_type must be one of {OFFER_TYPES}")
+    if not note or len(note) > OFFER_NOTE_MAX:
+        raise ValueError(f"offer note must be 1-{OFFER_NOTE_MAX} characters")
+    body: dict = {"note": note, "offer_type": offer_type}
+    if offer_type == "REPLACEMENT_WITHOUT_REFUND":
+        if amount is not None:
+            raise ValueError("REPLACEMENT_WITHOUT_REFUND takes no offer_amount")
+    else:
+        if amount is None or currency is None:
+            raise ValueError(f"{offer_type} needs offer_amount")
+        body["offer_amount"] = {"currency_code": currency, "value": amount}
+    if offer_type == "REFUND_WITH_RETURN":
+        if not return_address or not return_address.get("country_code"):
+            raise ValueError("REFUND_WITH_RETURN needs return_shipping_address with country_code")
+        body["return_shipping_address"] = return_address
+    if invoice_id:
+        body["invoice_id"] = invoice_id[:127]
+    return await (client or get_paypal_client()).post(f"{DISPUTES_PATH}/{dispute_id}/make-offer", json=body)
+
+
 MESSAGE_MAX = 2000  # schema "message".content maxLength
 
 

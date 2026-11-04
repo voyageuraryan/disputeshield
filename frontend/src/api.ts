@@ -108,14 +108,29 @@ export type CaseFile = {
   stage: string | null;
   dispute_state: string | null;
   allowed_actions: string[];
+  offer_types?: string[];
+  can_accept_claim?: boolean;
+  can_offer?: boolean;
+  can_replace?: boolean;
   can_fight: boolean;
   can_settle: boolean;
+};
+
+/** Phase 13: one way to resolve the dispute, with its expected net outcome (app/rules/money.py). */
+export type MoneyOption = {
+  action: "FIGHT" | "SETTLE" | "SETTLE_PARTIAL" | "REPLACEMENT";
+  label: string;
+  available: boolean;
+  net: string | null;
+  chance: string | null;
+  offer_amount: string | null;
+  why: string;
 };
 
 export type Decision = {
   id: number;
   dispute_id: number;
-  recommendation: "FIGHT" | "SETTLE" | "GATHER_MORE";
+  recommendation: "FIGHT" | "SETTLE" | "SETTLE_PARTIAL" | "REPLACEMENT" | "GATHER_MORE";
   confidence: string;
   reasoning: string;
   cited_evidence_ids: number[];
@@ -133,6 +148,8 @@ export type Decision = {
   analysed_threshold: string | null;
   data_as_of?: string | null;
   stale_sources?: string[] | null;
+  offer_amount?: string | null; // Phase 13: SETTLE_PARTIAL offer
+  options?: MoneyOption[] | null; // calculator: Fight / Full refund / Partial offer / Replacement
   can_retry: boolean;
 };
 
@@ -230,9 +247,11 @@ export type DisputeDetail = {
   timeline: Step[];
   uploads?: MerchantUpload[];
   upload_types?: string[];
+  offer_bounds?: { min: string; max: string } | null;
 };
 
-export type ApproveBody = { action?: "FIGHT" | "SETTLE"; note?: string; approved_by?: string };
+export type SendAction = "FIGHT" | "SETTLE" | "SETTLE_PARTIAL" | "REPLACEMENT";
+export type ApproveBody = { action?: SendAction; note?: string; approved_by?: string; offer_amount?: string };
 
 export const disputesApi = {
   list: () => req<DisputeRow[]>("/api/disputes"),
@@ -293,11 +312,26 @@ export type MerchantSettings = {
   auto_invite_troubleshooting: boolean;
   currency: string;
   updated_at: string;
+  dispute_fee?: string;
+  handling_minutes?: number;
+  hourly_value?: string;
+  max_offer_pct?: number;
+  fee_sources?: { country: string; standard: string; high_volume: string; url: string }[];
+};
+
+export type SettingsPatch = {
+  settle_threshold?: string;
+  refund_policy?: string;
+  auto_invite_troubleshooting?: boolean;
+  dispute_fee?: string;
+  handling_minutes?: number;
+  hourly_value?: string;
+  max_offer_pct?: number;
 };
 
 export const settingsApi = {
   get: () => req<MerchantSettings>("/api/settings"),
-  save: (patch: { settle_threshold?: string; refund_policy?: string; auto_invite_troubleshooting?: boolean }) =>
+  save: (patch: SettingsPatch) =>
     req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(patch) }),
 };
 

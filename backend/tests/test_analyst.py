@@ -306,7 +306,7 @@ async def test_graph_ends_without_approval_when_needs_human(pp, engine, demo, tm
 def test_prompt_only_offers_actions_the_app_can_send():
     from app.agents.analyst import SYSTEM_PROMPT
     assert "escalating the case to a PayPal claim" in SYSTEM_PROMPT
-    assert "cannot send partial offers or messages" in SYSTEM_PROMPT
+    assert "SETTLE_PARTIAL = a partial refund offer" in SYSTEM_PROMPT and "offer_types lists them" in SYSTEM_PROMPT
 
 
 async def test_gather_more_on_a_red_flag_gets_the_missing_items_from_the_rules(engine):

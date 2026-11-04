@@ -18,7 +18,8 @@ from evals.goldens.schema import Golden, load_goldens
 
 REPORTS = Path(__file__).parent / "reports"
 ROWS: list[dict] = []
-ACTIONS = ("FIGHT", "SETTLE", "GATHER_MORE", "NEEDS_HUMAN")
+ACTIONS = ("FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE", "NEEDS_HUMAN")
+EXPECTED_ACTIONS = ("FIGHT", "SETTLE", "GATHER_MORE")  # goldens' expected labels (rows of the confusion table)
 REASON_SHORT = {"MERCHANDISE_OR_SERVICE_NOT_RECEIVED": "Not received", "MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED":
                 "Not as described", "UNAUTHORISED": "Unauthorised"}
 
@@ -99,7 +100,7 @@ def build(rows: list[dict], judge_model: str | None) -> dict:
         rr = [r for r in ran if r["reason"] == reason]
         by_reason[short] = {"goldens": len(rr), "action_correct": sum(r["action"] in r["acceptable"] for r in rr),
                             "metrics_failed": sum(1 for r in rr for m in r["metrics"] if m["success"] is False)}
-    confusion = {e: {a: 0 for a in ACTIONS} for e in ACTIONS[:3]}
+    confusion = {e: {a: 0 for a in ACTIONS} for e in EXPECTED_ACTIONS}
     for r in ran:
         confusion[r["expected"]][r["action"] if r["action"] in ACTIONS else "NEEDS_HUMAN"] += 1
 

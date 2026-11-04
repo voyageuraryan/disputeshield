@@ -116,6 +116,7 @@ class DisputeDetail(BaseModel):
     decisions: list[DecisionOut]
     timeline: list[StepOut]
     uploads: list[dict] = []          # Phase 12: the merchant's uploads (pending and confirmed)
+    offer_bounds: dict | None = None  # Phase 13: {min, max} for a partial offer when PayPal lists REFUND offers
     upload_types: list[str] = []      # evidence types the merchant can add
 
 
@@ -250,7 +251,18 @@ def get_dispute_detail(dispute_id: str, session: Session = Depends(get_session))
                          checklist=_checklist(case, threshold, ship.carrier if ship else None),
                          decisions=[_out(x, session) for x in decisions],
                          timeline=[StepOut(**s.model_dump(include=set(StepOut.model_fields))) for s in steps],
-                         uploads=[upload_out(u).model_dump(mode="json") for u in ups], upload_types=list(UPLOAD_TYPES))
+                         uploads=[upload_out(u).model_dump(mode="json") for u in ups], upload_types=list(UPLOAD_TYPES),
+                         offer_bounds=_offer_bounds(session, case))
+
+
+def _offer_bounds(session: Session, case: CaseFile) -> dict | None:
+    if not case.can_offer:
+        return None
+    from app.merchant import money_settings
+    from app.rules.money import offer_bounds
+
+    lo, hi = offer_bounds(case.amount, money_settings(session))
+    return {"min": str(lo), "max": str(hi)}
 
 
 # Served at the spec's path (/disputes/...) and under /api for the frontend's Vite proxy.

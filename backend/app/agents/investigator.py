@@ -25,7 +25,7 @@ from app.tracing import observe
 from app.agents.steps import log_step
 from app.models import Dispute, EvidenceItemRow, EvidenceSource, Message, MessageSender, Order, Shipment
 from app.paypal.client import PayPalClient, PayPalError
-from app.paypal.disputes import allowed_actions, get_dispute
+from app.paypal.disputes import allowed_actions, get_dispute, offer_types
 from app.paypal.orders import get_order
 from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
@@ -132,6 +132,7 @@ def build_case_file(session: Session, dispute: Dispute) -> CaseFile:
         stage=dispute.stage,
         dispute_state=(dispute.raw or {}).get("dispute_state"),
         allowed_actions=allowed_actions(dispute.raw),
+        offer_types=offer_types(dispute.raw),
         evidence=[EvidenceItem(id=r.id, type=r.type, source=r.source.value, source_ref=r.source_ref,
                                summary=r.summary, flags=r.flags or []) for r in rows],
         data_as_of=dispute.refreshed_at, stale_sources=stale,

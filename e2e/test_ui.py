@@ -51,7 +51,7 @@ def test_queue_columns_sort_filter_search_countdown(stack, page):
     assert page.locator(".ag-header-cell-text").all_inner_texts() == [
         "Dispute", "Reason", "Amount", "Buyer", "Due in", "Recommendation", "Confidence", "Status"]
     rows = page.locator(".ag-grid-scrolling-container .ag-row")
-    assert rows.count() == 12  # A, B, C, D, F, G, H, I, J, K, R, E
+    assert rows.count() == 13  # A, B, C, D, F, G, H, I, J, K, R, E, O
     assert "PP-DEMO-A" in page.locator(".ag-row[row-index='0']").inner_text()  # soonest deadline first
     assert page.locator(".ag-grid-scrolling-container .font-semibold.text-red-600").count() == 2  # under 48 h
     page.fill("input[type=search]", "case-b")
@@ -600,3 +600,42 @@ def test_add_missing_evidence_and_confirm(stack, page):
         assert not real_errors(page)
     finally:
         stack.sql("delete from agent_steps where dispute_id=? and action='run_started' and created_at=?", b, now)
+
+
+# ---- Phase 13: offers -----------------------------------------------------------------------------------------
+
+def test_options_card_and_editing_the_offer(stack, page):
+    """Options compare Fight / Full refund / Partial offer; the merchant edits the offer within bounds. Nothing is
+    sent (the confirm step is opened and cancelled)."""
+    page.goto(f"{stack.base}/cases/PP-DEMO-O")
+    opts = page.locator("[data-testid=options]")
+    opts.wait_for()
+    text = opts.inner_text()
+    assert "Fight" in text and "Full refund" in text and "Partial refund offer" in text
+    assert opts.locator("li", has_text="Partial refund offer").locator("text=best").count() == 1
+    offer = page.get_by_label("Offer amount")
+    assert offer.input_value() == "80.00"
+    assert page.locator("text=offer the buyer a partial refund of $80.00").count() == 1
+    approve = page.locator("button:has-text('Approve')")
+
+    offer.fill("5")
+    page.wait_for_selector("text=The offer must be at least 20.00")
+    assert approve.is_disabled()
+    offer.fill("150")
+    page.wait_for_selector("text=The offer can be at most 140.00")
+    assert approve.is_disabled()
+    offer.fill("60")
+    assert approve.is_enabled()
+    assert "offer 60.00 (30% of the amount)" in opts.inner_text()  # the partial row follows the edit
+    # an edited amount never sends the old drafted note: the note is written for the final amount
+    assert "refund of 60.00 USD" in page.locator("textarea").get_attribute("placeholder")
+
+    approve.click()
+    page.wait_for_selector("text=Send this offer to the buyer now?")
+    page.locator("button:has-text('Cancel')").first.click()
+
+    page.locator("button:has-text('Choose fight')").click()
+    page.wait_for_selector("text=fight by escalating to a PayPal claim")
+    assert page.get_by_label("Offer amount").count() == 0
+    assert not real_errors(page)
+

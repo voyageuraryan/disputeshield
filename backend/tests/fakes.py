@@ -40,7 +40,8 @@ class ObedientLLM:
                               missing_items=p["checklist"]["missing"]
                               or [f"evidence that resolves {f}" for f in p["checklist"]["red_flags"]],
                               economic_note=f"Amount {p['case_file']['amount']} vs threshold "
-                                            f"{p['merchant_settle_threshold']}.")
+                                            f"{p['merchant_settle_threshold']}.",
+                              offer_amount=p.get("suggested_offer") if action == "SETTLE_PARTIAL" else None)
 
 
 class ScriptedLLM:

@@ -82,6 +82,37 @@ def purge_expired_proofs(db: Session, *, now: datetime | None = None, days: int 
     return [i for ids in done.values() for i in ids]
 
 
+def purge_expired_uploads(db: Session, *, now: datetime | None = None, days: int | None = None) -> list[int]:
+    """G109: the merchant's own uploaded files (Phase 12) follow the same retention: deleted `days` after the
+    dispute was resolved. The upload row keeps the confirmed fields and summary; the file endpoint answers 404."""
+    from app.models import MerchantUpload
+
+    days = get_settings().proof_retention_days if days is None else days
+    if days <= 0:
+        return []
+    now = now or datetime.now(timezone.utc)
+    rows = db.exec(select(MerchantUpload, Dispute).where(MerchantUpload.dispute_id == Dispute.id,
+                                                         Dispute.status == "RESOLVED",
+                                                         MerchantUpload.file_path.is_not(None))).all()
+    done: dict[int, list[int]] = {}
+    for up, d in rows:
+        when = resolved_at(d)
+        if when is None or when + timedelta(days=days) > now:
+            continue
+        _remove(up.file_path)
+        up.file_path = None
+        up.flags = [f for f in up.flags or [] if f != "file_attached"]
+        up.extraction = {**(up.extraction or {}), "purged_at": now.isoformat()}
+        db.add(up)
+        done.setdefault(d.id, []).append(up.id)
+    db.commit()
+    for dispute_id, ids in done.items():
+        log_step(db, dispute_id, "merchant", f"Deleted {len(ids)} uploaded file(s) of yours under the retention "
+                                             f"policy ({days} days after the dispute was resolved)",
+                 {"upload_ids": ids})
+    return [i for ids in done.values() for i in ids]
+
+
 class DeleteRefused(ValueError):
     pass
 
@@ -112,7 +143,7 @@ async def retention_loop(engine: Engine, interval_h: float = RETENTION_INTERVAL_
     while True:
         try:
             with Session(engine) as db:
-                ids = purge_expired_proofs(db)
+                ids = purge_expired_proofs(db) + purge_expired_uploads(db)
             if ids:
                 log.info("retention: purged %d proof file(s)", len(ids))
         except asyncio.CancelledError:

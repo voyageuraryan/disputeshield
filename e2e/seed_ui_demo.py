@@ -74,5 +74,28 @@ with Session(engine) as s:
                       stage="INQUIRY", amount=Decimal("89.00"), currency="USD",
                       seller_response_due=now + timedelta(hours=120),
                       raw={"update_time": now.isoformat(), "links": links("accept_claim")}, agent_status="PROPOSED"))
+    # Phase 13: a not-as-described inquiry where PayPal lists REFUND offers: the agents proposed a partial offer.
+    from app.rules.money import MoneySettings, options as money_options
+    o = Order(buyer_email="olga@demo.test", invoice_id="INV-O-13", amount=Decimal("200.00"), currency="USD",
+              items=[order_item(PRODUCTS["LAMP-01"], 1)])
+    s.add(o); s.commit(); s.refresh(o)
+    d = Dispute(paypal_dispute_id="PP-DEMO-O", order_id=o.id, reason=SNAD, status="WAITING_FOR_SELLER_RESPONSE",
+                stage="INQUIRY", amount=Decimal("200.00"), currency="USD", seller_response_due=now + timedelta(hours=120),
+                raw={"update_time": now.isoformat(), "dispute_life_cycle_stage": "INQUIRY",
+                     "links": links("accept_claim", "make_offer", "escalate"),
+                     "allowed_response_options": {"make_offer": {"offer_types": ["REFUND", "REFUND_WITH_RETURN"]}}},
+                agent_status="PROPOSED")
+    s.add(d); s.commit(); s.refresh(d)
+    e = EvidenceItemRow(dispute_id=d.id, type="order", source="store", source_ref=f"store:order/{o.id}",
+                        summary="Store order: 1x lamp", flags=[])
+    s.add(e); s.commit(); s.refresh(e)
+    opts = money_options(0.29, Decimal("200"), "USD", can_fight=True, can_accept_claim=True,
+                         offer_types=["REFUND", "REFUND_WITH_RETURN"], s=MoneySettings(), offer=Decimal("80.00"))
+    s.add(Decision(dispute_id=d.id, recommendation="SETTLE_PARTIAL", confidence="medium", status=DecisionStatus.PROPOSED,
+                   reasoning="Demo reasoning for PP-DEMO-O.", cited_evidence_ids=[e.id], offer_amount=Decimal("80.00"),
+                   economic_note="A partial offer is expected to cost less than a full refund.",
+                   options=[x.as_dict() for x in opts], missing_items=[], analysed_threshold=Decimal("25"),
+                   draft_note="We're sorry this order didn't work out. To resolve dispute PP-DEMO-O, we offer a refund "
+                              "of 80.00 USD (the disputed amount is 200.00 USD)."))
     s.commit()
 print("seeded")

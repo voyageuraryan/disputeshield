@@ -43,8 +43,12 @@
     ],
     "data_as_of": null,
     "stale_sources": [],
+    "offer_types": [],
     "can_fight": true,
-    "can_settle": true
+    "can_settle": true,
+    "can_accept_claim": true,
+    "can_offer": false,
+    "can_replace": false
   },
   "paypal_raw": {
     "dispute_id": "PP-EVAL-GRID-INR-WEAK-ABOVE-CHARGEBACK",

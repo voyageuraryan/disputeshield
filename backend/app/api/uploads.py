@@ -72,9 +72,18 @@ def _get(session: Session, dispute_id: str, upload_id: int):  # noqa: ANN202
 
 
 def _rerun(session: Session, d, background: BackgroundTasks, engine: Engine, why: str) -> RunOut:  # noqa: ANN001
+    from datetime import datetime, timezone
+
+    from app.agents import runner
+
     try:
         key = start_fresh_run(session, d, background, engine, why)
     except HTTPException as exc:  # a run is going (or the case just changed): the evidence is saved anyway
+        follow = f"run:{d.paypal_dispute_id}:manual:{datetime.now(timezone.utc).isoformat()}"
+        if exc.status_code == 409 and runner.defer(d.id, follow):  # G110: picked up when that run ends
+            return RunOut(started=False, run_key=follow,
+                          message="The agents are busy with this case; they'll re-analyse with the new evidence "
+                                  "as soon as the current run finishes.")
         return RunOut(started=False, message=f"{exc.detail} Re-analyse when it's done to use the new evidence.")
     return RunOut(started=True, run_key=key, message="The agents are re-analysing the case with the new evidence.")
 

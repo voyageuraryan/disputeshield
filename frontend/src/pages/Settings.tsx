@@ -113,6 +113,7 @@ export default function Settings() {
       </section>
       {saved && <RefundPolicy initial={saved.refund_policy ?? ""} onSaved={setSaved} />}
       {saved && <AutoInvite value={saved.auto_invite_troubleshooting} onSaved={setSaved} />}
+      {saved && <MoneyInputs saved={saved} onSaved={setSaved} />}
     </div>
   );
 }
@@ -222,4 +223,103 @@ function AutoInvite({ value, onSaved }: { value: boolean; onSaved: (s: MerchantS
       {status.kind === "error" && <p className="mt-2 text-sm text-red-700" role="alert">Couldn't save: {status.text}</p>}
     </section>
   );
+}
+
+/** Phase 13: inputs of the money calculator (Options card). Fee sources are PayPal's public fee pages. */
+function MoneyInputs({ saved, onSaved }: { saved: MerchantSettings; onSaved: (s: MerchantSettings) => void }) {
+  const init = () => ({
+    dispute_fee: Number(saved.dispute_fee ?? 15).toFixed(2),
+    handling_minutes: String(saved.handling_minutes ?? 30),
+    hourly_value: Number(saved.hourly_value ?? 25).toFixed(2),
+    max_offer_pct: String(saved.max_offer_pct ?? 70),
+  });
+  const [v, setV] = useState(init);
+  const [status, setStatus] = useState<{ kind: "idle" | "saving" | "ok" | "error"; text?: string }>({ kind: "idle" });
+  const problem = moneyProblem(v);
+  const save = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (problem) return;
+    setStatus({ kind: "saving" });
+    try {
+      const s = await settingsApi.save({
+        dispute_fee: Number(v.dispute_fee).toFixed(2),
+        handling_minutes: Number(v.handling_minutes),
+        hourly_value: Number(v.hourly_value).toFixed(2),
+        max_offer_pct: Number(v.max_offer_pct),
+      });
+      onSaved(s);
+      setStatus({ kind: "ok", text: "Saved. New analyses use these numbers." });
+    } catch (err) {
+      setStatus({ kind: "error", text: (err as Error).message });
+    }
+  };
+  const field = (key: keyof typeof v, labelText: string, help: string) => (
+    <label className="block text-sm">
+      <span className="font-medium text-slate-700">{labelText}</span>
+      <input
+        aria-label={labelText}
+        inputMode="decimal"
+        value={v[key]}
+        onChange={(e) => {
+          setV({ ...v, [key]: e.target.value });
+          setStatus({ kind: "idle" });
+        }}
+        className="mt-1 w-32 rounded-md border border-slate-300 px-2 py-1.5"
+      />
+      <span className="mt-0.5 block text-xs text-slate-500">{help}</span>
+    </label>
+  );
+  return (
+    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+      <h2 className="font-semibold">Money: fees, your time and offers</h2>
+      <p className="mt-1 text-sm text-slate-600">
+        The Options card compares fighting, a full refund and a partial offer using these numbers.
+      </p>
+      <form onSubmit={save} className="mt-3 grid gap-3 sm:grid-cols-2" noValidate>
+        {field("dispute_fee", `PayPal dispute fee (${saved.currency})`, "Charged when a buyer files a claim or chargeback.")}
+        {field("handling_minutes", "Your minutes per fought dispute", "Time to gather and send evidence.")}
+        {field("hourly_value", `Your hour is worth (${saved.currency})`, "Used to price your time.")}
+        {field("max_offer_pct", "Max partial offer (% of the amount)", "10 to 90. Offers are never suggested above this.")}
+        <div className="sm:col-span-2">
+          {problem && <p className="text-xs text-red-700" role="alert">{problem}</p>}
+          <button
+            type="submit"
+            disabled={!!problem || status.kind === "saving"}
+            className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            {status.kind === "saving" ? "Saving…" : "Save"}
+          </button>
+          {status.kind === "ok" && <span className="ml-3 text-sm text-indigo-700" role="status">{status.text}</span>}
+          {status.kind === "error" && <span className="ml-3 text-sm text-red-700" role="alert">Couldn't save: {status.text}</span>}
+        </div>
+      </form>
+      <div className="mt-4 rounded-md bg-slate-50 p-3 text-xs text-slate-600" data-testid="fee-sources">
+        <p className="font-medium text-slate-700">PayPal's dispute fees (from PayPal's fee pages, checked 3 Nov 2026)</p>
+        <ul className="mt-1 space-y-0.5">
+          {(saved.fee_sources ?? []).map((s) => (
+            <li key={s.country}>
+              {s.country}: standard {s.standard}, high volume {s.high_volume} ·{" "}
+              <a href={s.url} target="_blank" rel="noreferrer" className="text-indigo-700 hover:underline">
+                source
+              </a>
+            </li>
+          ))}
+        </ul>
+        <p className="mt-1">
+          PayPal says it "may charge a Dispute Fee when a buyer files a dispute claim or chargeback"; inquiries aren't
+          mentioned. Check your PayPal account for the rate that applies to you.
+        </p>
+      </div>
+    </section>
+  );
+}
+
+export function moneyProblem(v: { dispute_fee: string; handling_minutes: string; hourly_value: string; max_offer_pct: string }): string | null {
+  const num = (s: string) => (/^\d+(\.\d{1,2})?$/.test(s.trim()) ? Number(s) : NaN);
+  if (Number.isNaN(num(v.dispute_fee))) return "Enter the dispute fee like 15.00.";
+  if (!/^\d+$/.test(v.handling_minutes.trim()) || Number(v.handling_minutes) > 6000) return "Minutes must be a whole number (0 to 6000).";
+  if (Number.isNaN(num(v.hourly_value))) return "Enter your hourly value like 25.00.";
+  const pct = Number(v.max_offer_pct);
+  if (!/^\d+$/.test(v.max_offer_pct.trim()) || pct < 10 || pct > 90) return "Max offer must be between 10 and 90 (%).";
+  return null;
 }

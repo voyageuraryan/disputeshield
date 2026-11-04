@@ -10,17 +10,21 @@ import {
   type EvidenceSource,
   type MerchantUpload,
   type RunInfo,
+  type SendAction,
+  type MoneyOption,
   type TroubleshootingStatus,
   type TSProofView,
 } from "../api";
 import { ActionChip, addressLines, caseStatus, Chip, day, Due, fetchedAgo, fightRoute, label, money, sourceLabel, useNow, when, type Tone } from "../format";
 import { AddEvidenceForm, CoachPanel, ConfirmedUpload, ConfirmUpload } from "../evidence/AddEvidence";
+import { offerNotePreview, offerProblems, sendable, withOffer } from "../offers/logic";
 import ShippingPanel from "../ShippingPanel";
 import Timeline from "../Timeline";
 import { useDisputeEvents } from "../useDisputeEvents";
 
 const NOTE_MAX = 1000;
-type Action = "FIGHT" | "SETTLE";
+type Action = SendAction;
+const OFFERS: Action[] = ["SETTLE_PARTIAL", "REPLACEMENT"];
 
 const Card = ({ title, children, right }: { title: string; children: React.ReactNode; right?: React.ReactNode }) => (
   <section className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
@@ -676,16 +680,31 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
   const actionable = d.status === "PROPOSED" || d.can_retry;
   const initial: Action | null =
     (d.approved_action as Action | null) ?? (d.recommendation === "GATHER_MORE" ? null : (d.recommendation as Action));
+  // A drafted note belongs to its action: switching action must never send another action's note (a fight note
+  // with a refund). Offer notes are written by the server with the final amount unless the merchant writes one.
+  const noteFor = (a: Action | null) =>
+    a === null || a === "SETTLE_PARTIAL" ? "" : a === d.approved_action && d.final_note ? d.final_note : a === d.recommendation ? d.draft_note ?? "" : "";
   const [action, setAction] = useState<Action | null>(initial);
-  const [note, setNote] = useState(d.final_note ?? d.draft_note ?? "");
+  const [note, setNote] = useState(() => noteFor(initial));
+  const proposedOffer = d.offer_amount ?? d.options?.find((o) => o.action === "SETTLE_PARTIAL")?.offer_amount ?? "";
+  const [offer, setOffer] = useState(proposedOffer ? Number(proposedOffer).toFixed(2) : "");
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const canSend = sendable(c);
   const changed = action !== null && action !== d.recommendation;
   const escalating = action === "FIGHT" && fightRoute(c.allowed_actions) === "escalate";
-  const allowed = action === "FIGHT" ? c.can_fight : action === "SETTLE" ? c.can_settle : false;
+  const allowed = action !== null && canSend.includes(action);
   const needsNote = action === "FIGHT" && !note.trim();
+  const amount = Number(detail.dispute.amount);
+  const offerIssues = action === "SETTLE_PARTIAL" ? offerProblems(offer, amount, detail.offer_bounds) : [];
+  const cur = detail.dispute.currency;
+  const pick = (a: Action) => {
+    setConfirming(false);
+    setAction(a);
+    setNote(noteFor(a));
+  };
   const err = d.paypal_response?.error ? d.paypal_response : null;
   const retriedBy = detail.decisions.find((x) => x.retry_of === d.id);
 
@@ -703,15 +722,31 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
     }
   };
   const send = () => {
-    const body = { action: action ?? undefined, note: note.trim() || undefined, approved_by: "merchant" };
+    const body = {
+      action: action ?? undefined,
+      note: note.trim() || undefined,
+      approved_by: "merchant",
+      offer_amount: action === "SETTLE_PARTIAL" ? Number(offer).toFixed(2) : undefined,
+    };
     return run(() => (d.status === "PROPOSED" ? disputesApi.approve(d.id, body) : disputesApi.retry(d.id, body)));
   };
   const toggle = () => {
-    setConfirming(false);
-    setAction((a) => (a === "FIGHT" ? "SETTLE" : "FIGHT"));
+    const pool: Action[] = canSend.length ? canSend : ["FIGHT", "SETTLE"];
+    pick(pool[(pool.indexOf(action as Action) + 1) % pool.length]);
   };
+  const doing =
+    action === "SETTLE"
+      ? "settle (refund the buyer in full)"
+      : action === "SETTLE_PARTIAL"
+        ? `offer the buyer a partial refund of ${offer && !offerIssues.length ? money(Number(offer).toFixed(2), cur) : "…"}`
+        : action === "REPLACEMENT"
+          ? "offer the buyer a replacement item"
+          : escalating
+            ? "fight by escalating to a PayPal claim"
+            : "fight (send evidence)";
 
   return (
+    <>
     <Card
       title="Recommendation"
       right={
@@ -763,6 +798,8 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
             Sent to PayPal ({d.action_request?.endpoint}) on {when(d.executed_at)}.{" "}
             {d.approved_action === "SETTLE"
               ? "PayPal refunds the buyer and closes the case."
+              : d.action_request?.endpoint === "make-offer"
+                ? "The buyer has the offer now. If they accept, PayPal refunds it and closes the case; if they decline, DisputeShield analyses the case again."
               : d.action_request?.endpoint === "escalate"
                 ? "PayPal will review it as a claim and will probably ask you for evidence; DisputeShield analyses the case again when it does."
                 : "PayPal will now review it."}
@@ -784,9 +821,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
             {action ? (
               <>
                 You are about to{" "}
-                <span className="font-semibold">
-                  {action === "SETTLE" ? "settle (refund the buyer)" : escalating ? "fight by escalating to a PayPal claim" : "fight (send evidence)"}
-                </span>
+                <span className="font-semibold">{doing}</span>
                 {changed && <span className="text-slate-500"> — changed from {label(d.recommendation)}</span>}.
               </>
             ) : (
@@ -796,9 +831,39 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
           {action && !allowed && (
             <p className="text-xs text-red-700">PayPal doesn't allow this right now (allowed: {c.allowed_actions.map(label).join(", ") || "nothing"}).</p>
           )}
+          {action === "SETTLE_PARTIAL" && (
+            <label className="block">
+              <span className="text-xs font-medium text-slate-600">Offer to the buyer ({cur})</span>
+              <input
+                aria-label="Offer amount"
+                inputMode="decimal"
+                value={offer}
+                onChange={(e) => {
+                  setOffer(e.target.value);
+                  setConfirming(false);
+                }}
+                className="mt-1 w-32 rounded-md border border-slate-300 px-2 py-1.5 text-sm"
+              />
+              {detail.offer_bounds && (
+                <span className="ml-2 text-xs text-slate-500">
+                  between {money(detail.offer_bounds.min, cur)} and {money(detail.offer_bounds.max, cur)}
+                </span>
+              )}
+              {offerIssues.map((p) => (
+                <span key={p} className="mt-1 block text-xs text-red-700" role="alert">
+                  {p}
+                </span>
+              ))}
+            </label>
+          )}
           <label className="block">
-            <span className="text-xs font-medium text-slate-600">{action === "SETTLE" ? "Note to PayPal (optional)" : "Seller note to PayPal (facts only)"}</span>
+            <span className="text-xs font-medium text-slate-600">
+              {action === "SETTLE" ? "Note to PayPal (optional)" : action && OFFERS.includes(action) ? "Note to the buyer with the offer (optional)" : "Seller note to PayPal (facts only)"}
+            </span>
             <textarea
+              placeholder={
+                action && OFFERS.includes(action) ? `Leave empty to send: ${offerNotePreview(action, c.dispute_id, offer || "0", detail.dispute.amount, cur)}` : undefined
+              }
               className="mt-1 h-36 w-full rounded-md border border-slate-300 p-2 text-sm focus:border-indigo-500 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               maxLength={NOTE_MAX}
               value={note}
@@ -828,7 +893,9 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
               <p className="text-indigo-900">
                 {escalating
                   ? "Escalate this case to a PayPal claim now? This can't be undone."
-                  : `Send this ${action === "FIGHT" ? "evidence" : "refund"} to PayPal now? This can't be undone.`}
+                  : action && OFFERS.includes(action)
+                    ? `Send this offer to the buyer now? If they accept, PayPal ${action === "REPLACEMENT" ? "closes the case and you send the item" : `refunds ${money(Number(offer).toFixed(2), cur)} automatically`}. This can't be undone.`
+                    : `Send this ${action === "FIGHT" ? "evidence" : "refund"} to PayPal now? This can't be undone.`}
               </p>
               <div className="mt-2 flex gap-2">
                 <button disabled={busy} onClick={send} className="rounded-md bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50">
@@ -842,7 +909,7 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
           ) : (
             <div className="flex flex-wrap gap-2">
               <button
-                disabled={busy || !action || !allowed || needsNote}
+                disabled={busy || !action || !allowed || needsNote || offerIssues.length > 0}
                 onClick={() => setConfirming(true)}
                 className="flex-1 rounded-md bg-indigo-600 px-3 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -867,6 +934,64 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
         </div>
       )}
       {error && <p className="mt-3 rounded-md bg-red-50 p-2 text-xs text-red-700">{error}</p>}
+    </Card>
+    {d.options && d.options.length > 0 && (
+      <OptionsCard
+        options={d.options}
+        offer={offer}
+        amount={amount}
+        currency={cur}
+        chosen={action}
+        canPick={actionable}
+        onPick={(a) => pick(a)}
+      />
+    )}
+    </>
+  );
+}
+
+/** Phase 13: Fight / Full refund / Partial offer / Replacement side by side, with the expected net outcome. */
+export function OptionsCard({ options, offer, amount, currency, chosen, canPick, onPick }: {
+  options: MoneyOption[];
+  offer: string;
+  amount: number;
+  currency: string;
+  chosen: string | null;
+  canPick: boolean;
+  onPick: (a: SendAction) => void;
+}) {
+  const { rows, best } = withOffer(options, offer, amount);
+  return (
+    <Card title="Options">
+      <p className="mb-2 text-xs text-slate-500">
+        Expected net outcome for you compared with keeping the sale (estimates: the win and accept chances are starting
+        assumptions, not yet learned from your cases).
+      </p>
+      <ul className="space-y-2" data-testid="options">
+        {rows.map((o) => (
+          <li
+            key={o.action}
+            className={`rounded-md border p-2 text-sm ${o.action === chosen ? "border-indigo-400 bg-indigo-50/50" : "border-slate-200"} ${o.available ? "" : "opacity-60"}`}
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="font-medium">
+                {o.label}
+                {o.action === best && <span className="ml-2 rounded bg-emerald-100 px-1.5 py-0.5 text-xs text-emerald-800">best</span>}
+              </span>
+              <span className="tabular-nums">
+                {o.net != null ? money(o.net, currency) : "—"}
+                {o.chance != null && o.action !== "SETTLE" && <span className="ml-2 text-xs text-slate-500">{Math.round(Number(o.chance) * 100)}% chance</span>}
+              </span>
+            </div>
+            <p className="mt-0.5 text-xs text-slate-600">{o.why}</p>
+            {canPick && o.available && o.action !== chosen && (
+              <button onClick={() => onPick(o.action)} className="mt-1 text-xs font-medium text-indigo-700 hover:underline">
+                Choose {o.label.toLowerCase()}
+              </button>
+            )}
+          </li>
+        ))}
+      </ul>
     </Card>
   );
 }

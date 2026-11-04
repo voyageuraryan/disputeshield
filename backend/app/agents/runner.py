@@ -53,6 +53,20 @@ STARTED_STALE = timedelta(minutes=15)     # a run_started with no end marker old
 END_MARKERS = ("run_finished", "run_failed", "run_skipped")
 
 
+# G98/G110: a run asked for while another is going isn't dropped: the newest request waits here and runs once,
+# fresh, when the current run ends (several requests during one run collapse into one follow-up).
+PENDING: dict[int, str] = {}
+
+
+def defer(dispute_row_id: int, run_key: str) -> bool:
+    """Queue a follow-up run if a run for this dispute is going in THIS process. False if none is going here."""
+    with _RUNNING_LOCK:
+        if dispute_row_id not in RUNNING:
+            return False
+        PENDING[dispute_row_id] = run_key
+        return True
+
+
 def claim(dispute_row_id: int) -> bool:
     with _RUNNING_LOCK:
         if dispute_row_id in RUNNING:
@@ -88,15 +102,27 @@ async def run_agents(dispute_row_id: int, run_key: str, engine: Engine, *,
     """fresh: fetch everything from PayPal now (manual re-analyse) instead of reusing a copy fetched in the last
     60 s. claimed: the caller already claimed the dispute (the re-analyse endpoint does, so double clicks get 409)."""
     if not claimed and not claim(dispute_row_id):
+        queued = defer(dispute_row_id, run_key)
         with Session(engine) as session:
             log_step(session, dispute_row_id, "orchestrator", "run_skipped",
-                     {"run_key": run_key, "reason": "another run for this dispute is in progress"})
+                     {"run_key": run_key, "queued": queued,
+                      "reason": "another run for this dispute is in progress"
+                                + ("; it runs again when that one finishes" if queued else "")})
         return None
     try:
-        return await _run(dispute_row_id, run_key, engine, client=client, checkpoint_path=checkpoint_path, llm=llm,
-                          fresh=fresh)
+        result = await _run(dispute_row_id, run_key, engine, client=client, checkpoint_path=checkpoint_path,
+                            llm=llm, fresh=fresh)
     finally:
+        with _RUNNING_LOCK:
+            follow_up = PENDING.pop(dispute_row_id, None)
         release(dispute_row_id)
+    if follow_up:  # something changed while we ran: one fresh run on the latest data
+        with Session(engine) as session:
+            log_step(session, dispute_row_id, "orchestrator", "Running again: something changed during the last run",
+                     {"run_key": follow_up})
+        return await run_agents(dispute_row_id, follow_up, engine, client=client, checkpoint_path=checkpoint_path,
+                                llm=llm, fresh=True)
+    return result
 
 
 async def _run(dispute_row_id: int, run_key: str, engine: Engine, *, client, checkpoint_path, llm,  # noqa: ANN001

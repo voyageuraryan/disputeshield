@@ -43,6 +43,7 @@ from app.paypal.disputes import (
     NotApprovedError,
     accept_claim,
     escalate,
+    make_offer,
     provide_evidence,
     provide_supporting_info,
 )
@@ -126,6 +127,23 @@ async def draft_seller_note(case: CaseFile, reasoning: str, llm: StructuredLLM,
 def settle_note(case: CaseFile) -> str:
     return (f"We accept this claim and agree to refund {case.amount} {case.currency} for dispute "
             f"{case.dispute_id}. Thank you for your patience.")
+
+
+OFFER_ACTIONS = ("SETTLE_PARTIAL", "REPLACEMENT")
+SENDABLE = ("FIGHT", "SETTLE", *OFFER_ACTIONS)
+
+
+def offer_note(case: CaseFile, action: str, amount=None) -> str:  # noqa: ANN001
+    """Templated note for a make-offer (Phase 13): factual, no promises beyond the offer itself."""
+    if action == "REPLACEMENT":
+        return (f"We're sorry this order didn't work out. To resolve dispute {case.dispute_id}, we offer to send you "
+                f"a replacement item at no cost.")
+    return (f"We're sorry this order didn't work out. To resolve dispute {case.dispute_id}, we offer a refund of "
+            f"{amount} {case.currency} (the disputed amount is {case.amount} {case.currency}).")
+
+
+def default_note(case: CaseFile, action: str, amount=None) -> str:  # noqa: ANN001
+    return settle_note(case) if action == "SETTLE" else offer_note(case, action, amount)
 
 
 # ---- PDF evidence summary (ReportLab) -------------------------------------------------------
@@ -286,8 +304,31 @@ def _requested_evidence_type(raw: dict | None) -> str | None:
 
 
 def build_action_request(session: Session, dispute: Dispute, case: CaseFile, action: str, note: str,
-                         pdf_path: str | None) -> dict[str, Any]:
+                         pdf_path: str | None, offer_amount=None) -> dict[str, Any]:  # noqa: ANN001
     """The exact PayPal call execute will make. Raises ValueError if PayPal doesn't allow it now."""
+    if action == "SETTLE_PARTIAL":  # Phase 13: make-offer REFUND with an amount (inquiry stage only)
+        from app.merchant import money_settings
+        from app.rules.money import offer_problems
+
+        if not case.can_offer:
+            raise ValueError(f"PayPal doesn't allow a partial refund offer now (allowed: {case.allowed_actions}, "
+                             f"offer types: {case.offer_types or 'none listed'})")
+        from decimal import Decimal
+
+        amount = Decimal(str(offer_amount)) if offer_amount is not None else None
+        problems = offer_problems(amount, case.amount, money_settings(session))
+        if problems:
+            raise ValueError("; ".join(problems))
+        order = session.get(Order, case.order_id) if case.order_id else None
+        req = {"endpoint": "make-offer", "offer_type": "REFUND", "note": note,
+               "offer_amount": {"currency_code": case.currency, "value": f"{amount:.2f}"}}
+        if order is not None and order.invoice_id:
+            req["invoice_id"] = order.invoice_id
+        return req
+    if action == "REPLACEMENT":
+        if not case.can_replace:
+            raise ValueError("PayPal doesn't list a REPLACEMENT_WITHOUT_REFUND offer for this dispute now")
+        return {"endpoint": "make-offer", "offer_type": "REPLACEMENT_WITHOUT_REFUND", "note": note}
     attachments = [{"path": pdf_path, "content_type": "application/pdf"}] if pdf_path else []
     if action == "FIGHT":  # Phase 12: the merchant's own documents go along (within PayPal's per-call limit)
         attachments += [{"path": u.file_path, "content_type": u.mime or "application/pdf", "evidence_id": e.id}
@@ -309,7 +350,7 @@ def build_action_request(session: Session, dispute: Dispute, case: CaseFile, act
             return {"endpoint": "escalate", "note": note}
         raise ValueError(f"PayPal allows no way to contest this dispute now (allowed: {case.allowed_actions})")
     if action == "SETTLE":
-        if "accept_claim" not in case.allowed_actions:
+        if not case.can_accept_claim:
             raise ValueError(f"PayPal does not allow accepting the claim now (allowed: {case.allowed_actions})")
         return {"endpoint": "accept-claim", "note": note}
     raise ValueError(f"{action} has nothing to send to PayPal")
@@ -364,11 +405,11 @@ async def resolve(session: Session, dispute: Dispute, case: CaseFile, decision_i
                  + (f"; with the buyer's troubleshooting record and {len(ts.images)} photo(s)" if ts else "") + ")",
                  {"decision_id": decision.id, "path": str(pdf), "troubleshooting": bool(ts)})
         text, pdf_path = note.note, str(pdf)
-    else:  # SETTLE
-        text, pdf_path = settle_note(case), None
+    else:  # SETTLE, SETTLE_PARTIAL, REPLACEMENT: templated note, no PDF
+        text, pdf_path = default_note(case, action, decision.offer_amount), None
 
     try:
-        request = build_action_request(session, dispute, case, action, text, pdf_path)
+        request = build_action_request(session, dispute, case, action, text, pdf_path, decision.offer_amount)
     except ValueError as exc:
         dispute.agent_status = NEEDS_HUMAN
         session.add(dispute)
@@ -422,6 +463,11 @@ async def _send(decision: Decision, pid: str, req: dict, client: PayPalClient | 
         return await accept_claim(decision, pid, req["note"], client=client)
     if req.get("endpoint") == "escalate":
         return await escalate(decision, pid, req["note"], client=client)
+    if req.get("endpoint") == "make-offer":
+        amt = req.get("offer_amount") or {}
+        return await make_offer(decision, pid, note=req["note"], offer_type=req["offer_type"],
+                                amount=amt.get("value"), currency=amt.get("currency_code"),
+                                invoice_id=req.get("invoice_id"), client=client)
     raise ValueError(f"decision {decision.id} has no PayPal request to execute")
 
 
@@ -487,6 +533,13 @@ async def execute_decision(session: Session, decision_id: int, *, client: PayPal
     dispute.agent_status = "EXECUTED"
     session.add_all([decision, dispute])
     session.commit()
-    log_step(session, dispute.id, "executor", f"PayPal accepted {req.get('endpoint')} for {pid}",
-             {"decision_id": decision.id, "paypal_response": decision.paypal_response})
+    if req.get("endpoint") == "make-offer":  # Phase 13: the buyer still has to answer
+        amt = req.get("offer_amount")
+        what = (f"a refund offer of {amt['value']} {amt['currency_code']}" if amt else "a replacement offer")
+        log_step(session, dispute.id, "executor", f"Offer sent: PayPal passed {what} to the buyer; waiting for "
+                 "their answer (accepted: PayPal refunds and closes the case; declined: the case is analysed again)",
+                 {"decision_id": decision.id, "paypal_response": decision.paypal_response, "offer": req})
+    else:
+        log_step(session, dispute.id, "executor", f"PayPal accepted {req.get('endpoint')} for {pid}",
+                 {"decision_id": decision.id, "paypal_response": decision.paypal_response})
     return decision

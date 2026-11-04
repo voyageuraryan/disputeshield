@@ -268,11 +268,34 @@ async def test_concurrent_run_is_skipped(engine, demo, tmp_path):
     assert runner.claim(did)
     try:
         assert await run_agents(did, "run:webhook", engine, checkpoint_path=str(tmp_path / "c.db")) is None
+        assert runner.PENDING[did] == "run:webhook"  # G98: queued, not lost
     finally:
+        runner.PENDING.pop(did, None)
         runner.release(did)
     with Session(engine) as s:
         last = s.exec(select(AgentStep).order_by(AgentStep.id.desc())).first()
-        assert last.action == "run_skipped" and "in progress" in last.detail["reason"]
+        assert last.action == "run_skipped" and "runs again when that one finishes" in last.detail["reason"]
+
+
+async def test_a_run_asked_for_during_a_run_follows_it(engine, demo, tmp_path, monkeypatch):
+    """G98: the webhook run that arrives mid-run is run once, fresh, right after (several collapse into one)."""
+    did = make_dispute(engine, demo["A"], "PP-D-A")
+    calls = []
+
+    async def fake_run(dispute_row_id, run_key, engine_, **kw):
+        calls.append((run_key, kw["fresh"]))
+        if len(calls) == 1:  # while the first run is going, two more requests arrive
+            assert await runner.run_agents(dispute_row_id, "run:webhook-1", engine_) is None
+            assert await runner.run_agents(dispute_row_id, "run:webhook-2", engine_) is None
+        return {"ok": run_key}
+
+    monkeypatch.setattr(runner, "_run", fake_run)
+    out = await runner.run_agents(did, "run:first", engine)
+    assert calls == [("run:first", False), ("run:webhook-2", True)] and out == {"ok": "run:webhook-2"}
+    assert did not in runner.RUNNING and did not in runner.PENDING
+    with Session(engine) as s:
+        acts = [a.action for a in s.exec(select(AgentStep).order_by(AgentStep.id)).all()]
+    assert acts.count("run_skipped") == 2 and "Running again: something changed during the last run" in acts
 
 
 @respx.mock

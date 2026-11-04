@@ -353,10 +353,13 @@ def test_confirm_while_a_run_is_going_saves_but_does_not_start(api, engine, case
     assert runner.claim(did)
     try:
         r = api.post(f"/api/disputes/{PID}/uploads/{up['id']}/confirm", json={"note": "Delivered 7 Oct"})
+        assert runner.PENDING.get(did) == r.json()["run"]["run_key"]  # G110: queued behind the current run
     finally:
+        runner.PENDING.pop(did, None)
         runner.release(did)
     assert r.status_code == 200 and r.json()["run"]["started"] is False
-    assert "Re-analyse when it's done" in r.json()["run"]["message"] and r.json()["upload"]["status"] == "CONFIRMED"
+    assert "as soon as the current run finishes" in r.json()["run"]["message"]
+    assert r.json()["upload"]["status"] == "CONFIRMED"
 
 
 def test_resolved_dispute_takes_no_uploads(api, engine, case_row):
@@ -414,3 +417,27 @@ def test_detail_on_a_fresh_database_keeps_the_timeline(api, engine, case_row):
         s.add(AgentStep(dispute_id=did, agent="orchestrator", action="run_started")); s.commit()
     r = api.get(f"/api/disputes/{PID}")
     assert r.status_code == 200 and [t["action"] for t in r.json()["timeline"]] == ["run_started"]
+
+
+def test_uploaded_files_follow_the_retention_policy(engine, case_row, artifacts):
+    """G109: the merchant's files are deleted N days after the dispute is resolved; fields and summary stay."""
+    from datetime import timedelta
+
+    from app.troubleshooting.retention import purge_expired_uploads
+
+    did, _ = case_row
+    with Session(engine) as s:
+        up, _ = mu.store(s, s.get(Dispute, did), "invoice", data=pdf_bytes(), name="i.pdf")
+        mu.confirm(s, up, mu.ConfirmFields(document_kind="Invoice"))
+        path, uid = Path(up.file_path), up.id
+        assert purge_expired_uploads(s, days=90) == []  # dispute still open
+        d = s.get(Dispute, did)
+        d.status, d.raw = "RESOLVED", {"update_time": "2026-07-01T00:00:00Z"}
+        s.add(d); s.commit()
+        now = datetime(2026, 9, 1, tzinfo=timezone.utc)
+        assert purge_expired_uploads(s, now=now, days=90) == []          # 62 days: kept
+        assert purge_expired_uploads(s, now=now + timedelta(days=30), days=90) == [uid]
+        row = s.get(MerchantUpload, uid)
+        assert row.file_path is None and "file_attached" not in row.flags and row.summary
+        assert not path.exists()
+        assert purge_expired_uploads(s, now=now + timedelta(days=60), days=90) == []  # idempotent

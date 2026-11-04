@@ -34,6 +34,8 @@ from app.agents.resolution import (
     build_evidence_pdf,
     definitely_not_processed,
     execute_decision,
+    SENDABLE,
+    default_note,
     pdf_path_for,
     settle_note,
 )
@@ -50,7 +52,9 @@ router = APIRouter(prefix="/decisions", tags=["decisions"])
 
 
 class ApproveIn(BaseModel):
-    action: Literal["FIGHT", "SETTLE"] | None = None  # override the recommended action
+    action: Literal["FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT"] | None = None  # override the action
+    # Phase 13: SETTLE_PARTIAL: the merchant may edit the offer (checked: 10%-90% and their max-offer setting)
+    offer_amount: Decimal | None = Field(default=None, gt=0, max_digits=12, decimal_places=2)
     note: str | None = Field(default=None, min_length=1, max_length=NOTE_MAX_CHARS)  # edited note
     approved_by: str | None = Field(default=None, max_length=200)
 
@@ -80,6 +84,8 @@ class DecisionOut(BaseModel):
     analysed_threshold: Decimal | None
     data_as_of: datetime | None = None       # Phase 11: when the PayPal data behind it was fetched
     stale_sources: list[str] | None = None   # sources that couldn't be refreshed (last good copy used)
+    offer_amount: Decimal | None = None      # Phase 13: SETTLE_PARTIAL offer (proposed, or as approved)
+    options: list[dict] | None = None        # calculator output: Fight / Full refund / Partial offer / Replacement
     can_retry: bool
 
 
@@ -130,7 +136,18 @@ async def _refresh_from_paypal(session: Session, dispute: Dispute, paypal: PayPa
     session.refresh(dispute)
 
 
-def _request_for(session: Session, d: Decision, dispute: Dispute, action: str, note: str) -> dict:
+def _offer_for(session: Session, d: Decision, action: str, body_offer: Decimal | None) -> Decimal | None:
+    """The offer to send for SETTLE_PARTIAL: the merchant's edit, else the proposed one. 422 if out of bounds."""
+    if action != "SETTLE_PARTIAL":
+        return None
+    offer = body_offer if body_offer is not None else d.offer_amount
+    if offer is None:
+        raise HTTPException(422, "a partial refund offer needs offer_amount")
+    return offer
+
+
+def _request_for(session: Session, d: Decision, dispute: Dispute, action: str, note: str,
+                 offer: Decimal | None = None) -> dict:
     case = build_case_file(session, dispute)
     pdf = None
     if action == "FIGHT":
@@ -143,9 +160,10 @@ def _request_for(session: Session, d: Decision, dispute: Dispute, action: str, n
                                      troubleshooting=pdf_section(session, dispute.id),
                                      attached=attached_labels(session, case)))
     try:
-        return build_action_request(session, dispute, case, action, note, pdf)
+        return build_action_request(session, dispute, case, action, note, pdf, offer)
     except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
+        out_of_bounds = action == "SETTLE_PARTIAL" and case.can_offer
+        raise HTTPException(422 if out_of_bounds else 409, str(exc)) from exc
 
 
 async def _execute(session: Session, engine: Engine, paypal: PayPalClient, d: Decision) -> None:
@@ -189,26 +207,32 @@ async def approve(decision_id: int, body: ApproveIn | None = None, session: Sess
     if d.status != DecisionStatus.PROPOSED:
         raise HTTPException(409, f"decision is {d.status.value}; only PROPOSED decisions can be approved or rejected")
     action = body.action or d.recommendation
-    if action not in ("FIGHT", "SETTLE"):
-        raise HTTPException(409, f"{action} has nothing to send to PayPal; approve with action FIGHT or SETTLE, "
-                                 f"or reject")
+    if action not in SENDABLE:
+        raise HTTPException(409, f"{action} has nothing to send to PayPal; approve with action FIGHT, SETTLE, "
+                                 f"SETTLE_PARTIAL or REPLACEMENT, or reject")
+    offer = _offer_for(session, d, action, body.offer_amount)
     await _refresh_from_paypal(session, dispute, paypal)
     session.refresh(d)
     if dispute.status == "RESOLVED" or d.status != DecisionStatus.PROPOSED:
         raise HTTPException(409, "the dispute is already resolved at PayPal; nothing can be sent")
 
-    note = body.note or (d.draft_note if action == d.recommendation else None)
+    same_offer = offer is None or offer == d.offer_amount
+    note = body.note or (d.draft_note if action == d.recommendation and same_offer else None)
     if note is None:
         if action == "FIGHT":
             raise HTTPException(422, "approving FIGHT for a decision without a drafted seller note needs a note")
-        note = settle_note(build_case_file(session, dispute))
-    # Always rebuild from PayPal's current state (requested evidence types, allowed actions).
-    request = _request_for(session, d, dispute, action, note)
+        note = default_note(build_case_file(session, dispute), action, offer)
+    # Always rebuild from PayPal's current state (requested evidence types, allowed actions, offer types).
+    request = _request_for(session, d, dispute, action, note, offer)
 
+    proposed_offer = d.offer_amount
     _claim(session, d, DecisionStatus.APPROVED, approved_at=datetime.now(timezone.utc), approved_action=action,
-           final_note=note, action_request=request)
+           final_note=note, action_request=request, **({"offer_amount": offer} if offer is not None else {}))
     log_step(session, dispute.id, "merchant",
-             f"Approved {action}" + (f" (changed from {d.recommendation})" if action != d.recommendation else "")
+             f"Approved {action}" + (f" of {offer} {dispute.currency}" if offer is not None else "")
+             + (f" (changed from {d.recommendation})" if action != d.recommendation else "")
+             + (f" (edited from {proposed_offer})" if offer is not None and proposed_offer not in (None, offer)
+                else "")
              + (" with an edited note" if body.note and body.note != d.draft_note else ""),
              {"decision_id": d.id, "approved_by": body.approved_by, "endpoint": request["endpoint"]})
     await _execute(session, engine, paypal, d)
@@ -257,19 +281,20 @@ async def retry(decision_id: int, body: ApproveIn | None = None, session: Sessio
     action = body.action or previous_action
     # Reuse the earlier note only for the same action: a FIGHT seller note must never become a refund note.
     note = body.note or ((old.final_note or old.draft_note) if action == previous_action else None)
-    if action == "SETTLE" and not note:
-        note = settle_note(build_case_file(session, dispute))
-    if action not in ("FIGHT", "SETTLE") or not note:
-        raise HTTPException(422, "retry needs action FIGHT or SETTLE and a note")
+    offer = _offer_for(session, old, action, body.offer_amount) if action in SENDABLE else None
+    if action in SENDABLE and action != "FIGHT" and not note:
+        note = default_note(build_case_file(session, dispute), action, offer)
+    if action not in SENDABLE or not note:
+        raise HTTPException(422, "retry needs action FIGHT, SETTLE, SETTLE_PARTIAL or REPLACEMENT and a note")
     new = Decision(dispute_id=old.dispute_id, recommendation=old.recommendation, confidence=old.confidence,
                    reasoning=old.reasoning, cited_evidence_ids=old.cited_evidence_ids, draft_note=old.draft_note,
                    economic_note=old.economic_note, missing_items=old.missing_items,
-                   analysed_threshold=old.analysed_threshold,
+                   analysed_threshold=old.analysed_threshold, offer_amount=offer, options=old.options,
                    status=DecisionStatus.PROPOSED, retry_of=old.id)
     session.add(new)
     session.commit()
     session.refresh(new)
-    request = _request_for(session, new, dispute, action, note)
+    request = _request_for(session, new, dispute, action, note, offer)
     _claim(session, new, DecisionStatus.APPROVED, approved_at=datetime.now(timezone.utc), approved_action=action,
            final_note=note, action_request=request)
     log_step(session, dispute.id, "merchant", f"Retried failed decision #{old.id} as {action} (decision #{new.id})",

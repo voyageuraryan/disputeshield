@@ -156,6 +156,9 @@ class Decision(SQLModel, table=True):
     # Phase 11: how fresh the data behind this decision was
     data_as_of: Optional[datetime] = None            # when the PayPal dispute copy used was fetched
     stale_sources: Optional[list[str]] = _json_col()  # sources that failed to load this run (previous data used)
+    # Phase 13: partial offers and the money calculator
+    offer_amount: Optional[Decimal] = Field(default=None, max_digits=12, decimal_places=2)  # SETTLE_PARTIAL
+    options: Optional[list[dict]] = _json_col()      # calculator output at analysis time (rules/money.py)
 
 
 class ProcessedEvent(SQLModel, table=True):
@@ -192,6 +195,11 @@ class MerchantSettings(SQLModel, table=True):
     # Nullable so the auto-migration can add it to existing databases; None means off.
     auto_invite_troubleshooting: Optional[bool] = Field(default=False)
     updated_at: datetime = Field(default_factory=utcnow)
+    # Phase 13: money calculator inputs (nullable for the auto-migration; None -> app.rules.money defaults)
+    dispute_fee: Optional[Decimal] = Field(default=None, max_digits=10, decimal_places=2)
+    handling_minutes: Optional[int] = None
+    hourly_value: Optional[Decimal] = Field(default=None, max_digits=10, decimal_places=2)
+    max_offer_pct: Optional[int] = None
 
 
 # ---- Phase 9A: buyer troubleshooting portal ------------------------------------

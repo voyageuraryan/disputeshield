@@ -17,6 +17,8 @@ export const LABELS: Record<string, string> = {
   GATHER_MORE: "Gather more",
   FIGHT: "Fight",
   SETTLE: "Settle",
+  SETTLE_PARTIAL: "Partial refund offer",
+  REPLACEMENT: "Replacement offer",
   provide_evidence: "send evidence",
   provide_supporting_info: "send supporting info",
   accept_claim: "refund the buyer",

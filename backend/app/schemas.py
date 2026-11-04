@@ -45,6 +45,8 @@ class CaseFile(BaseModel):
     # to load in this run (their previous items are kept, flagged "stale:<time of last success>").
     data_as_of: datetime | None = None
     stale_sources: list[str] = []
+    # Phase 13: make-offer types PayPal allows now (allowed_response_options.make_offer.offer_types)
+    offer_types: list[str] = []
 
     @computed_field
     @property
@@ -55,8 +57,23 @@ class CaseFile(BaseModel):
     @computed_field
     @property
     def can_settle(self) -> bool:
-        from app.paypal.disputes import SETTLE_ACTIONS
-        return any(a in SETTLE_ACTIONS for a in self.allowed_actions)
+        """Some way to give in is possible (accept the claim, or an offer PayPal lists)."""
+        return self.can_accept_claim or self.can_offer or self.can_replace
+
+    @computed_field
+    @property
+    def can_accept_claim(self) -> bool:  # SETTLE = full refund via accept-claim
+        return "accept_claim" in self.allowed_actions
+
+    @computed_field
+    @property
+    def can_offer(self) -> bool:  # SETTLE_PARTIAL = make-offer REFUND with an amount
+        return "make_offer" in self.allowed_actions and "REFUND" in self.offer_types
+
+    @computed_field
+    @property
+    def can_replace(self) -> bool:  # REPLACEMENT = make-offer REPLACEMENT_WITHOUT_REFUND
+        return "make_offer" in self.allowed_actions and "REPLACEMENT_WITHOUT_REFUND" in self.offer_types
 
     @property
     def evidence_ids(self) -> set[int]:
@@ -77,13 +94,18 @@ class ChecklistResult(BaseModel):
     safety_review: bool = False    # the buyer reported a safety problem: always GATHER_MORE, a person reviews
 
 
+Action = Literal["FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE"]
+
+
 class Recommendation(BaseModel):
-    action: Literal["FIGHT", "SETTLE", "GATHER_MORE"]
+    action: Action
     confidence: Literal["low", "medium", "high"]
     reasoning: str  # plain English, max ~120 words
     cited_evidence_ids: list[int]  # must all exist in CaseFile.evidence
     missing_items: list[str]
     economic_note: str  # amount vs effort vs win odds
+    # Phase 13: SETTLE_PARTIAL only: the refund to offer, a decimal string like "25.00"; null for other actions.
+    offer_amount: str | None = None
 
     def check_citations(self, case: CaseFile) -> "Recommendation":
         """Hard rule 4: the LLM may only cite evidence that exists in the case file."""
@@ -96,8 +118,16 @@ class Recommendation(BaseModel):
         """Never recommend an action PayPal won't accept right now (GATHER_MORE is always possible)."""
         if self.action == "FIGHT" and not case.can_fight:
             raise ValueError(f"FIGHT is not possible now; PayPal allows only {case.allowed_actions or 'nothing'}")
-        if self.action == "SETTLE" and not case.can_settle:
-            raise ValueError(f"SETTLE is not possible now; PayPal allows only {case.allowed_actions or 'nothing'}")
+        if self.action == "SETTLE" and not case.can_accept_claim:
+            raise ValueError(f"SETTLE (accept the claim, full refund) is not possible now; PayPal allows only "
+                             f"{case.allowed_actions or 'nothing'}")
+        if self.action == "SETTLE_PARTIAL" and not case.can_offer:
+            raise ValueError("SETTLE_PARTIAL is not possible now: PayPal doesn't list a REFUND offer (make_offer, "
+                             f"inquiry stage only); allowed: {case.allowed_actions or 'nothing'}")
+        if self.action == "REPLACEMENT" and not case.can_replace:
+            raise ValueError("REPLACEMENT is not possible now: PayPal doesn't list a REPLACEMENT_WITHOUT_REFUND offer")
+        if self.action != "SETTLE_PARTIAL" and self.offer_amount not in (None, ""):
+            raise ValueError("offer_amount is only for SETTLE_PARTIAL; set it to null")
         return self
 
     def validate_against(self, case: CaseFile) -> "Recommendation":

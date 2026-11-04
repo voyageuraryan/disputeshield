@@ -18,7 +18,7 @@ from sqlmodel import Session, select
 from app.troubleshooting.service import close_for_resolved_dispute
 from app.models import AgentStep, Decision, DecisionStatus, Dispute, Order, ProcessedEvent
 from app.paypal.client import PayPalClient
-from app.paypal.disputes import Dispute as PayPalDispute
+from app.paypal.disputes import offer_events, Dispute as PayPalDispute
 from app.paypal.disputes import allowed_actions, get_dispute
 
 log = logging.getLogger(__name__)
@@ -71,6 +71,7 @@ def upsert_dispute(session: Session, pp: PayPalDispute) -> Dispute:
         row.amount = pp.dispute_amount.value
         row.currency = pp.dispute_amount.currency_code
     row.seller_response_due = pp.seller_response_due_date
+    prev_raw = row.raw
     row.raw = pp.raw  # PayPal's original JSON
     row.refreshed_at = datetime.now(timezone.utc)
     matched = match_order(session, pp)
@@ -78,9 +79,52 @@ def upsert_dispute(session: Session, pp: PayPalDispute) -> Dispute:
         row.order_id = matched
     session.add(row)
     session.flush()
+    log_offer_changes(session, row, prev_raw, pp.raw)
     if row.status == "RESOLVED":
         close_pending_decisions(session, row, "Dispute resolved at PayPal")
     return row
+
+
+def _offer_key(e: dict) -> tuple:
+    return (e["actor"], e["event_type"], e["time"], e["amount"])
+
+
+def offer_denied_now(prev_raw: dict | None, raw: dict | None) -> bool:
+    """The buyer declined an offer since the copy we had (Phase 13): the merchant's turn again."""
+    seen = {_offer_key(e) for e in offer_events(prev_raw)}
+    return any(e["actor"] == "BUYER" and e["event_type"] == "DENIED" and _offer_key(e) not in seen
+               for e in offer_events(raw))
+
+
+def denied_our_last_offer(session: Session, row: Dispute) -> bool:
+    """Our newest decision was a sent offer and the buyer's newest answer is DENIED (state check: works even when
+    an agent run's refresh recorded the denial before this webhook arrived)."""
+    latest = session.exec(select(Decision).where(Decision.dispute_id == row.id)
+                          .order_by(Decision.id.desc())).first()
+    if latest is None or latest.status != DecisionStatus.EXECUTED or \
+            (latest.action_request or {}).get("endpoint") != "make-offer":
+        return False
+    events = offer_events(row.raw)
+    return bool(events) and events[-1]["actor"] == "BUYER" and events[-1]["event_type"] == "DENIED"
+
+
+def log_offer_changes(session: Session, row: Dispute, prev_raw: dict | None, raw: dict | None) -> None:
+    """Offer history entries we haven't seen before -> timeline (offer sent / accepted / declined)."""
+    seen = {_offer_key(e) for e in offer_events(prev_raw)}
+    for e in offer_events(raw):
+        if _offer_key(e) in seen:
+            continue
+        what = (f"{e['amount']} {e['currency']}" if e["amount"] else "a replacement") + (
+            f" ({e['offer_type'].replace('_', ' ').lower()})" if e["offer_type"] else "")
+        text = {("SELLER", "PROPOSED"): f"PayPal shows the buyer your offer: {what}",
+                ("BUYER", "ACCEPTED"): f"The buyer accepted your offer: {what}. PayPal refunds it and closes the case",
+                ("BUYER", "DENIED"): f"The buyer declined your offer: {what}. The case will be analysed again",
+                ("BUYER", "PROPOSED"): f"The buyer asked for: {what}",
+                ("SELLER", "ACCEPTED"): f"You accepted the buyer's request: {what}",
+                ("SELLER", "DENIED"): f"You declined the buyer's request: {what}"}.get(
+                    (e["actor"], e["event_type"]), f"Offer update: {e['actor']} {e['event_type']} {what}")
+        session.add(AgentStep(dispute_id=row.id, agent="orchestrator", action=text,
+                              detail={"offer_event": e}))
 
 
 def close_pending_decisions(session: Session, dispute: Dispute, why: str) -> list[int]:
@@ -119,6 +163,10 @@ def material_state(pp: PayPalDispute, ts_status: str | None = None) -> dict:
     }
     if ts_status:
         state["troubleshooting"] = ts_status
+    events = offer_events(raw)
+    if events:  # Phase 13: an offer accepted/declined is new material (added only when there is one: old keys stay)
+        last = events[-1]
+        state["offer"] = f"{last['actor']}:{last['event_type']}:{last['time']}"
     return state
 
 
@@ -129,10 +177,13 @@ def run_key(pp: PayPalDispute, ts_status: str | None = None) -> str:
     return f"run:{pp.dispute_id}:{hashlib.sha1(version.encode()).hexdigest()[:16]}"
 
 
-def seller_turn_again(prev_status: str | None, prev_stage: str | None, pp: PayPalDispute) -> bool:
+def seller_turn_again(prev_status: str | None, prev_stage: str | None, pp: PayPalDispute,
+                      prev_raw: dict | None = None) -> bool:
     """After the merchant has responded, only a new request for the seller deserves a new analysis."""
     if pp.dispute_life_cycle_stage and prev_stage and pp.dispute_life_cycle_stage != prev_stage:
         return True  # escalated, e.g. INQUIRY -> CHARGEBACK
+    if offer_denied_now(prev_raw, pp.raw):
+        return True  # Phase 13: the buyer declined our offer: decide again
     return pp.status == "WAITING_FOR_SELLER_RESPONSE" and prev_status != "WAITING_FOR_SELLER_RESPONSE"
 
 
@@ -172,6 +223,7 @@ async def ingest_dispute(
     pp = await get_dispute(paypal_dispute_id, client=client)
     before = session.exec(select(Dispute).where(Dispute.paypal_dispute_id == pp.dispute_id)).first()
     prev_status, prev_stage = (before.status, before.stage) if before else (None, None)
+    prev_raw = dict(before.raw or {}) if before else None
     row = upsert_dispute(session, pp)
     claimed = None
     from app.troubleshooting.outcome import is_final, session_of
@@ -180,7 +232,8 @@ async def ingest_dispute(
     key = run_key(pp, ts.status.value if is_final(ts) else None)
     if claim(session, key, "agent_run", row.id, {"status": pp.status}):
         claimed = key
-        if responded_since_last_run(session, row.id) and not seller_turn_again(prev_status, prev_stage, pp):
+        if (responded_since_last_run(session, row.id) and not seller_turn_again(prev_status, prev_stage, pp, prev_raw)
+                and not denied_our_last_offer(session, row)):
             claimed = None  # PayPal is processing our response; keep the case as "response sent"
             session.add(AgentStep(dispute_id=row.id, agent="orchestrator",
                                   action=f"PayPal updated the case after your response (status {pp.status}); "

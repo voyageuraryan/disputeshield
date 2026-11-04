@@ -67,6 +67,7 @@ def strict_json_schema(model: type[BaseModel]) -> dict[str, Any]:
     def walk(node: Any) -> None:
         if isinstance(node, dict):
             node.pop("title", None)  # the schema's own "title" annotation
+            node.pop("default", None)  # strict mode: every field is required anyway ("default" isn't supported)
             if node.get("type") == "object" and "properties" in node:
                 node["required"] = list(node["properties"])
                 node["additionalProperties"] = False

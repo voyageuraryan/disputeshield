@@ -28,7 +28,7 @@ from app.agents.llm import LLMError, StructuredLLM, structured_call
 from app.agents.redact import pii_terms, redact
 from app.agents.steps import log_step
 from app.config import get_settings  # noqa: F401
-from app.merchant import settle_threshold
+from app.merchant import money_settings, settle_threshold
 from app.models import Decision, DecisionStatus, Dispute
 from app.rules.evidence_rules import (
     RULES,
@@ -40,6 +40,7 @@ from app.rules.evidence_rules import (
     red_flag_description,
     steps_apart,
 )
+from app.rules.money import MoneySettings, full_baseline, offer_bounds, offer_problems, options
 from app.schemas import CaseFile, ChecklistResult, EvidenceItem, Recommendation
 
 log = logging.getLogger(__name__)
@@ -85,7 +86,16 @@ How the decision works (the rules already applied it; you explain it):
   evidence: recommend GATHER_MORE and name the source to refresh in missing_items.
 - What DisputeShield can send: FIGHT = evidence, supporting info, or (in an inquiry where PayPal takes no
   evidence yet) escalating the case to a PayPal claim with the seller note; SETTLE = accept the claim, which
-  refunds the buyer in full. It cannot send partial offers or messages to the buyer, so never suggest them.
+  refunds the buyer in full; SETTLE_PARTIAL = a partial refund offer (PayPal make-offer, inquiry stage only; the
+  buyer must accept it, otherwise the case goes on); REPLACEMENT = offer to send a replacement item instead of
+  money. Offer actions are possible only when offer_types lists them (REFUND for SETTLE_PARTIAL,
+  REPLACEMENT_WITHOUT_REFUND for REPLACEMENT).
+- Money: "options" is the deterministic calculator: the expected net outcome of each option for the merchant
+  (relative to keeping the sale) and the estimated chance. SETTLE, SETTLE_PARTIAL and REPLACEMENT are the same
+  step (ways of settling): choosing between them is not a move, but follow the calculator unless a cited buyer
+  message asks for something specific (e.g. a replacement). For SETTLE_PARTIAL set offer_amount to a decimal
+  string within offer_bounds (use suggested_offer unless you have a reason); for every other action offer_amount
+  is null. Mention the expected outcomes in economic_note.
 
 Rules for your output:
 - Cite evidence only by the integer ids in the case file. Never invent evidence, facts, dates or ids.
@@ -110,7 +120,8 @@ class AnalysisResult:
 MERCHANT_ONLY_FLAGS = {"ts_proof_suspect"}  # suspect buyer proofs: shown to the merchant, never to the LLM
 
 
-def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline, threshold: Decimal) -> str:
+def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline, threshold: Decimal,
+                 money: dict | None = None) -> str:
     case_json = case.model_dump(mode="json")
     for e in case_json["evidence"]:
         e["flags"] = [f for f in e["flags"] if f not in MERCHANT_ONLY_FLAGS]
@@ -122,6 +133,8 @@ def build_prompt(case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
         "baseline": {"action": baseline.action, "why": baseline.why},
         "merchant_settle_threshold": f"{threshold} {case.currency}",
         "allowed_actions": case.allowed_actions,
+        "offer_types": case.offer_types,
+        **(money or {}),
     }
     return ("Here is the case. Write the recommendation.\n\n"
             + json.dumps(payload, indent=2, sort_keys=True, default=str))
@@ -151,10 +164,21 @@ def stale_required(case: CaseFile) -> list[EvidenceItem]:
     return [e for e in case.evidence if e.type in required and e.type not in fresh_types and stale(e)]
 
 
+def parse_offer(value: str | None) -> Decimal | None:
+    try:
+        return Decimal(str(value).strip()) if value not in (None, "") else None
+    except Exception:  # noqa: BLE001 - InvalidOperation etc.
+        return None
+
+
 def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
-             checklist: ChecklistResult | None = None) -> list[str]:
+             checklist: ChecklistResult | None = None, money: MoneySettings | None = None) -> list[str]:
     """Every problem with an LLM recommendation; empty list means it is acceptable."""
     problems: list[str] = []
+    if rec.action == "SETTLE_PARTIAL":  # Phase 13: 10%-90% of the amount, within the merchant's max offer
+        offer = parse_offer(rec.offer_amount)
+        problems += (offer_problems(offer, case.amount, money or MoneySettings()) if offer is not None
+                     else [f"SETTLE_PARTIAL needs offer_amount as a decimal string (got {rec.offer_amount!r})"])
     stale = stale_required(case)
     if rec.action == "FIGHT" and stale:
         problems.append("required evidence is stale (couldn't be refreshed from PayPal this run): "
@@ -170,7 +194,9 @@ def validate(rec: Recommendation, case: CaseFile, baseline: Baseline,
     by_id = {e.id: e for e in case.evidence}
     if steps_apart(rec.action, baseline.action) > 1:
         problems.append(f"{rec.action} is more than one step from the baseline {baseline.action}")
-    elif rec.action != baseline.action and not (stale and rec.action == "GATHER_MORE" and baseline.action == "FIGHT"):
+    elif steps_apart(rec.action, baseline.action) == 1 and not (
+            stale and rec.action == "GATHER_MORE" and baseline.action == "FIGHT"):
+        # (same rung = ways of settling: SETTLE / SETTLE_PARTIAL / REPLACEMENT; picking one isn't a move)
         # (stepping down from FIGHT because required evidence is stale is justified by the staleness itself)
         cited_types = {by_id[i].type for i in rec.cited_evidence_ids if i in by_id}
         if not cited_types & JUSTIFYING_TYPES:
@@ -214,13 +240,20 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
         return _needs_human(session, dispute, checklist, None,
                             [f"No evidence rule for PayPal reason {case.reason}; a person should review this case"])
 
-    baseline = economic_baseline(checklist, case.amount, threshold,
-                                 can_fight=case.can_fight, can_settle=case.can_settle)
+    money = money_settings(session)
+    baseline, opts, suggested = full_baseline(checklist, case, threshold, money)
     log_step(session, dispute.id, AGENT, f"Economic rule suggests {baseline.action}: {baseline.why}",
              {"baseline": baseline.action, "why": baseline.why, "amount": str(case.amount),
-              "threshold": str(threshold), "allowed_actions": case.allowed_actions})
+              "threshold": str(threshold), "allowed_actions": case.allowed_actions,
+              "offer_types": case.offer_types, "suggested_offer": str(suggested) if suggested else None,
+              "options": [o.as_dict() for o in opts]})
+    lo, hi = offer_bounds(case.amount, money)
+    money_prompt = {"options": [o.as_dict() for o in opts],
+                    "suggested_offer": str(suggested) if suggested else None,
+                    "offer_bounds": {"min": str(lo), "max": str(hi)} if case.can_offer else None}
 
-    prompt = redact(build_prompt(case, checklist, baseline, threshold), pii_terms(session, case.order_id))
+    prompt = redact(build_prompt(case, checklist, baseline, threshold, money_prompt),
+                    pii_terms(session, case.order_id))
     problems: list[str] = []
     for attempt in range(1, MAX_ATTEMPTS + 1):
         user = prompt if not problems else (
@@ -244,29 +277,40 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
                 # of a red flag. What's needed is evidence that resolves it: the rule-owned red-flag descriptions.
                 rec.missing_items = [f"evidence that resolves: {red_flag_description(case.reason, c)}"
                                      for c in checklist.red_flags]
-            problems = validate(rec, case, baseline, checklist)
+            if rec.action != "SETTLE_PARTIAL" and rec.offer_amount == "":
+                rec.offer_amount = None
+            problems = validate(rec, case, baseline, checklist, money)
             if not problems:
-                return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold)
+                return _propose(session, dispute, case, checklist, baseline, rec, run_key, attempt, threshold,
+                                money)
         log_step(session, dispute.id, AGENT, f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS})",
                  {"problems": problems})
     return _needs_human(session, dispute, checklist, baseline, problems)
 
 
 def _propose(session: Session, dispute: Dispute, case: CaseFile, checklist: ChecklistResult, baseline: Baseline,
-             rec: Recommendation, run_key: str | None, attempt: int, threshold: Decimal) -> AnalysisResult:
+             rec: Recommendation, run_key: str | None, attempt: int, threshold: Decimal,
+             money: MoneySettings | None = None) -> AnalysisResult:
     superseded = _supersede_proposals(session, dispute.id)
+    offer = parse_offer(rec.offer_amount) if rec.action == "SETTLE_PARTIAL" else None
+    opts = options(checklist.rule_score, case.amount, case.currency, can_fight=case.can_fight,
+                   can_accept_claim=case.can_accept_claim, offer_types=case.offer_types,
+                   s=money or MoneySettings(), offer=offer)
     decision = Decision(dispute_id=dispute.id, recommendation=rec.action, confidence=rec.confidence,
                         reasoning=rec.reasoning, cited_evidence_ids=rec.cited_evidence_ids,
                         economic_note=rec.economic_note, missing_items=rec.missing_items,
                         analysed_threshold=threshold, data_as_of=case.data_as_of,
-                        stale_sources=case.stale_sources or [],
+                        stale_sources=case.stale_sources or [], offer_amount=offer,
+                        options=[o.as_dict() for o in opts],
                         status=DecisionStatus.PROPOSED, run_key=run_key)
     dispute.agent_status = PROPOSED
     session.add_all([decision, dispute])
     session.commit()
     session.refresh(decision)
     moved = "" if rec.action == baseline.action else f" (moved from {baseline.action})"
-    log_step(session, dispute.id, AGENT, f"Recommend {rec.action}{moved}, {rec.confidence} confidence: {rec.reasoning}",
+    offered = f" of {offer} {case.currency}" if offer is not None else ""
+    log_step(session, dispute.id, AGENT,
+             f"Recommend {rec.action}{offered}{moved}, {rec.confidence} confidence: {rec.reasoning}",
              {"decision_id": decision.id, "cited_evidence_ids": rec.cited_evidence_ids,
               "missing_items": rec.missing_items, "economic_note": rec.economic_note,
               "baseline": baseline.action, "rule_score": checklist.rule_score, "attempt": attempt,

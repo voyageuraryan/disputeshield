@@ -41,8 +41,12 @@ SUPPORTING_WEIGHT = Decimal("0.3")
 FIGHT_AT = 0.7   # rule_score >= this -> FIGHT
 SETTLE_BELOW = 0.4  # rule_score < this -> SETTLE
 
-Action = Literal["FIGHT", "SETTLE", "GATHER_MORE"]
-LADDER: tuple[Action, ...] = ("SETTLE", "GATHER_MORE", "FIGHT")
+Action = Literal["FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE"]
+LADDER: tuple[str, ...] = ("SETTLE", "GATHER_MORE", "FIGHT")
+# Phase 13: a partial offer or a replacement is a way of settling: same rung as SETTLE (which one is the
+# calculator's call, not a "move"), so they are one step from GATHER_MORE and two from FIGHT.
+RUNG = {"SETTLE": 0, "SETTLE_PARTIAL": 0, "REPLACEMENT": 0, "GATHER_MORE": 1, "FIGHT": 2}
+SETTLE_FAMILY = ("SETTLE", "SETTLE_PARTIAL", "REPLACEMENT")
 
 
 @dataclass(frozen=True)
@@ -225,5 +229,5 @@ def _baseline(checklist: ChecklistResult, amount: Decimal, threshold: Decimal,
     return b
 
 
-def steps_apart(a: Action, b: Action) -> int:
-    return abs(LADDER.index(a) - LADDER.index(b))
+def steps_apart(a: str, b: str) -> int:
+    return abs(RUNG[a] - RUNG[b])

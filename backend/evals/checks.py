@@ -14,10 +14,11 @@ from app.rules.evidence_rules import steps_apart
 from app.schemas import CaseFile, Recommendation, SellerNote
 from evals.claims import false_claims
 
-DECIDED = ("FIGHT", "SETTLE", "GATHER_MORE")
+DECIDED = ("FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE")
+SENDABLE = ("FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT")
 PAYPAL_ENDPOINTS = {  # which allowed action makes each request possible (app/agents/resolution.py)
     "provide-evidence": "provide_evidence", "provide-supporting-info": "provide_supporting_info",
-    "escalate": "escalate", "accept-claim": "accept_claim",
+    "escalate": "escalate", "accept-claim": "accept_claim", "make-offer": "make_offer",  # Phase 13
 }
 
 
@@ -63,10 +64,14 @@ def allowed_action_respected(out: dict, golden: dict) -> tuple[float, str]:
     case, action = _case(golden), out.get("action")
     if action == "FIGHT" and not case.can_fight:
         return 0.0, f"FIGHT although PayPal allows no way to contest ({case.allowed_actions})"
-    if action == "SETTLE" and not case.can_settle:
-        return 0.0, f"SETTLE although PayPal allows no settling ({case.allowed_actions})"
+    if action == "SETTLE" and not case.can_accept_claim:
+        return 0.0, f"SETTLE although PayPal doesn't allow accepting the claim ({case.allowed_actions})"
+    if action == "SETTLE_PARTIAL" and not case.can_offer:
+        return 0.0, f"SETTLE_PARTIAL although PayPal lists no REFUND offer ({case.offer_types})"
+    if action == "REPLACEMENT" and not case.can_replace:
+        return 0.0, f"REPLACEMENT although PayPal lists no replacement offer ({case.offer_types})"
     req = out.get("request") or {}
-    if action in ("FIGHT", "SETTLE") and req.get("endpoint"):
+    if action in SENDABLE and req.get("endpoint"):
         if PAYPAL_ENDPOINTS.get(req["endpoint"]) not in case.allowed_actions:
             return 0.0, f"prepared {req['endpoint']}, not allowed now ({case.allowed_actions})"
         if req["endpoint"] in ("provide-evidence", "provide-supporting-info") and not req.get("attachments"):

@@ -187,7 +187,7 @@ resolution draft + PROPOSED Decision, approval API that resumes the paused run.
 - Live (rules only): PP-R-ZWL-10195422 -> rule score 0.58, missing delivery_confirmation, baseline
   GATHER_MORE. LLM step not run live yet: no Anthropic credentials on this machine.
 
-## Open items (tracked) — updated 2026-11-03, Phase 12
+## Open items (tracked) — updated 2026-11-04, Phase 13
 Legend: [ ] open · [~] partly done / waiting on the user · [x] done. P1 = blocks a credible demo/deploy.
 User decisions (session 13): login = Log in with PayPal; auto-settle stays advisory; keep India seller;
 SQLite on Render disk.
@@ -247,7 +247,8 @@ G22 [x] Inquiry-stage SNAD: PayPal allows only make_offer/accept_claim/escalate/
 G23 [x] Inquiry-stage fight: escalate (POST /v1/customer/disputes/{id}/escalate, JSON {note} 1-2000, spec: stage
         must be INQUIRY) added to FIGHT_ACTIONS; FIGHT order: provide-evidence > supporting-info > escalate. UI says
         "fight by escalating to a PayPal claim". Analyst prompt: never suggest partial offers / messages (can't send).
-        Not yet run live.
+        Not yet run live. CLOSED by Phase 13 (2026-11-04): inquiries can now also be resolved with a partial refund
+        offer or a replacement (make-offer), so the prompt no longer forbids offers; live check of make-offer = G111.
 G24 [x] Executed decision card didn't show the note sent (E9) -> shows "Note sent" + settle wording.
 G25 [x] Phone layout put the long timeline above facts/evidence -> timeline last on phones.
 G26 [~] P3 sandbox fact (admin helper now returns a "hint" explaining it): adjudicate refused (ACTION_NOT_ALLOWED_IN_CURRENT_DISPUTE_STATE, debug f350719ea974e) on
@@ -308,6 +309,36 @@ G46 [x] The e2e stack inherited real LLM keys from backend/.env (a chat test wou
 G47 [x] Buyer page went blank in real Chromium (an effect returned scrollIntoView()'s Promise) and React
         StrictMode's double load tripped the device binding (403) -> fixed; e2e covers both.
 G48 [x] Dead imports (events.py asyncio, store.py Decimal, runner.py llm_module) removed.
+### Found in Phase 13 (2026-11-04)
+G111 [ ] P2 make-offer not run live. Shapes come from the v1 OpenAPI (offer_type enum REFUND / REFUND_WITH_RETURN /
+        REFUND_WITH_REPLACEMENT / REPLACEMENT_WITHOUT_REFUND; offer_amount money; note 1-2000; invoice_id). It needs
+        a sandbox not-as-described inquiry whose dispute lists make_offer, and the user's approval (it moves money if
+        the buyer accepts). Also check the buyer's accept/deny reaches us as CUSTOMER.DISPUTE.UPDATED / RESOLVED
+        with offer.history.
+G112 [ ] P2 Offer types are taken ONLY from allowed_response_options.make_offer.offer_types (rule: no guessing). If the
+        sandbox sends a make_offer link without that list, no offer is proposed (falls back to accept-claim). Check
+        what a live inquiry returns.
+G113 [ ] P2 USER DECISION. The brief's fight formula "P(win) x amount - (1-P(win)) x (amount+fee) - handling" counts the
+        amount twice next to settle = -amount (fighting would beat refunding even at 15% odds). Implemented with the
+        keep-the-sale baseline: fight = -(1-P(win)) x (amount+fee) - handling (documented in rules/money.py). The
+        partial-offer formula uses + (1-P(accept)) x fight (fight is already a net value). Say if you want the
+        literal formula instead.
+G114 [ ] P3 P(win) (rule_score table) and P(accept) (0.1 + 0.8 x offer share) are starting assumptions, not calibrated:
+        Phase 14 recalibrates from real outcomes. The UI says they're estimates.
+G115 [ ] P3 REPLACEMENT has no expected net (item + shipping cost unknown); a "replacement cost" setting would let the
+        calculator rank it.
+G116 [ ] P3 No eval goldens with offer types yet (all 51 have none, so they're unchanged); add inquiry goldens where
+        PayPal lists REFUND offers, and re-run evals (G100) to see the real LLM choose amounts.
+G117 [x] can_settle was true when only make_offer was allowed, but SETTLE sends accept-claim (it would have failed at
+        resolution). Now SETTLE needs accept_claim; offers need the listed offer types.
+G118 [x] UI: "Change action" kept the previous action's drafted note, so switching FIGHT -> SETTLE would send the seller's
+        fight note as the refund note. The note now resets to that action's own draft (or empty: server writes it).
+G119 [x] An offer denial recorded first by an agent run's refresh (before the webhook) was suppressed as "PayPal
+        processing your response". Ingest now also checks state: our last decision was a sent offer + the buyer's
+        newest answer is DENIED.
+G120 [x] Frontend rounding differed from the backend on .5 cents (-146.845 -> -146.84 vs -146.85); now half away from
+        zero like Decimal ROUND_HALF_UP.
+
 ### Found in Phase 12 (2026-11-03)
 G103 [ ] P2 USER DECISION (like G50). UPLOAD_EXTRACTION is on by default: the merchant's uploaded documents (labels,
         carrier proof of delivery, receipts) go to Gemini, and they often show the buyer's name and address. On
@@ -328,15 +359,15 @@ G107 [ ] P3 Extraction runs inside the upload request (up to 45 s per model, two
 G108 [ ] P3 The coach assumes the added item is clean (no red flags, e.g. delivered to the order's address), and it
         shows only the rules' baseline, not the analyst's one-step move. If PayPal allows no FIGHT right now it
         honestly shows GATHER_MORE after the item.
-G109 [ ] P3 Merchant uploads aren't covered by the proof-retention purge (G44 covers buyer proofs only).
-G110 [ ] P3 Confirming evidence while a run is going saves it but doesn't start a run ("re-analyse when it's
+G109 [x] P3 (fixed Phase 13: purge_expired_uploads, same retention) Merchant uploads aren't covered by the proof-retention purge (G44 covers buyer proofs only).
+G110 [x] P3 (fixed Phase 13: queued behind the current run) Confirming evidence while a run is going saves it but doesn't start a run ("re-analyse when it's
         done"), the same gap as G98.
 
 ### Found in Phase 11 (2026-11-03)
 G97 [x] P1 The investigator didn't catch httpx transport errors (timeout / connection reset): one PayPal timeout
         crashed the whole run (run_failed). Now caught; timeouts, 5xx and 429 count as transient (last good copy kept,
         flagged stale), 4xx as "gone".
-G98 [ ] P2 Runs that aren't manual (webhook, poll, troubleshooting re-analysis) arriving while another run for the
+G98 [x] P2 (fixed Phase 13: runner.PENDING, one fresh follow-up run) Runs that aren't manual (webhook, poll, troubleshooting re-analysis) arriving while another run for the
         same dispute is going are skipped ("Run skipped: another run for this dispute is in progress" on the
         timeline), not queued. A buyer finishing troubleshooting during a manual re-analyse is picked up only at the
         next event / re-analyse. Fix option: a per-dispute "rerun pending" flag that starts one follow-up run.
@@ -967,4 +998,51 @@ for the Gemini + Groq quotas (G92).
   - e2e test_add_missing_evidence_and_confirm (coach → Add → bad file refused → upload → confirm)
 - Regression: backend 622 passed, frontend 124 passed + tsc + build, e2e 30 passed.
 - Live: Gemini extraction blocked by quota (G106). New items G103-G110.
+
+## 2026-11-04 — Phase 13: resolve inquiries with offers (closes G23)
+
+- PayPal (spec read first: Disputes v1 OpenAPI from github.com/paypal/paypal-rest-api-specifications):
+  - make_offer() in paypal/disputes.py; rule 5 enforced in code (require_approved), the enum validated, and the
+    payload checked per type (REFUND needs an amount; REPLACEMENT_WITHOUT_REFUND takes none; REFUND_WITH_RETURN
+    needs a return address).
+  - offer_types() comes only from allowed_response_options.make_offer.offer_types. offer_events() reads
+    offer.history.
+  - send_message already existed (9A).
+  - Outcomes come in through CUSTOMER.DISPUTE.UPDATED/RESOLVED (the only dispute webhooks per PayPal's
+    event-names page). Ingest logs "PayPal shows the buyer your offer" / "The buyer accepted…" / "The buyer
+    declined… analysed again", once each.
+  - A denial is material (offer added to material_state only when there is one, so old run keys are unchanged)
+    and counts as the merchant's turn again.
+- Actions: SETTLE_PARTIAL (make-offer REFUND with an amount) and REPLACEMENT (REPLACEMENT_WITHOUT_REFUND) in
+  Recommendation, rules, approval and UI.
+  - They are allowed only when PayPal lists the offer type.
+  - They sit on the same rung as SETTLE (picking among settling options is not a "move").
+  - CaseFile has offer_types, can_accept_claim, can_offer, can_replace.
+- Money calculator (rules/money.py, pure):
+  - fight = -(1-P(win))(amount+fee) - handling; settle = -amount; partial = -offer·P(accept) +
+    (1-P(accept))·fight. See G113 for the deviation from the brief's fight formula.
+  - P(win) comes from a documented rule_score table. P(accept) = 0.1 + 0.8 × offer share.
+  - The best offer is searched on a 5% grid inside the bounds.
+  - Merchant settings: dispute fee, minutes per dispute, hourly value, max offer %. Settings shows PayPal's US
+    ($15/$30) and IN (₹580 or $8 / ₹1,160 or $16) fee pages as sources.
+- Rules: when the rules say SETTLE and a partial offer has a better expected net (or a full refund isn't allowed),
+  the baseline is SETTLE_PARTIAL with the suggested offer. The analyst sees the options, the bounds and the
+  suggested offer. The validator enforces 10%-90% of the amount, the max-offer setting, never above the amount,
+  and 2 decimals; offer_amount only for SETTLE_PARTIAL. The strict schema now drops "default".
+- UI:
+  - Options card: Fight / Full refund / Partial offer / Replacement with net, chance, why and "best"; it updates
+    live as the offer is edited.
+  - Editable offer with bounds; a confirm step worded for offers; an "offer sent" state.
+  - The note for an offer is written by the server for the final amount.
+  - Settings money section.
+- Also fixed: G98/G110 (a run asked for during a run is queued and runs once, fresh, afterwards), G109 (merchant
+  uploads follow retention), G117-G120.
+- Tests:
+  - backend tests/test_offers.py (37): calculator table, validator bounds, rule 5, request shapes, offer types,
+    webhook outcomes incl. redelivery and accept→resolved, inquiry SNAD → SETTLE_PARTIAL end to end, edited offer
+    sent, settings
+  - runner follow-up and upload retention tests
+  - frontend offers.test.tsx (9)
+  - e2e test_options_card_and_editing_the_offer
+- Regression: backend 661 passed, frontend 133 passed + tsc + build, e2e 31 passed.
 

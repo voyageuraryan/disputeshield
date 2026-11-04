@@ -14,7 +14,7 @@ from app.db import create_db_and_tables
 from app.schemas import Recommendation
 
 GOOD = {"action": "FIGHT", "confidence": "high", "reasoning": "Tracking shows delivery.",
-        "cited_evidence_ids": [1, 2], "missing_items": [], "economic_note": "Worth fighting."}
+        "cited_evidence_ids": [1, 2], "missing_items": [], "economic_note": "Worth fighting.", "offer_amount": None}
 GEMINI = GEMINI_URL.format(model="gemini-3.8-flash")
 
 
@@ -51,7 +51,8 @@ def test_strict_schema():
     assert s["additionalProperties"] is False
     assert set(s["required"]) == set(s["properties"]) == set(GOOD)
     assert "title" not in json.dumps(s).replace('"reasoning"', "")
-    assert s["properties"]["action"]["enum"] == ["FIGHT", "SETTLE", "GATHER_MORE"]
+    assert s["properties"]["action"]["enum"] == ["FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT", "GATHER_MORE"]
+    assert s["properties"]["offer_amount"] == {"anyOf": [{"type": "string"}, {"type": "null"}]}  # no "default"
 
 
 # ---- Groq (primary) --------------------------------------------------------------------

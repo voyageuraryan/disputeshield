@@ -77,7 +77,7 @@ def test_fight_allowed_with_supporting_info_or_evidence():
 
 
 def test_settle_rejected_when_no_settle_action():
-    with pytest.raises(ValueError, match="SETTLE is not possible now"):
+    with pytest.raises(ValueError, match=r"SETTLE \(accept the claim, full refund\) is not possible now"):
         rec("SETTLE").validate_against(case(["provide_evidence"]))
 
 

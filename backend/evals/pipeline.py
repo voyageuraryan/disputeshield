@@ -355,7 +355,7 @@ async def _run(g: Golden, engine, did: int, key: str, llm: Any) -> dict:  # noqa
                        missing_items=rec.missing_items, economic_note=rec.economic_note)
         else:
             out.update(action="NEEDS_HUMAN", reasoning="", cited_evidence_ids=[], cited_types=[], missing_items=[])
-        if r.decision_id and rec and rec.action in ("FIGHT", "SETTLE"):
+        if r.decision_id and rec and rec.action in ("FIGHT", "SETTLE", "SETTLE_PARTIAL", "REPLACEMENT"):
             res = await resolve(s, d, case, r.decision_id, llm=llm)
             dec = s.get(Decision, r.decision_id)
             notes = [c["result"] for c in getattr(llm, "calls", []) if c["output"] == SellerNote.__name__]

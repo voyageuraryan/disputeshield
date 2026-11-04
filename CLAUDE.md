@@ -37,7 +37,7 @@ Built for the PayPal AI Hackathon (deadline 12 Nov 2026, 12:00 PM PST).
 4. The LLM never invents evidence. Agents may only cite items that exist in
    the case file, by evidence_item id. Rules (app/rules/) decide which
    evidence a dispute reason requires; the LLM reads text and explains.
-5. No money-moving PayPal call (provide-evidence, accept-claim, make-offer)
+5. No money-moving PayPal call (provide-evidence, accept-claim, make-offer, escalate)
    runs without an approved Decision row. Enforce this in code, not just UI.
 6. Every agent step is logged to the agent_steps table (powers the timeline). Runs end with run_finished /
    run_failed / run_skipped; one run per dispute at a time (re-analyse 409s while one is going).
@@ -52,7 +52,8 @@ backend/app/{main.py, config.py, db.py, models.py, schemas.py, catalog.py, inges
 backend/app/paypal/   client.py, disputes.py, orders.py, payments.py, tracking.py, webhooks.py, identity.py
 backend/app/agents/   graph.py, investigator.py, analyst.py, resolution.py, llm.py, runner.py, steps.py,
                       troubleshooter.py (buyer troubleshooting agent), web_research.py (grounded search), redact.py
-backend/app/rules/    evidence_rules.py, coach.py ("What would win this?": hypothetical scores, pure)
+backend/app/rules/    evidence_rules.py, coach.py ("What would win this?": hypothetical scores, pure),
+                      money.py (Phase 13 calculator: fight / refund / partial offer expected net, pure)
 backend/app/troubleshooting/  buyer troubleshooting package: eligibility.py, access.py (link tokens, expiry,
                               rate limit), service.py (invite), proofs.py (upload checks: type/size/EXIF/GPS/dHash),
                               vision.py (advisory photo check), outcome.py (finished session -> evidence record +
@@ -70,6 +71,7 @@ backend/evals/        DeepEval harness: goldens/ (51 versioned JSON + build_gold
 backend/app/tracing.py  @observe shim (no-op unless DEEPEVAL_TRACING=1)
 e2e/                  Playwright UI suite (starts its own throwaway stack); frontend: npm test (Vitest)
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page)
+frontend/src/offers/    logic.ts (Phase 13: offer math mirroring rules/money.py; Options card is in CaseDetail)
 frontend/src/evidence/  AddEvidence.tsx (add/confirm evidence, coach panel), logic.ts (pure)
 frontend/src/help/    StepCard.tsx (step card + upload), logic.ts (pure step/upload/SSE logic); the buyer's page is
                       pages/Help.tsx at /help/:sessionId (public, link token); the merchant's panel is
