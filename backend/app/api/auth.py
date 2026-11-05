@@ -20,6 +20,8 @@ from fastapi.responses import RedirectResponse
 from app import ratelimit
 from app.auth import allowed_emails, auth_disabled, consume_state, new_session, new_state, require_merchant
 from app.config import get_settings
+from app.db import get_session
+from sqlmodel import Session
 from app.paypal.client import PayPalClient, PayPalError, get_paypal_client
 from app.paypal.identity import authorize_url, exchange_code, userinfo
 
@@ -91,3 +93,20 @@ async def callback(code: str | None = None, state: str | None = None, error: str
 def me(merchant: dict = Depends(require_merchant)) -> dict:
     return {"email": merchant.get("email"), "name": merchant.get("name"), "sub": merchant.get("sub"),
             "expires_at": merchant.get("exp")}
+
+
+@router.post("/logout", status_code=204)
+def logout(merchant: dict = Depends(require_merchant), s: Session = Depends(get_session)) -> None:
+    """G167: end every merchant session (this browser and any other, e.g. a leaked token), not just forget it here.
+    Note: on Render's free plan the database (and so this cut-off) is reset on restart; tokens still expire."""
+    from datetime import datetime, timezone
+
+    from app.merchant import get_merchant_settings
+    from app.models import AuditLog
+
+    row = get_merchant_settings(s)
+    row.sessions_valid_after = datetime.now(timezone.utc)
+    s.add(row)
+    s.add(AuditLog(who=(merchant.get("email") or "merchant")[:254], action="logged out (all sessions ended)"))
+    s.commit()
+    log.info("merchant %s logged out; all sessions ended", merchant.get("email"))

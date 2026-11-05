@@ -81,7 +81,7 @@ class Stack:
 
     def session_token(self, exp_offset=3600):
         code = ("import time;from app.auth import sign;print(sign({'kind':'session','sub':'e2e',"
-                f"'email':'merchant@business.example.com','name':'E2E Merchant','exp':int(time.time()+{exp_offset})}}))")
+                f"'email':'merchant@business.example.com','name':'E2E Merchant','iat':time.time(),'exp':int(time.time()+{exp_offset})}}))")
         return subprocess.run([PY, "-c", code], cwd=BACKEND, env=self.env, check=True, capture_output=True,
                               text=True).stdout.strip()
 

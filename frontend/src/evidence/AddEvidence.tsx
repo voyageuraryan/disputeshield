@@ -1,6 +1,7 @@
 // Phase 12: the merchant adds missing evidence (file or fact), checks what was read, confirms; and the
 // "What would win this?" coach. Nothing becomes evidence until the merchant presses Confirm.
 import { useState } from "react";
+import { AuthedLink } from "../Authed";
 import { uploadsApi, type CoachItem, type MerchantUpload, type RunInfo } from "../api";
 import { label } from "../format";
 import { ACCEPT, checkInput, coachLine, FACT_MAX, fieldsFor, prefill, readNote, toConfirmBody, type FieldValues } from "./logic";
@@ -122,9 +123,9 @@ export function ConfirmUpload({ disputeId, upload, types, onDone }: {
           Check the details: {upload.kind === "file" ? upload.original_name ?? "your file" : "your note"}
         </span>
         {upload.kind === "file" && (
-          <a href={uploadsApi.fileUrl(disputeId, upload.id)} target="_blank" rel="noreferrer" className="text-xs text-indigo-700 hover:underline">
+          <AuthedLink href={uploadsApi.fileUrl(disputeId, upload.id)} className="text-xs text-indigo-700 hover:underline">
             Open the file
-          </a>
+          </AuthedLink>
         )}
       </div>
       {upload.fact && <p className="text-xs text-slate-600">You wrote: “{upload.fact}”</p>}

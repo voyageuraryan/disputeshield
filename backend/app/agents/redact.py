@@ -16,7 +16,10 @@ from app.config import get_settings
 from app.models import Order, Shipment
 
 EMAIL = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
-PLACEHOLDER = re.compile(r"\[(email|shipping address|delivery address(?: \d+)?)\]", re.IGNORECASE)
+PLACEHOLDER = re.compile(r"\[(email|shipping address|delivery address(?: \d+)?|buyer name|phone|card number)\]",
+                         re.IGNORECASE)
+# Evidence whose text the buyer wrote: quoted data for the LLM, never instructions (G169).
+BUYER_TEXT_TYPES = frozenset({"buyer_message", "troubleshooting_record"})
 
 
 def _addr(a: dict | None) -> str | None:
@@ -27,14 +30,29 @@ def _addr(a: dict | None) -> str | None:
     return s or None
 
 
-def pii_terms(session: Session, order_id: int | None) -> dict[str, str]:
+def name_terms(dispute_raw: dict | None) -> dict[str, str]:
+    """The buyer's name as PayPal gives it on the dispute (disputed_transactions[].buyer.name), whole and per word
+    (3+ letters), so "John" alone is caught too (G168)."""
+    terms: dict[str, str] = {}
+    for tx in (dispute_raw or {}).get("disputed_transactions") or []:
+        name = ((tx.get("buyer") or {}).get("name") or "").strip()
+        if not name:
+            continue
+        terms[name] = "[buyer name]"
+        for part in re.split(r"\s+", name):
+            if len(part) >= 3:
+                terms.setdefault(part, "[buyer name]")
+    return terms
+
+
+def pii_terms(session: Session, order_id: int | None, dispute_raw: dict | None = None) -> dict[str, str]:
     """Known personal strings for this case -> placeholder (longest first when applied)."""
+    terms: dict[str, str] = name_terms(dispute_raw)
     if not order_id:
-        return {}
+        return terms
     order = session.get(Order, order_id)
     if order is None:
-        return {}
-    terms: dict[str, str] = {}
+        return terms
     ship = _addr(order.shipping_address)
     if ship:
         terms[ship] = "[shipping address]"
@@ -55,7 +73,9 @@ def redact(text: str, terms: dict[str, str]) -> str:
     if not get_settings().llm_redact_pii:
         return text
     for term in sorted(terms, key=len, reverse=True):
-        text = text.replace(term, terms[term])
+        # whole words only: a name part like "Doe" must not eat "Doesn't"
+        text = re.sub(rf"(?<!\w){re.escape(term)}(?!\w)", lambda _m, t=terms[term]: t, text, flags=re.IGNORECASE
+                      if terms[term] == "[buyer name]" else 0)
     return EMAIL.sub("[email]", text)
 
 
@@ -93,3 +113,14 @@ def redact_buyer_text(text: str, terms: dict[str, str]) -> str:
 def contains_placeholder(text: str) -> str | None:
     m = PLACEHOLDER.search(text)
     return m.group(0) if m else None
+
+
+def mark_buyer_text(case_json: dict) -> dict:
+    """G168/G169: in a case file about to go to an LLM, buyer-written evidence is labelled untrusted (data, never
+    instructions) and loses phone / card numbers (redact() later handles emails, names and addresses)."""
+    for e in case_json.get("evidence") or []:
+        if e.get("type") in BUYER_TEXT_TYPES:
+            e["trust"] = "untrusted_buyer_text"
+            if get_settings().llm_redact_pii and isinstance(e.get("summary"), str):
+                e["summary"] = redact_buyer_text(e["summary"], {})
+    return case_json

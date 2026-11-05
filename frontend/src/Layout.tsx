@@ -26,7 +26,8 @@ function Account() {
     <div className="ml-auto flex items-center gap-2 text-sm">
       {who && <span className="hidden max-w-[16rem] truncate text-slate-500 md:inline" title={who}>{who}</span>}
       <button
-        onClick={() => {
+        onClick={async () => {
+          await authApi.logout(); // server-side: every session ends, not just this tab's copy
           clearToken();
           navigate("/login", { replace: true });
         }}

@@ -176,18 +176,19 @@ async def test_reanalyze_runs_fresh(api, engine, demo, monkeypatch):
 async def test_unmatched_dispute_is_matched_once_the_order_exists(pp, engine):
     mock_real_paypal(respx)
     did = make_dispute(engine, None, REAL_ID, transaction_id=CAPTURE)
+    # 2026-11-05: the store row is missing (e.g. an empty database after a restart): the investigator rebuilds it from
+    # PayPal's own copy (capture -> order, our DS- invoice) instead of leaving the case without its order
     case, steps = await inv(engine, did, pp)
-    assert case.order_id is None and "No store order matched this dispute" in steps
-
+    assert case.order_id is not None and "No store order matched this dispute" not in steps
+    assert any(s.startswith(f"Rebuilt store order #{case.order_id} from PayPal order 2WB80238HM8587143") for s in steps)
+    assert "order" in {e.type for e in case.evidence}
     with Session(engine) as s:
-        o = Order(buyer_email="b@example.com", amount=Decimal("89"), currency="USD",
-                  paypal_order_id="2WB80238HM8587143", capture_id=CAPTURE, product_listing="Walnut lamp")
-        s.add(o); s.commit(); s.refresh(o)
-        oid = o.id
-    case, steps = await inv(engine, did, pp)
-    assert case.order_id == oid
-    assert f"Matched the dispute to store order #{oid} on this refresh" in steps
-    assert {"order", "listing"} <= {e.type for e in case.evidence}
+        o = s.get(Order, case.order_id)
+        assert o.capture_id == CAPTURE and o.paypal_order_id == "2WB80238HM8587143" and o.invoice_id.startswith("DS-")
+    again, steps2 = await inv(engine, did, pp)  # next run: the rebuilt row is used, not rebuilt again
+    assert again.order_id == case.order_id and sum(s.startswith("Rebuilt store order") for s in steps2) == 1
+    with Session(engine) as s:
+        assert len(s.exec(select(Order)).all()) == 1
 
 
 @respx.mock

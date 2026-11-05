@@ -388,18 +388,52 @@ G165 [x] Group B fixed (one commit):
         timestamp window (PayPal re-delivers for 3 days and the fixtures replay real recordings),
         refusing a short ADMIN_TOKEN at startup (can't see the Render value; warning instead), re-confirming
         alert_email_to changes (a flow change; G167).
-G166 [ ] P1 Group C (changes AI output; run evals before/after): buyer_message justifies moves toward FIGHT only;
+G166 [~] (2026-11-05 done: notes refuse links / emails / instruction-like text / insults, also for MCP notes;
+        a suspect proof can't justify a move. OPEN: buyer_message direction rule, troubleshooter plan/translation
+        guard, DEFECT_CONFIRMED provenance; these change AI output and need an eval run) P1 Group C (changes AI output; run evals before/after): buyer_message justifies moves toward FIGHT only;
         defect_cited must exclude ts_proof_suspect; stronger validate_note (URLs, PII, admissions, insults,
         injection words; re-run at approve / retry / MCP); troubleshooter guard on plans + translations
         (multilingual, URL ban; beware "replace the battery" false positives); DEFECT_CONFIRMED only from button
         presses + unverified-proof flag + dHash duplicates + deleted-proof tombstone.
-G167 [ ] P2 Group D (changes a flow; safe first step first): react-router 7 upgrade (run all e2e); re-confirm alert_email_to changes; MCP confirmation shown on the dashboard, not returned
+G167 [~] (2026-11-05 done: react-router 7, no ?token=, dashboard-only MCP code, MCP note checks, server-side
+        Log out ending every session. OPEN: re-confirm alert_email_to, email_verified/payer-id pinning, AUTH_MODE=off
+        loopback-only (already refused on Render), CSP) P2 Group D (changes a flow; safe first step first): react-router 7 upgrade (run all e2e); re-confirm alert_email_to changes; MCP confirmation shown on the dashboard, not returned
         to the assistant; validate MCP note; remove ?token= (fetch with the header / fetch-event-source); session
         epoch + logout; email_verified + payer-id pinning (log a real sandbox userinfo first); AUTH_MODE=off only
         with ALLOW_INSECURE_LOCAL from loopback (update e2e / dev.sh / CI together); CSP (report-only first).
-G168 [ ] P2 Redact buyer names / phones in buyer_message and troubleshooting summaries before the analyst and note
+G168 [x] (2026-11-05: buyer name from the dispute redacted whole-word; phones/cards in buyer-written evidence) P2 Redact buyer names / phones in buyer_message and troubleshooting summaries before the analyst and note
         LLM calls (redact_buyer_text is only used in the troubleshooting chat today).
-G169 [ ] P2 Mark buyer text as untrusted data in the analyst and note prompts (as the troubleshooter does).
+G169 [x] (2026-11-05: trust=untrusted_buyer_text + prompt rule in analyst and note prompts) P2 Mark buyer text as untrusted data in the analyst and note prompts (as the troubleshooter does).
+
+### Live review + fixes (2026-11-05)
+G170 [x] Live review 2026-11-05 (Claude, Cowork; real Render deploy + sandbox) found and fixed:
+        - P1 after every free-plan restart, real disputes showed "No store order matched" (order rows lost with the
+          DB), so every case scored 8/100 and could only SETTLE. The investigator now rebuilds the order from PayPal
+          (capture -> supplementary_data.related_ids.order_id -> GET order; only invoices starting DS-, never another
+          shop's data; idempotent) with its items, amount, address, payer hash and PayPal trackers as shipments.
+          Merchant-recorded delivery is not at PayPal, so it must be recorded again (the timeline says so).
+        - P1 cold start re-analysed every case at once: Groq 8K TPM 429 + a broken Gemini key -> NEEDS_HUMAN, and the
+          timeline showed the raw provider error with the Groq organisation id. LLMError text is now safe to show
+          (status + plain words; full body in the server log only), a 429 asking for <= 20 s is waited out once, at
+          most 2 LLM calls run at once, and a provider outage is no longer fed back into the next prompt.
+        - Case page said "The agents are still working…" forever on NEEDS_HUMAN with no decision -> explains it and
+          offers Re-analyse; a resolved case says there is nothing to decide.
+        - Approve race: a losing second click said "already resolved at PayPal" -> says the decision's real status.
+          Retry: two simultaneous retries could both send (one process lock per decision now).
+        - Analyst said "0% chance to win" while the Options card said 15% -> a stated win chance must match the
+          calculator (+-1 point) or the answer is retried.
+        - Deadlines showed "Gathering evidence" for cases PayPal is reviewing / waiting on the buyer -> right label.
+        - Security (G167 items): session token no longer accepted in ?token= (streams via fetch + header, files and
+          proof photos fetched with the header into blob: URLs); MCP approvals need a 6-character code shown ONLY on
+          the dashboard case page (never returned by a tool, never echoed in errors; 5 wrong tries lock MCP approval
+          of that decision); API sends nosniff / X-Frame-Options DENY / frame-ancestors 'none' / no-referrer; static
+          site headers in render.yaml; react-router-dom 7.18.5 (npm audit: 0 vulnerabilities).
+G171 [ ] P1 USER: the Gemini key on Render is invalid (live: HTTP 401 "API key not valid",
+        ACCESS_TOKEN_TYPE_UNSUPPORTED). It breaks the LLM fallback, upload reading, troubleshooting research and the
+        photo check. Re-paste GEMINI_API_KEY / RESEARCH_GEMINI_API_KEY (an AIza... key from aistudio.google.com).
+G172 [ ] P2 USER: render.yaml now sets static-site headers; Render applies blueprint changes on the next Blueprint
+        sync (Dashboard -> Blueprints -> Sync) or add them under the static site's Headers tab.
+G173 [ ] P3 Full CSP for the static site (PayPal JS SDK, Bryntum, AG Grid inline styles) not done: report-only first.
 
 ### Found in Phases 17-18 and the full regression (2026-11-04)
 G140 [x] MCP server verified LIVE with the official SDK client (streamable HTTP) on a dev-DB copy:
@@ -414,7 +448,7 @@ G142 [ ] P3 PayPal Agent Toolkit (Python) NOT used. It was optional in the brief
         list_disputes / get_dispute / get_order / get_shipment_tracking. It targets agent frameworks (OpenAI Agents,
         LangChain, CrewAI, Bedrock) with its own HTTP calls, without our retry / PayPal-Debug-Id logging, and the
         investigator already has tested wrappers. Revisit only if a judge wants it.
-G143 [ ] P3 MCP tools give the connected assistant the case data (evidence summaries can include the buyer's
+G143 [x] (2026-11-05: get_case masks buyer emails, phones and card numbers) P3 MCP tools give the connected assistant the case data (evidence summaries can include the buyer's
         email). The README warns about this; consider redacting for MCP.
 G144 [ ] P3 Alerts go out from a 60 s loop (a deadline alert can be up to a minute late). SMTP is STARTTLS only (no
         port-465 SSL).
@@ -633,7 +667,7 @@ G75 [x] P2 (decided + done 2026-11-04, see above) DECISION (yours): ts-defect (b
         listing. Option: a rule like the safety one (defect confirmed without suspect proof: never auto-FIGHT).
 G76 [x] Address mismatch: GATHER_MORE with no missing items -> NEEDS_HUMAN. Nothing required is missing (the case is
         weak because of a red flag) -> code names "evidence that resolves: <red flag>" (rule-owned), like G59.
-G77 [ ] P2 adv-listing-contradicts: correct FIGHT, but both seller notes were rejected (resolution gave up).
+G77 [x] (2026-11-05: receipt wording allowed in not-as-described notes) P2 adv-listing-contradicts: correct FIGHT, but both seller notes were rejected (resolution gave up).
         Hypothesis: validate_note's delivery-claim check rejects "the buyer received ..." although in a not-as-
         described dispute the buyer's own complaint admits receipt. The harness now records resolution_problems;
         confirm on the next run before changing the validator.
@@ -1405,3 +1439,18 @@ for the Gemini + Groq quotas (G92).
 - Found while testing: the Group A login-error change broke one e2e test (it expected URL free text on screen);
   the test now checks the fixed message and that crafted text is never shown.
 - Tests: backend 770 passed; frontend 159 passed + tsc + build; e2e 37 passed.
+
+## 2026-11-05 — Live end-to-end review + fixes (Claude in Cowork)
+- Tested the live Render deploy in a real browser with the sandbox merchant + buyer: login gate, every merchant
+  route without a session (401), forged tokens, rate limits (Group B live after the push), webhook spoofing / size cap,
+  checkout price tampering (server price kept), capture idempotency, tracking to PayPal, delivery validation, upload
+  type checks, settings validation + stored XSS (escaped), MCP token create / wrong confirmation / revoke, Ask
+  prompt injection (no SQL), and a real accept-claim: three simultaneous approvals -> exactly one sent, PayPal then
+  resolved it and the app showed it (webhook/poller loop verified).
+- Fixed what it found (G170); user items G171-G173.
+- Tests: backend 778 passed (new: order recovery, safe LLM errors + 429 wait, retry lock, security headers, win
+  chance, MCP code + lockout); frontend 160 passed + tsc + build; e2e 40 passed (new: no ?token= in any API request,
+  live stream over the header, MCP code shown, needs-review card, API headers, file opens via blob URL).
+- Second batch (same day): G143, G168, G169, G77 closed; G166 / G167 mostly done (see the entries). Server-side
+  Log out (MerchantSettings.sessions_valid_after; sessions now carry iat). Tests: backend 785 passed, frontend 160 +
+  tsc + build, e2e 40 passed.

@@ -89,14 +89,16 @@ DisputeShield is also an MCP server (streamable HTTP at `<backend>/mcp`, officia
 |---|---|
 | `list_open_disputes` | open disputes with the agents' latest recommendation |
 | `get_case(dispute_id)` | facts, checklist score, evidence items, the current decision |
-| `explain_recommendation(dispute_id)` | reasoning, money options, cited evidence and the **confirmation phrase** |
-| `approve_decision(decision_id, confirm, note?)` | approve and send to PayPal: `confirm` must echo the phrase exactly |
+| `explain_recommendation(dispute_id)` | reasoning, money options, cited evidence and the **confirmation phrase** (without its code) |
+| `approve_decision(decision_id, confirm, note?)` | approve and send to PayPal: `confirm` = the phrase + the code from your dashboard |
 | `reject_decision(decision_id, reason)` | reject (nothing is sent) |
 
 Rule 5 still holds: `approve_decision` runs the same approval code as the dashboard's Approve button. That means an
 atomic PROPOSED → APPROVED, PayPal re-checked first, and APPROVED checked again before any money-moving call. The
-`confirm` argument must be exactly `APPROVE <ACTION> <dispute id> <amount> <currency>` (from
-`explain_recommendation`), so an assistant can't approve blindly or approve something other than what you saw.
+`confirm` argument must be exactly `APPROVE <ACTION> <dispute id> <amount> <currency> <CODE>`. The phrase comes from
+`explain_recommendation`; the 6-character CODE is shown **only on the case page of your dashboard** and is never
+returned by any tool. So an assistant can't approve on its own (even if text in a case tried to talk it into it), or
+approve something other than what you saw. Five wrong confirmations lock MCP approval of that decision.
 
 1. In DisputeShield go to **Settings → Use from Claude (MCP)** and press **Create token**. The token is shown once;
    only its hash is stored. A new token replaces the old one, and **Revoke** turns MCP access off.
@@ -121,8 +123,8 @@ atomic PROPOSED → APPROVED, PayPal re-checked first, and APPROVED checked agai
    (Locally: `http://localhost:8000/mcp`. No spaces around `:` in the header argument; the space in `Bearer …`
    lives in the env var, as mcp-remote's README recommends for Windows.)
 3. Restart Claude Desktop and ask, for example: *"Which disputes are due this week, and what do the agents
-   recommend for the lamp case?"* Claude shows the recommendation and the confirmation phrase. Nothing is approved
-   until you confirm that phrase.
+   recommend for the lamp case?"* Claude shows the recommendation. Nothing is approved until you give Claude the
+   confirmation code from that case's page in DisputeShield.
 
 Your case data (amounts, evidence summaries, buyer emails in summaries) goes to the assistant you connect, so use
 an assistant you trust with your business data.

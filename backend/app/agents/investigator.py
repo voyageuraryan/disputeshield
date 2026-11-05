@@ -192,7 +192,9 @@ class Investigator:
         capture_id = d.transaction_id
         order = self.s.get(Order, d.order_id) if d.order_id else None
 
-        await self._capture(capture_id)
+        cap = await self._capture(capture_id)
+        if order is None and cap:
+            order = await self._recover_order(cap)
         await self._paypal_trackers(order)
         if order is None:
             self.step("No store order matched this dispute", {"transaction_id": capture_id})
@@ -261,10 +263,10 @@ class Investigator:
                   {"allowed_actions": acts, "dispute_state": raw.get("dispute_state")})
         return raw
 
-    async def _capture(self, capture_id: str | None) -> None:
+    async def _capture(self, capture_id: str | None) -> dict | None:
         if not capture_id:
             self.step("No disputed transaction id on the dispute")
-            return
+            return None
         try:
             cap = await get_capture(capture_id, client=self.client)
         except (PayPalError, ValueError, httpx.HTTPError) as exc:
@@ -273,7 +275,7 @@ class Investigator:
             self.step(f"Could not fetch transaction {capture_id} from PayPal"
                       + (" (temporary error: keeping the last good copy, marked stale)" if transient(exc) else ""),
                       {"error": str(exc)[:300], "debug_id": getattr(exc, "debug_id", None)})
-            return
+            return None
         sp = cap.get("seller_protection") or {}
         reason = (cap.get("status_details") or {}).get("reason")
         summary = (f"PayPal capture {capture_id}: {_money(cap.get('amount'))}, status {cap.get('status')}"
@@ -287,6 +289,69 @@ class Investigator:
                             summary=summary, flags=flags)
         self.step(f"Found transaction {capture_id}: {_money(cap.get('amount'))}, "
                   f"seller protection {sp.get('status', 'unknown')}", {"evidence_id": row.id})
+        return cap
+
+    async def _recover_order(self, cap: dict) -> Order | None:
+        """The store order row is missing (e.g. Render's free plan starts with an empty database after a sleep or
+        deploy), but the disputed capture points at a PayPal order this store created (invoice DS-...). Rebuild the
+        order row from PayPal's copy (items, amount, shipping address, payer) so tracking and the order itself
+        count as evidence again. Merchant-recorded delivery isn't on PayPal, so it can't come back."""
+        from app.catalog import PRODUCTS, order_item
+        from app.signals import signal_hash
+
+        pp_order_id = (((cap.get("supplementary_data") or {}).get("related_ids") or {}).get("order_id"))
+        if not pp_order_id or not str(pp_order_id).isalnum():
+            return None
+        existing = self.s.exec(select(Order).where(Order.paypal_order_id == pp_order_id)).first()
+        if existing is None:
+            try:
+                pp = await get_order(pp_order_id, client=self.client)
+            except (PayPalError, ValueError, httpx.HTTPError) as exc:
+                self.step(f"Could not fetch PayPal order {pp_order_id} to rebuild the store order",
+                          {"error": str(exc)[:300], "debug_id": getattr(exc, "debug_id", None)})
+                return None
+            pu = (pp.get("purchase_units") or [{}])[0]
+            invoice = pu.get("invoice_id") or cap.get("invoice_id")
+            if not (invoice or "").startswith("DS-"):
+                return None  # not an order this store created: never import someone else's data
+            if self.s.exec(select(Order).where(Order.invoice_id == invoice)).first():
+                return None
+            items = []
+            for it in pu.get("items") or []:
+                qty = int(it.get("quantity") or 1)
+                product = PRODUCTS.get(it.get("sku") or "")
+                items.append(order_item(product, qty) if product else
+                             {"sku": it.get("sku"), "name": it.get("name"), "quantity": qty,
+                              "unit_amount": (it.get("unit_amount") or {}).get("value"),
+                              "paypal_category": it.get("category")})
+            amount = (pu.get("amount") or cap.get("amount") or {})
+            listing = next((PRODUCTS[i["sku"]].listing for i in items if i.get("sku") in PRODUCTS), None)
+            created = pp.get("create_time") or cap.get("create_time")
+            try:
+                created_at = datetime.fromisoformat(created.replace("Z", "+00:00")) if created else None
+            except ValueError:
+                created_at = None
+            payer = pp.get("payer") or {}
+            existing = Order(paypal_order_id=pp_order_id, capture_id=cap.get("id"), invoice_id=invoice,
+                             buyer_email=payer.get("email_address"), items=items,
+                             amount=amount.get("value") or "0", currency=amount.get("currency_code") or "USD",
+                             shipping_address=(pu.get("shipping") or {}).get("address"), product_listing=listing,
+                             payer_hash=signal_hash("payer", payer.get("payer_id")),
+                             **({"created_at": created_at} if created_at else {}))
+            self.s.add(existing)
+            self.s.commit()
+            self.s.refresh(existing)
+            for t in trackers_from_order(pp):  # so the merchant can record delivery on them again
+                if t["tracking_number"] and t["status"] != "CANCELLED":
+                    self.s.add(Shipment(order_id=existing.id, tracking_number=t["tracking_number"], status="SHIPPED"))
+            self.s.commit()
+            self.step(f"Rebuilt store order #{existing.id} from PayPal order {pp_order_id} (invoice {invoice}); "
+                      "the local copy was missing. Delivery you recorded earlier isn't stored at PayPal: record it "
+                      "again if you have it", {"order_id": existing.id, "source_ref": f"paypal:order/{pp_order_id}"})
+        self.d.order_id = existing.id
+        self.s.add(self.d)
+        self.s.commit()
+        return existing
 
     async def _paypal_trackers(self, order: Order | None) -> None:
         if order is None or not order.paypal_order_id:

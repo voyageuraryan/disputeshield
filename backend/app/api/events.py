@@ -3,11 +3,11 @@
 GET /disputes/{id}/events (and /api/disputes/{id}/events for the Vite proxy)
 - Each step is one SSE message: `id: <step id>`, `event: step`, `data: <StepOut JSON>`.
 - On connect it first sends the steps the client hasn't seen, then `event: ready`: after `Last-Event-ID` (sent automatically by
-  EventSource on reconnect) or `?after=<step id>`; with neither, the full backlog.
+  the dashboard sends it on reconnect) or `?after=<step id>`; with neither, the full backlog.
 - Then pushes new rows as soon as they're committed in this process (events_bus wake-up), with a slow
   safety-net poll every POLL_S; a `: ping` comment every HEARTBEAT_S keeps proxies
   from closing an idle stream; `retry: 3000` tells the browser how fast to reconnect.
-- Streams end after MAX_SECONDS (EventSource reconnects transparently with Last-Event-ID), and when the
+- Streams end after MAX_SECONDS (the dashboard reconnects with Last-Event-ID), and when the
   client disconnects. Single-process app: polling SQLite is simpler than a pub/sub and plenty fast here.
 """
 

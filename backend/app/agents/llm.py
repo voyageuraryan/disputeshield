@@ -52,7 +52,25 @@ last_usage: ContextVar[dict | None] = ContextVar("last_usage", default=None)
 
 
 class LLMError(Exception):
-    pass
+    """str(exc) is safe to show the merchant / buyer / timeline (no provider account ids, raw bodies or key hints);
+    `detail` keeps the provider's full answer for the server log only. `retry_after`: seconds a 429 asked for."""
+
+    def __init__(self, message: str, *, detail: str | None = None, retry_after: float | None = None):
+        super().__init__(message)
+        self.detail = detail or message
+        self.retry_after = retry_after
+
+
+RATE_LIMIT_WAIT_MAX_S = 20.0  # all providers failed and one was only rate limited for <= this long: wait, retry once
+CONCURRENT_CALLS = 2          # in-process cap: a cold start re-analyses every case at once (Groq free: 8K TPM)
+_calls = asyncio.Semaphore(CONCURRENT_CALLS)
+
+_PUBLIC_STATUS = {401: "API key rejected (check the key on the server)", 403: "API key not allowed for this model",
+                  404: "model not found", 413: "request too large", 429: "rate limited, try again shortly"}
+
+
+def _public_status(code: int) -> str:
+    return _PUBLIC_STATUS.get(code) or ("temporarily unavailable" if code >= 500 else f"request refused ({code})")
 
 
 class StructuredLLM(Protocol):
@@ -104,13 +122,22 @@ def _parse(text: str | None, output_model: type[T], provider: str) -> T:
 def _http_error(provider: str, exc: Exception) -> LLMError:
     if isinstance(exc, httpx.HTTPStatusError):
         r = exc.response
+        retry_after = None
+        if r.status_code == 429:
+            try:
+                retry_after = float(r.headers.get("retry-after") or "")
+            except ValueError:
+                retry_after = None
         hint = f" retry-after={r.headers['retry-after']}s" if r.status_code == 429 and "retry-after" in r.headers else ""
         try:
-            detail = r.json()
+            body = r.json()
         except ValueError:
-            detail = r.text[:300]
-        return LLMError(f"{provider}: HTTP {r.status_code}{hint}: {detail}")
-    return LLMError(f"{provider}: {type(exc).__name__}: {exc}")
+            body = r.text[:300]
+        return LLMError(f"{provider}: HTTP {r.status_code}: {_public_status(r.status_code)}",
+                        detail=f"{provider}: HTTP {r.status_code}{hint}: {body}", retry_after=retry_after)
+    if isinstance(exc, httpx.TimeoutException):
+        return LLMError(f"{provider}: timed out", detail=f"{provider}: {type(exc).__name__}: {exc}")
+    return LLMError(f"{provider}: connection failed", detail=f"{provider}: {type(exc).__name__}: {exc}")
 
 
 async def groq_call(*, system: str, user: str, output_model: type[T], api_key: str, model: str) -> T:
@@ -203,16 +230,26 @@ async def structured_call(*, system: str, user: str, output_model: type[T]) -> T
     chain = providers()
     if not chain:
         raise LLMError("no LLM provider configured: set GROQ_API_KEY and/or GEMINI_API_KEY in backend/.env")
-    errors = []
-    for name, model, call, key in chain:
-        try:
-            result = await call(system=system, user=user, output_model=output_model, api_key=key, model=model)
-        except LLMError as exc:
-            log.warning("LLM provider %s (%s) failed: %s", name, model, exc)
-            errors.append(str(exc))
+    for round_ in range(2):
+        errors: list[LLMError] = []
+        async with _calls:
+            for name, model, call, key in chain:
+                try:
+                    result = await call(system=system, user=user, output_model=output_model, api_key=key, model=model)
+                except LLMError as exc:
+                    log.warning("LLM provider %s (%s) failed: %s", name, model, exc.detail)
+                    errors.append(exc)
+                    continue
+                last_provider.set(f"{name}:{model}")
+                log.info("LLM answered by %s (%s)", name, model)
+                return result
+        waits = [e.retry_after for e in errors if e.retry_after is not None]
+        if round_ == 0 and waits and min(waits) <= RATE_LIMIT_WAIT_MAX_S:
+            # Seen live on Render: a cold start re-analysed every case at once and Groq's free 8K TPM answered 429
+            # "try again in 8.6s" while the fallback was down, so a case went to Needs review. Wait once instead.
+            log.info("LLM rate limited; waiting %.1fs and trying once more", min(waits))
+            await asyncio.sleep(min(waits) + 0.5)
             continue
-        last_provider.set(f"{name}:{model}")
-        log.info("LLM answered by %s (%s)", name, model)
-        return result
+        break
     last_provider.set(None)
-    raise LLMError(" | ".join(errors))
+    raise LLMError(" | ".join(str(e) for e in errors), detail=" | ".join(e.detail for e in errors))

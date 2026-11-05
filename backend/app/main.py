@@ -33,7 +33,7 @@ _TOKEN_IN_URL = re.compile(r"((?:^|[?&])(?:token|t)=)[^&\s]+")
 
 
 class _RedactTokenFilter(logging.Filter):
-    """Strip session/link tokens from uvicorn access-log lines (SSE and file URLs still carry ?token=)."""
+    """Strip session/link tokens from uvicorn access-log lines (the buyer help link carries ?t=; old merchant links may still send ?token=)."""
 
     def filter(self, record: logging.LogRecord) -> bool:
         args = record.args
@@ -108,6 +108,36 @@ def docs_enabled() -> bool:
 _docs = docs_enabled()
 app = FastAPI(title="DisputeShield", lifespan=lifespan, docs_url="/docs" if _docs else None,
               redoc_url="/redoc" if _docs else None, openapi_url="/openapi.json" if _docs else None)
+SECURITY_HEADERS = [
+    (b"x-content-type-options", b"nosniff"),        # an uploaded file is served only as its sniffed-at-upload type
+    (b"x-frame-options", b"DENY"),                  # nothing from the API is meant to be framed (clickjacking)
+    (b"content-security-policy", b"frame-ancestors 'none'"),
+    (b"referrer-policy", b"no-referrer"),
+]
+
+
+class SecurityHeaders:
+    """Pure ASGI (not BaseHTTPMiddleware) so streamed responses (SSE, files) keep streaming; adds the headers to every
+    HTTP response that doesn't set them itself (security review 2026-11-05)."""
+
+    def __init__(self, inner):  # noqa: ANN001
+        self.inner = inner
+
+    async def __call__(self, scope, receive, send):  # noqa: ANN001
+        if scope["type"] != "http":
+            return await self.inner(scope, receive, send)
+
+        async def send_with_headers(message):  # noqa: ANN001
+            if message["type"] == "http.response.start":
+                have = {k.lower() for k, _ in message.get("headers", [])}
+                message["headers"] = list(message.get("headers", [])) + [h for h in SECURITY_HEADERS
+                                                                         if h[0] not in have]
+            await send(message)
+
+        await self.inner(scope, receive, send_with_headers)
+
+
+app.add_middleware(SecurityHeaders)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=get_settings().cors_origin_list,

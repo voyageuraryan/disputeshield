@@ -800,3 +800,66 @@ def test_settings_alerts_and_mcp_token(stack, page):
     alerts.locator("button:has-text('Save')").click()
     page.wait_for_selector("text=Email alerts off.")
     assert not real_errors(page)
+
+
+def test_session_token_never_in_urls_mcp_code_and_needs_review_card(auth_stack, browser):
+    """Security review 2026-11-05: live streams and files use the session header (never ?token=); the MCP confirmation
+    code is shown on the case page; a case the agents couldn't finish offers Re-analyse instead of 'still working'."""
+    ctx = browser.new_context()
+    pg = ctx.new_page()
+    urls: list[str] = []
+    pg.on("request", lambda r: urls.append(r.url))
+    tok = auth_stack.session_token()
+    pg.goto(f"{auth_stack.base}/auth/callback#token={tok}&next=%2Fcases%2FPP-DEMO-A")
+    pg.wait_for_url("**/cases/PP-DEMO-A")
+    pg.wait_for_selector("text=Live")  # the fetch() stream connected with the Authorization header
+    code = pg.locator("[data-testid='mcp-code'] span.font-mono").inner_text()
+    assert re.fullmatch(r"[A-Z2-7]{6}", code)
+    # a step written by another process still arrives live over the header-authenticated stream
+    auth_stack.sql("insert into agent_steps (dispute_id, agent, action, created_at) values (?,?,?,datetime('now'))",
+                   did(auth_stack, "PP-DEMO-A"), "investigator", "Header stream step 42")
+    pg.wait_for_selector("text=Header stream step 42", timeout=8000)
+
+    auth_stack.sql("update disputes set agent_status='NEEDS_HUMAN' where paypal_dispute_id='PP-DEMO-E'")
+    pg.goto(f"{auth_stack.base}/cases/PP-DEMO-E")
+    pg.wait_for_selector("text=couldn't finish a recommendation")
+    assert pg.locator("button:has-text('Re-analyse')").count() >= 1
+    assert pg.locator("text=The agents are still working on this case").count() == 0
+
+    api = [u for u in urls if f":{auth_stack.api_port}/" in u]
+    assert api and not [u for u in api if "token=" in u], [u for u in api if "token=" in u]
+    ctx.close()
+
+
+def test_api_sends_security_headers(auth_stack, browser):
+    ctx = browser.new_context()
+    r = ctx.request.get(f"http://localhost:{auth_stack.api_port}/health")
+    assert r.headers["x-frame-options"] == "DENY" and r.headers["x-content-type-options"] == "nosniff"
+    # the old ?token= form is refused now
+    tok = auth_stack.session_token()
+    assert ctx.request.get(f"http://localhost:{auth_stack.api_port}/api/settings?token={tok}").status == 401
+    assert ctx.request.get(f"http://localhost:{auth_stack.api_port}/api/settings",
+                           headers={"Authorization": f"Bearer {tok}"}).status == 200
+    ctx.close()
+
+
+def test_merchant_file_opens_with_the_session_header(auth_stack, browser):
+    """'Open the file' fetches the upload with the Authorization header and shows it from a blob: URL."""
+    ctx = browser.new_context()
+    tok = auth_stack.session_token()
+    r = ctx.request.post(f"http://localhost:{auth_stack.api_port}/api/disputes/PP-DEMO-C/uploads",
+                         headers={"Authorization": f"Bearer {tok}"},
+                         multipart={"evidence_type": "tracking",
+                                    "file": {"name": "label.png", "mimeType": "image/png", "buffer": PNG_1PX}})
+    assert r.status == 201, r.text()
+    pg = ctx.new_page()
+    pg.goto(f"{auth_stack.base}/auth/callback#token={tok}&next=%2Fcases%2FPP-DEMO-C")
+    pg.wait_for_url("**/cases/PP-DEMO-C")
+    link = pg.get_by_role("link", name="Open the file")
+    link.wait_for()
+    assert "token=" not in (link.get_attribute("href") or "")
+    with ctx.expect_page() as new:
+        link.click()
+    opened = new.value
+    opened.wait_for_url(re.compile(r"^blob:"), timeout=8000)
+    ctx.close()

@@ -33,6 +33,12 @@ describe("Deadlines mapping", () => {
     expect(review.startDate.toISOString()).toBe("2026-11-03T09:00:00.000Z");
     expect(review.endDate.getTime()).toBe(NOW + REVIEW_DAYS * DAY);
   });
+  it("PayPal reviewing / waiting on the buyer with nothing asked of the seller: no 'Gathering evidence' bar", () => {
+    const review = toSchedule([row({ status: "UNDER_REVIEW", seller_response_due: null })], [], NOW).bars;
+    expect(review.map((b) => [b.kind, b.name])).toEqual([["review", "PayPal reviewing"]]);
+    const buyer = toSchedule([row({ status: "WAITING_FOR_BUYER_RESPONSE", seller_response_due: null })], [], NOW).bars;
+    expect(buyer.map((b) => b.name)).toEqual(["Waiting for the buyer"]);
+  });
   it("adds the buyer troubleshooting window", () => {
     const w: TroubleshootingWindow[] = [{ dispute_id: "PP-1", status: "AWAITING_PROOF", start: "2026-11-02T10:00:00Z", end: "2026-11-06T12:00:00Z", finished: false }];
     const ts = toSchedule([row({})], w, NOW).bars.find((b) => b.kind === "ts")!;

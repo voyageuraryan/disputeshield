@@ -226,14 +226,18 @@ async def test_approve_via_mcp_needs_the_exact_confirmation(mcp, engine, snad_ca
     send = mcp.mock.post(f"{DISPUTES_URL}/PP-D-OFFER/make-offer").respond(200, json={"links": []})
 
     err, info, _ = call(mcp, token, "explain_recommendation", dispute_id="PP-D-OFFER")
-    phrase = info["confirmation_phrase"]
-    assert not err and phrase == f"APPROVE SETTLE_PARTIAL PP-D-OFFER {dec.offer_amount:.2f} USD"
+    template = info["confirmation_phrase"]
+    assert not err and template == f"APPROVE SETTLE_PARTIAL PP-D-OFFER {dec.offer_amount:.2f} USD <CODE>"
+    # the code is never given to the assistant: only the dashboard (merchant session) shows it
+    code = mcp.get(f"/decisions/{dec.id}").json()["mcp_code"]
+    assert code and len(code) == 6 and code not in str(info)
+    phrase = template.replace("<CODE>", code)
     assert info["decision_id"] == dec.id and info["options"]
     assert info["draft_note"] == dec.draft_note and "draft_note" in info["how_to_approve"]  # merchant sees what's sent
 
-    for wrong in ("yes", "APPROVE FIGHT PP-D-OFFER 200.00 USD", f"APPROVE SETTLE_PARTIAL PP-D-OFFER 200.00 USD", ""):
+    for wrong in ("yes", template.replace(" <CODE>", ""), template, f"APPROVE SETTLE_PARTIAL PP-D-OFFER 200.00 USD {code}"):
         err, _, text = call(mcp, token, "approve_decision", decision_id=dec.id, confirm=wrong)
-        assert err and "confirmation doesn't match" in text and phrase in text
+        assert err and "confirmation doesn't match" in text and code not in text  # never echoes the answer
     assert send.call_count == 0
     with Session(engine) as s:
         assert s.get(Decision, dec.id).status == DecisionStatus.PROPOSED            # nothing happened
@@ -275,6 +279,8 @@ async def test_mcp_read_tools(mcp, engine, snad_case):
     for e in case["evidence"]:  # buyer-written text is labelled as data for the assistant
         assert e["trust"] == ("untrusted_buyer_text" if e["type"] in ("buyer_message", "troubleshooting_record")
                               else "system")
+    import json as _json  # G143: no buyer email anywhere in what the assistant receives
+    assert "@" not in _json.dumps(case)
     err, _, text = call(mcp, token, "get_case", dispute_id="NOPE")
     assert err and "unknown dispute" in text
 
@@ -306,3 +312,27 @@ def test_mcp_token_expires_after_7_days_and_changes_are_audited(mcp, engine):
     assert all(r.who == "merchant@business.example.com" for r in rows)
     assert rows[1].detail["settle_threshold"][1] == "42.00"
     assert rows[1].detail["alerts"][0]["email_to"] is None and rows[1].detail["alerts"][1]["email_to"] == "ops@example.com"
+
+
+async def test_mcp_wrong_confirmations_lock_the_decision(mcp, engine, snad_case):
+    dec = await _proposed_partial(mcp, engine, snad_case)
+    token = mcp.post("/api/settings/mcp-token").json()["token"]
+    send = mcp.mock.post(f"{DISPUTES_URL}/PP-D-OFFER/make-offer").respond(200, json={"links": []})
+    code = mcp.get(f"/decisions/{dec.id}").json()["mcp_code"]
+    right = f"APPROVE SETTLE_PARTIAL PP-D-OFFER {dec.offer_amount:.2f} USD {code}"
+    for i in range(5):
+        err, _, _ = call(mcp, token, "approve_decision", decision_id=dec.id, confirm=f"{right[:-6]}AAAAA{i}")
+        assert err
+    err, _, text = call(mcp, token, "approve_decision", decision_id=dec.id, confirm=right)
+    assert err and "too many wrong confirmations" in text and send.call_count == 0
+
+
+async def test_mcp_note_with_a_link_is_refused(mcp, engine, snad_case):
+    dec = await _proposed_partial(mcp, engine, snad_case)
+    token = mcp.post("/api/settings/mcp-token").json()["token"]
+    send = mcp.mock.post(f"{DISPUTES_URL}/PP-D-OFFER/make-offer").respond(200, json={"links": []})
+    code = mcp.get(f"/decisions/{dec.id}").json()["mcp_code"]
+    right = f"APPROVE SETTLE_PARTIAL PP-D-OFFER {dec.offer_amount:.2f} USD {code}"
+    err, _, text = call(mcp, token, "approve_decision", decision_id=dec.id, confirm=right,
+                        note="Refund offered, details at https://evil.example/x")
+    assert err and "link" in text and send.call_count == 0

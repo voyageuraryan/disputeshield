@@ -13,6 +13,7 @@ Safety (rule 5 + real-world races):
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -95,6 +96,8 @@ class DecisionOut(BaseModel):
     offer_amount: Decimal | None = None      # Phase 13: SETTLE_PARTIAL offer (proposed, or as approved)
     options: list[dict] | None = None        # calculator output: Fight / Full refund / Partial offer / Replacement
     can_retry: bool
+    # Shown only to the signed-in merchant: the code an AI assistant (MCP) needs to approve this decision
+    mcp_code: str | None = None
 
 
 def _already_retried(session: Session, d: Decision) -> bool:
@@ -108,10 +111,13 @@ def retryable(session: Session, d: Decision) -> bool:
 
 
 def _out(d: Decision, session: Session | None = None) -> DecisionOut:
-    fields = set(DecisionOut.model_fields) - {"status", "can_retry"}
+    from app.mcp_server import confirmation_code
+
+    fields = set(DecisionOut.model_fields) - {"status", "can_retry", "mcp_code"}
     can = retryable(session, d) if session is not None else (
         d.status == DecisionStatus.FAILED and definitely_not_processed(d.paypal_response))
-    return DecisionOut(**d.model_dump(include=fields), status=d.status.value, can_retry=can)
+    code = confirmation_code(d) if d.status == DecisionStatus.PROPOSED and d.recommendation in SENDABLE else None
+    return DecisionOut(**d.model_dump(include=fields), status=d.status.value, can_retry=can, mcp_code=code)
 
 
 def _get(session: Session, decision_id: int) -> tuple[Decision, Dispute]:
@@ -228,8 +234,10 @@ async def approve_core(session: Session, engine: Engine, paypal: PayPalClient, d
     offer = _offer_for(session, d, action, body.offer_amount)
     await _refresh_from_paypal(session, dispute, paypal)
     session.refresh(d)
-    if dispute.status == "RESOLVED" or d.status != DecisionStatus.PROPOSED:
+    if dispute.status == "RESOLVED":  # (the refresh also retires its PROPOSED decisions)
         raise HTTPException(409, "the dispute is already resolved at PayPal; nothing can be sent")
+    if d.status != DecisionStatus.PROPOSED:  # e.g. a second click approved it while PayPal was being re-checked
+        raise HTTPException(409, f"decision is {d.status.value}; only PROPOSED decisions can be approved or rejected")
 
     same_offer = offer is None or offer == d.offer_amount
     note = body.note or (d.draft_note if action == d.recommendation and same_offer else None)
@@ -286,6 +294,18 @@ async def retry(decision_id: int, body: ApproveIn | None = None, session: Sessio
     """Retry a FAILED decision that PayPal definitely did not process. This call is the merchant's
     approval of the new attempt (optionally with a different action or note)."""
     body = (body or ApproveIn()).model_copy(update={"approved_by": _who(merchant)})
+    lock = _RETRY_LOCKS.setdefault(decision_id, asyncio.Lock())
+    if lock.locked():  # two clicks at once: both would pass the "already retried" check below (one process)
+        raise HTTPException(409, f"decision #{decision_id} is already being retried")
+    async with lock:
+        return await _retry(decision_id, body, session, engine, paypal)
+
+
+_RETRY_LOCKS: dict[int, asyncio.Lock] = {}
+
+
+async def _retry(decision_id: int, body: ApproveIn, session: Session, engine: Engine,
+                 paypal: PayPalClient) -> DecisionOut:
     old, dispute = _get(session, decision_id)
     if old.status != DecisionStatus.FAILED:
         raise HTTPException(409, f"only FAILED decisions can be retried (this one is {old.status.value})")

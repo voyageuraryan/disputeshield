@@ -113,6 +113,21 @@ services:
       # (fromService `host` is the private-network hostname, which browsers can't reach.)
       - key: VITE_API_BASE_URL
         sync: false
+    # Security review 2026-11-05: no framing of the dashboard (clickjacking); never send the page's path/query
+    # (the buyer help link carries its token in ?t=) to other sites. A full CSP stays future work (PayPal SDK, Bryntum).
+    headers:
+      - path: /*
+        name: X-Frame-Options
+        value: DENY
+      - path: /*
+        name: Content-Security-Policy
+        value: "frame-ancestors 'none'"
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
     routes:
       - type: rewrite
         source: /*

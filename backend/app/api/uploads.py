@@ -5,7 +5,7 @@
                                                      -> stored, read by Gemini (suggested fields), status PENDING
   POST   /api/disputes/{id}/uploads/{uid}/confirm    JSON fields the merchant confirmed/edited -> CONFIRMED, fresh run
   DELETE /api/disputes/{id}/uploads/{uid}            remove (file deleted); a fresh run if it was evidence
-  GET    /api/disputes/{id}/uploads/{uid}/file       the stored file (?token= works for <img>/<a>)
+  GET    /api/disputes/{id}/uploads/{uid}/file       the stored file (the dashboard fetches it with the session header)
 Nothing becomes evidence before the merchant confirms; the new proposal supersedes the old PROPOSED one.
 """
 

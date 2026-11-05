@@ -156,6 +156,7 @@ export type Decision = {
   offer_amount?: string | null; // Phase 13: SETTLE_PARTIAL offer
   options?: MoneyOption[] | null; // calculator: Fight / Full refund / Partial offer / Replacement
   can_retry: boolean;
+  mcp_code?: string | null; // only for the signed-in merchant: an AI assistant (MCP) needs it to approve
 };
 
 export type Step = { id: number; agent: string; action: string; detail: Record<string, unknown> | null; created_at: string };
@@ -267,7 +268,8 @@ export const disputesApi = {
     req<Decision>(`/api/decisions/${id}/reject`, { method: "POST", body: JSON.stringify({ reason }) }),
   retry: (id: number, body: ApproveBody) =>
     req<Decision>(`/api/decisions/${id}/retry`, { method: "POST", body: JSON.stringify(body) }),
-  pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf?token=${encodeURIComponent(getToken() ?? "")}`,
+  // Security review 2026-11-05: no session token in URLs (history, proxies, logs): files are fetched with the header
+  pdfUrl: (id: number) => `${API_BASE}/api/decisions/${id}/evidence.pdf`,
   source: (evidenceId: number) => req<EvidenceSource>(`/api/evidence/${evidenceId}/source`),
   reanalyze: (id: string) =>
     req<{ queued: boolean; run_key: string }>(`/api/disputes/${encodeURIComponent(id)}/reanalyze`, { method: "POST" }),
@@ -305,8 +307,7 @@ export const uploadsApi = {
   confirm: (id: string, uploadId: number, body: ConfirmBody) =>
     req<{ upload: MerchantUpload; run: RunInfo }>(`${uploadsPath(id)}/${uploadId}/confirm`, { method: "POST", body: JSON.stringify(body) }),
   remove: (id: string, uploadId: number) => req<RunInfo>(`${uploadsPath(id)}/${uploadId}`, { method: "DELETE" }),
-  fileUrl: (id: string, uploadId: number) =>
-    `${API_BASE}${uploadsPath(id)}/${uploadId}/file?token=${encodeURIComponent(getToken() ?? "")}`,
+  fileUrl: (id: string, uploadId: number) => `${API_BASE}${uploadsPath(id)}/${uploadId}/file`,
 };
 
 // ---- settings & live events --------------------------------------------------------------
@@ -359,16 +360,87 @@ export const settingsApi = {
     req<MerchantSettings>("/api/settings", { method: "PUT", body: JSON.stringify(patch) }),
 };
 
-// EventSource can't send headers, so the session token goes in the query string.
-export const eventsUrl = (disputeId: string) =>
-  `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/events?token=${encodeURIComponent(getToken() ?? "")}`;
+// Live streams are read with fetch() (not EventSource) so the session token travels in a header, never in a URL.
+export const eventsUrl = (disputeId: string) => `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/events`;
 
-export const newDisputesUrl = () => `${API_BASE}/api/events/disputes?token=${encodeURIComponent(getToken() ?? "")}`;
+export const newDisputesUrl = () => `${API_BASE}/api/events/disputes`;
+
+const authHeader = (): Record<string, string> => (getToken() ? { Authorization: `Bearer ${getToken()}` } : {});
+
+/** A merchant file (evidence PDF, upload, buyer proof) as a blob, fetched with the session header. */
+export async function fetchAuthedBlob(url: string): Promise<Blob> {
+  const res = await fetch(url, { headers: authHeader() });
+  if (res.status === 401) {
+    goToLogin("Your session ended. Please log in again.");
+    throw new ApiError("401: login required", 401, null);
+  }
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new ApiError(`${res.status}: ${errorText(body?.detail) || "couldn't load the file"}`, res.status, body?.detail);
+  }
+  return res.blob();
+}
+
+/** Open a merchant file in a new tab. The tab is opened synchronously in the click (popup blockers), then pointed at
+ * a blob: URL once the file has arrived with the session header. */
+export function openAuthed(url: string): void {
+  const w = window.open("", "_blank");
+  fetchAuthedBlob(url)
+    .then((blob) => {
+      const u = URL.createObjectURL(blob);
+      if (w) w.location.href = u;
+      else window.location.href = u;
+      setTimeout(() => URL.revokeObjectURL(u), 60_000);
+    })
+    .catch((e) => {
+      if (w) w.close();
+      alertError(e);
+    });
+}
+
+function alertError(e: unknown) {
+  window.dispatchEvent(new CustomEvent("disputeshield:file-error", { detail: e instanceof Error ? e.message : String(e) }));
+}
+
+export type StreamEvent = { event: string; data: string; id?: string };
+
+/** One connection to a merchant SSE stream (fetch + header). Resolves when the server ends it or the connection drops;
+ * rejects with ApiError on 4xx so the caller can stop. `lastEventId` replays what was missed (server supports it). */
+export async function merchantStream(url: string, onEvent: (e: StreamEvent) => void, signal: AbortSignal,
+                                     lastEventId?: string, onOpen?: () => void): Promise<void> {
+  const res = await fetch(url, {
+    headers: { ...authHeader(), Accept: "text/event-stream", ...(lastEventId ? { "Last-Event-ID": lastEventId } : {}) },
+    signal,
+  });
+  if (res.status === 401) {
+    goToLogin("Your session ended. Please log in again.");
+    throw new ApiError("401: login required", 401, null);
+  }
+  if (!res.ok || !res.body) throw new ApiError(`stream refused (${res.status})`, res.status, null);
+  onOpen?.();
+  const { parseSSE } = await import("./help/logic");
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    if (done) return;
+    buf += decoder.decode(value, { stream: true });
+    const { events, rest } = parseSSE(buf);
+    buf = rest;
+    for (const e of events) onEvent(e);
+  }
+}
 
 export const authApi = {
   config: () => req<{ mode: "paypal" | "off" }>("/api/auth/config"),
   me: () => req<{ email: string | null; name: string | null; expires_at: number | null }>("/api/auth/me"),
   startUrl: (next: string) => `${API_BASE}/api/auth/paypal/start?next=${encodeURIComponent(next)}`,
+  /** G167: ends every session server-side (best effort: the local token is cleared either way). */
+  logout: () =>
+    fetch(`${API_BASE}/api/auth/logout`, { method: "POST", headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {} })
+      .then(() => undefined)
+      .catch(() => undefined),
 };
 
 // ---- store back-office: orders, tracking, delivery (merchant only) ---------------------------
@@ -477,7 +549,7 @@ export const troubleshootingApi = {
       body: JSON.stringify({ resume: true }),
     }),
   proofUrl: (disputeId: string, proofId: number) =>
-    `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/proofs/${proofId}?token=${encodeURIComponent(getToken() ?? "")}`,
+    `${API_BASE}/api/disputes/${encodeURIComponent(disputeId)}/troubleshooting/proofs/${proofId}`,
 };
 
 export type TSStepView = {

@@ -227,6 +227,8 @@ class MerchantSettings(SQLModel, table=True):
     alert_on_deadlines: Optional[bool] = None
     mcp_token_hash: Optional[str] = Field(default=None, max_length=64)
     mcp_token_created_at: Optional[datetime] = None
+    # G167: "Log out" ends every merchant session issued before this moment (server-side, not just this browser)
+    sessions_valid_after: Optional[datetime] = None
 
 
 # ---- Phase 9A: buyer troubleshooting portal ------------------------------------

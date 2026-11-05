@@ -179,7 +179,9 @@ async def test_llm_failure_then_success(pp, engine, demo):
     llm = ScriptedLLM(LLMError("model refused (category=None)"), rec("FIGHT", "high", ids_of(case, "tracking")))
     result, steps, decisions, _ = await run_analyst(engine, did, case, llm)
     assert result.recommendation.action == "FIGHT" and len(decisions) == 1
-    assert "LLM call failed: model refused" in llm.calls[1]["user"]
+    # a provider failure isn't fed back into the prompt (the model can't fix an outage); it's on the timeline
+    assert "LLM call failed" not in llm.calls[1]["user"] and "model refused" not in llm.calls[1]["user"]
+    assert any("AI provider unavailable (attempt 1 of 2): model refused" in s for s in steps)
 
 
 @respx.mock

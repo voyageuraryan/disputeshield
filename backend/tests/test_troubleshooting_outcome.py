@@ -482,3 +482,17 @@ async def test_safety_case_gets_the_review_item_from_code(engine):
         r = await analyze(s, d, case, llm=llm)
     assert not r.needs_human and r.recommendation.missing_items == [SAFETY_REVIEW_ITEM]
     assert r.baseline.why == SAFETY_WHY
+
+
+def test_suspect_proof_cannot_justify_a_move_toward_settling():
+    """G166: only a defect proven with clean proof may justify the one-step move toward settling."""
+    from app.rules.evidence_rules import Baseline
+
+    for flags, allowed in ((("ts_defect_confirmed",), True), (("ts_defect_confirmed", "ts_proof_suspect"), False)):
+        case = snad(ts(*flags))
+        c = evaluate(case)
+        b = Baseline(action="GATHER_MORE", why="test")
+        settle = Recommendation(action="SETTLE", confidence="medium", reasoning="The buyer proved the fault.",
+                                cited_evidence_ids=[9], missing_items=[], economic_note="x")
+        moved = [p for p in validate(settle, case, b, c) if "must cite a buyer_message or listing" in p]
+        assert (moved == []) is allowed

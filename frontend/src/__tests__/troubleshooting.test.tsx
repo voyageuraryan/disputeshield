@@ -354,10 +354,16 @@ describe("case page troubleshooting card", () => {
         },
       },
     ];
+    replies["GET /api/disputes/PP-1/troubleshooting/proofs/4"] = [{ status: 200, body: "jpeg-bytes" }];
+    vi.stubGlobal("URL", Object.assign(URL, { createObjectURL: () => "blob:proof-4", revokeObjectURL: () => undefined }));
     await act(async () => root.render(<TroubleshootingCard detail={detail()} />));
     await flush();
+    await flush();
     const img = el.querySelector('img[alt="Buyer\'s photo 1 for step 1"]') as HTMLImageElement;
-    expect(img.src).toContain("/troubleshooting/proofs/4");
+    // fetched with the session header and shown from a blob: URL; the token is never put in the URL
+    expect(img.src).toBe("blob:proof-4");
+    const proofReq = requests.find((r) => r.url.includes("/troubleshooting/proofs/4"))!;
+    expect(proofReq.url).not.toContain("token=");
     expect(el.textContent).toContain("Check: taken before the dispute was opened; same file as case PP-9");
     expect(el.textContent).toContain("removed: GPS location");
     expect(el.textContent).toContain("AI look (advisory only): shows the step = no");

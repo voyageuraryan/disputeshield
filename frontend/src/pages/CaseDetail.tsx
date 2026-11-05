@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { AuthedImg, AuthedLink } from "../Authed";
 import { Link, useParams } from "react-router-dom";
 import {
   ApiError,
@@ -206,13 +207,13 @@ function TroubleshootingDetails({ id, st, onChange }: { id: string; st: Troubles
                   .filter((p) => p.step_id === x.id)
                   .map((p, n) => (
                     <div key={p.id} className="ml-4 mt-1 flex gap-2">
-                      <a href={troubleshootingApi.proofUrl(id, p.id)} target="_blank" rel="noopener noreferrer" className="shrink-0 text-indigo-700 hover:underline">
+                      <AuthedLink href={troubleshootingApi.proofUrl(id, p.id)} className="shrink-0 text-indigo-700 hover:underline">
                         {p.mime.startsWith("image") ? (
-                          <img src={troubleshootingApi.proofUrl(id, p.id)} alt={`Buyer's photo ${n + 1} for step ${x.ordinal}`} className="h-16 w-16 rounded border border-slate-200 object-cover" loading="lazy" />
+                          <AuthedImg src={troubleshootingApi.proofUrl(id, p.id)} alt={`Buyer's photo ${n + 1} for step ${x.ordinal}`} className="h-16 w-16 rounded border border-slate-200 object-cover" />
                         ) : (
                           <span className="flex h-16 w-16 items-center justify-center rounded border border-slate-200 bg-slate-50 text-xs">▶ video {n + 1}</span>
                         )}
-                      </a>
+                      </AuthedLink>
                       <div className="min-w-0">
                         <span className="text-xs font-medium">{p.mime.startsWith("video") ? "video" : "photo"} {n + 1}</span>
                         <ProofFlags p={p} />
@@ -829,6 +830,12 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
       )}
       {d.status === "REJECTED" && <p className="mt-3 text-sm text-slate-600">You rejected this recommendation.</p>}
       {d.status === "SUPERSEDED" && <p className="mt-3 text-sm text-slate-600">Replaced by a newer analysis or closed because the case was resolved.</p>}
+      {d.status === "PROPOSED" && d.mcp_code && (
+        <p className="mt-3 text-xs text-slate-500" data-testid="mcp-code">
+          Approving from an AI assistant (MCP)? Give it this confirmation code only if you agree:{" "}
+          <span className="font-mono font-semibold tracking-wider text-slate-800">{d.mcp_code}</span>
+        </p>
+      )}
 
       {actionable && (
         <div className="mt-4 space-y-3 border-t pt-4">
@@ -898,9 +905,9 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
             </p>
           )}
           {action === "FIGHT" && !escalating && d.action_request?.endpoint !== "accept-claim" && d.status === "PROPOSED" && d.action_request && (
-            <a href={disputesApi.pdfUrl(d.id)} target="_blank" rel="noreferrer" className="block text-xs font-medium text-indigo-700 hover:underline">
+            <AuthedLink href={disputesApi.pdfUrl(d.id)} className="block text-xs font-medium text-indigo-700 hover:underline">
               Preview the evidence PDF →
-            </a>
+            </AuthedLink>
           )}
 
           {confirming ? (
@@ -1176,7 +1183,19 @@ export default function CaseDetail() {
             <Recommendation key={`${d.id}-${d.status}`} d={d} detail={detail} onDone={load} />
           ) : (
             <Card title="Recommendation">
-              <p className="text-sm text-slate-500">The agents are still working on this case…</p>
+              {detail.dispute.status === "RESOLVED" || detail.dispute.agent_status === "RESOLVED" ? (
+                <p className="text-sm text-slate-500">This dispute is closed at PayPal; there is nothing to decide.</p>
+              ) : detail.dispute.agent_status === "NEEDS_HUMAN" ? (
+                <div className="space-y-2 text-sm">
+                  <p className="text-slate-700">
+                    The agents couldn&apos;t finish a recommendation for this case. The timeline shows why (for
+                    example, the AI service was busy). Nothing was sent to PayPal.
+                  </p>
+                  <ReanalyzeButton disputeId={detail.dispute.paypal_dispute_id} onDone={load} primary />
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500">The agents are still working on this case…</p>
+              )}
             </Card>
           )}
           <History decisions={detail.decisions} currentId={d?.id} />

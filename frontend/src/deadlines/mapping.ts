@@ -32,6 +32,17 @@ export function toSchedule(rows: DisputeRow[], windows: TroubleshootingWindow[],
     const due = at(r.seller_response_due);
     const sent = at(r.responded_at);
     const start = opened ?? (due ? new Date(Math.min(due.getTime(), now) - DAY) : new Date(now - DAY));
+    // Nothing is asked of the seller right now (PayPal is reviewing, or waiting on the buyer): don't call it
+    // "Gathering evidence" (seen live: chargebacks UNDER_REVIEW with no due date).
+    const waiting = !sent && !due && (r.status === "UNDER_REVIEW" || r.status === "WAITING_FOR_BUYER_RESPONSE");
+    if (waiting) {
+      bar(r, "review", r.status === "UNDER_REVIEW" ? "PayPal reviewing" : "Waiting for the buyer", start,
+          new Date(Math.max(now, start.getTime()) + REVIEW_DAYS * DAY));
+      const w0 = windows.find((x) => x.dispute_id === r.paypal_dispute_id);
+      const s0 = at(w0?.start), e0 = at(w0?.end);
+      if (w0 && s0 && e0 && e0 > s0) bar(r, "ts", `Buyer troubleshooting (${w0.status.replaceAll("_", " ").toLowerCase()})`, s0, e0);
+      continue;
+    }
     const gatherEnd = sent ?? due ?? new Date(Math.max(now, start.getTime()) + DAY);
     if (gatherEnd > start) bar(r, "gather", sent ? "Evidence gathered, response sent" : "Gathering evidence", start, gatherEnd);
     const w = windows.find((x) => x.dispute_id === r.paypal_dispute_id);

@@ -75,10 +75,11 @@ def test_public_endpoints_stay_open(client):
     assert client.post("/webhooks/paypal", content=b"{}").status_code == 400  # signature check, not login
 
 
-def test_valid_session_via_header_or_query(client):
+def test_valid_session_via_header_only(client):
     tok = new_session({"sub": "u1", "email": "merchant@business.example.com", "name": "Shop Owner"})
     assert client.get("/api/settings", headers={"Authorization": f"Bearer {tok}"}).status_code == 200
-    assert client.get(f"/api/settings?token={tok}").status_code == 200  # EventSource / PDF links
+    # security review 2026-11-05: never in the URL (history, proxy logs); streams and files use fetch + the header
+    assert client.get(f"/api/settings?token={tok}").status_code == 401
     me = client.get("/api/auth/me", headers={"Authorization": f"Bearer {tok}"}).json()
     assert me["email"] == "merchant@business.example.com" and me["name"] == "Shop Owner" and me["expires_at"]
 
@@ -314,3 +315,20 @@ def test_login_is_rate_limited_per_ip(client, monkeypatch):
     assert client.get("/api/auth/paypal/start", headers={"X-Forwarded-For": "198.51.100.8"}).status_code == 302
     monkeypatch.setattr(ratelimit, "EXEMPT", {"testclient", "198.51.100.7"})  # this machine is never limited
     assert client.get("/api/auth/paypal/start", headers=ip).status_code == 302
+
+
+@pytest.mark.real_auth
+def test_logout_ends_every_session(client):
+    """G167: Log out is server-side: the token (and any copy of it) stops working, a new login works."""
+    import time as _t
+
+    tok = new_session({"sub": "u1", "email": "merchant@business.example.com", "name": "Shop Owner"})
+    other = new_session({"sub": "u1", "email": "merchant@business.example.com", "name": "Shop Owner"})
+    h = {"Authorization": f"Bearer {tok}"}
+    assert client.get("/api/settings", headers=h).status_code == 200
+    assert client.post("/api/auth/logout", headers=h).status_code == 204
+    assert client.get("/api/settings", headers=h).status_code == 401
+    assert client.get("/api/settings", headers={"Authorization": f"Bearer {other}"}).status_code == 401
+    _t.sleep(0.01)
+    fresh = new_session({"sub": "u1", "email": "merchant@business.example.com", "name": "Shop Owner"})
+    assert client.get("/api/settings", headers={"Authorization": f"Bearer {fresh}"}).status_code == 200

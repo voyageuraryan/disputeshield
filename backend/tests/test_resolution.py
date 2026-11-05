@@ -92,6 +92,13 @@ def test_note_must_not_overclaim_delivery():
     assert validate_note(SellerNote(note="Delivered on 15 Oct (2).", cited_evidence_ids=[2]), with_proof) == []
 
 
+def test_snad_note_may_say_the_buyer_received_it():
+    """G77: in a not-as-described dispute the buyer's complaint itself admits receipt."""
+    snad = case(ev(1, "listing", "Listing: 10 W LED lamp"), reason="MERCHANDISE_OR_SERVICE_NOT_AS_DESCRIBED")
+    note = SellerNote(note="The buyer received the lamp; the listing (1) states 10 W.", cited_evidence_ids=[1])
+    assert validate_note(note, snad) == []
+
+
 async def test_note_retry_then_give_up():
     c = case(ev(1))
     bad = SellerNote(note="x" * (NOTE_MAX_CHARS + 5), cited_evidence_ids=[1])

@@ -2,8 +2,7 @@
 
 Tokens are compact HMAC-SHA256 signed JSON (base64url payload "." base64url signature) with an expiry.
 OAuth `state` uses the same signing plus a single-use nonce, so a login link can't be forged or replayed.
-`require_merchant` protects every merchant endpoint; it accepts `Authorization: Bearer <token>` or
-`?token=<token>` (EventSource and <a href> downloads can't send headers).
+`require_merchant` protects every merchant endpoint; it accepts `Authorization: Bearer <token>` only.
 """
 
 from __future__ import annotations
@@ -18,9 +17,10 @@ import secrets
 import time
 from typing import Any
 
-from fastapi import Header, HTTPException, Query
+from fastapi import Depends, Header, HTTPException
 
 from app.config import get_settings
+from app.db import get_engine
 
 log = logging.getLogger(__name__)
 STATE_TTL_S = 600
@@ -68,8 +68,9 @@ def verify(token: str, kind: str) -> dict[str, Any]:
 
 def new_session(user: dict[str, Any]) -> str:
     hours = get_settings().session_hours
+    now = time.time()
     return sign({"kind": "session", "sub": user["sub"], "email": user.get("email"), "name": user.get("name"),
-                 "exp": int(time.time() + hours * 3600)})
+                 "iat": now, "exp": int(now + hours * 3600)})
 
 
 def new_state(next_path: str) -> str:
@@ -104,14 +105,35 @@ def auth_disabled() -> bool:
     return False
 
 
+def sessions_valid_after(eng) -> float | None:  # noqa: ANN001
+    """G167: the moment the merchant last pressed Log out (every older session is refused), from the database."""
+    from sqlmodel import Session as DBSession
+
+    from app.models import MerchantSettings
+
+    try:
+        with DBSession(eng) as s:
+            row = s.get(MerchantSettings, 1)
+            at = row.sessions_valid_after if row else None
+    except Exception:  # noqa: BLE001 - e.g. tables not created yet: nothing has been revoked
+        return None
+    if at is None:
+        return None
+    from datetime import timezone
+
+    return (at if at.tzinfo else at.replace(tzinfo=timezone.utc)).timestamp()
+
+
 def require_merchant(authorization: str | None = Header(default=None),
-                     token: str | None = Query(default=None)) -> dict[str, Any]:
+                     eng=Depends(get_engine)) -> dict[str, Any]:  # noqa: ANN001
+    """Session from `Authorization: Bearer <token>` only. (Security review 2026-11-05: the `?token=` query form is
+    gone; the dashboard reads live streams and files with fetch() + this header, so the session never sits in URLs,
+    browser history or proxy logs.)"""
     if auth_disabled():
         return {"sub": "local-dev", "email": None, "name": "Local developer"}
     raw = None
     if authorization and authorization.lower().startswith("bearer "):
         raw = authorization[7:].strip()
-    raw = raw or token
     if not raw:
         raise HTTPException(401, "login required", headers={"WWW-Authenticate": "Bearer"})
     try:
@@ -121,6 +143,10 @@ def require_merchant(authorization: str | None = Header(default=None),
                             headers={"WWW-Authenticate": "Bearer"}) from exc
     # Re-checked on every request: removing an email from MERCHANT_LOGIN_EMAILS (e.g. the judges' account after
     # judging) ends that account's sessions at once, instead of when the token expires.
+    cutoff = sessions_valid_after(eng)
+    if cutoff is not None and float(claims.get("iat") or 0) <= cutoff:
+        raise HTTPException(401, "session ended by Log out; please log in again",
+                            headers={"WWW-Authenticate": "Bearer"})
     if (claims.get("email") or "").lower() not in allowed_emails():
         raise HTTPException(401, "this account is no longer allowed to manage this store; please log in again",
                             headers={"WWW-Authenticate": "Bearer"})
