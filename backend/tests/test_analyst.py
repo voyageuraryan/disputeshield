@@ -185,6 +185,16 @@ async def test_llm_failure_then_success(pp, engine, demo):
 
 
 @respx.mock
+async def test_invalid_json_is_retried_with_a_hint(pp, engine, demo):
+    did, case = await investigated(engine, pp, demo["A"], "PP-D-A", INR, "89.00")
+    llm = ScriptedLLM(LLMError("groq: output did not match the JSON schema (json_validate_failed)"),
+                      rec("FIGHT", "high", ids_of(case, "tracking")))
+    result, steps, decisions, _ = await run_analyst(engine, did, case, llm)
+    assert result.recommendation.action == "FIGHT" and len(decisions) == 1
+    assert "not valid JSON" in llm.calls[1]["user"]
+
+
+@respx.mock
 async def test_llm_failing_twice_needs_human(pp, engine, demo):
     did, case = await investigated(engine, pp, demo["A"], "PP-D-A", INR, "89.00")
     result, _, decisions, status = await run_analyst(engine, did, case,

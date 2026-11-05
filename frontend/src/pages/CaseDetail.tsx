@@ -419,6 +419,13 @@ export function TroubleshootingCard({ detail }: { detail: DisputeDetail }) {
           )}
         </div>
       )}
+      {!s && st.can_message && open && (detail.case?.allowed_actions ?? []).includes("make_offer") && (
+        <p className="mt-2 text-xs text-amber-800" data-testid="ts-offer-warning">
+          Heads-up: a PayPal message moves the case to &ldquo;waiting for the buyer&rdquo;, and PayPal then stops offering
+          the partial refund option until the buyer replies (seen in the sandbox). Make an offer first if you want one, or
+          email the link instead.
+        </p>
+      )}
       {!s && !st.can_message && open && (
         <p id="ts-no-message" className="mt-2 text-xs text-slate-500">PayPal doesn't allow messages at this stage (only during an inquiry), so the link can only go by email.</p>
       )}

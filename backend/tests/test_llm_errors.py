@@ -58,3 +58,25 @@ async def test_long_rate_limit_fails_fast(monkeypatch):
     with pytest.raises(llm.LLMError) as info:
         await REAL_CALL(system="s", user="u", output_model=Out)
     assert "org_01SECRET" not in str(info.value)
+
+
+def test_groq_json_validate_failed_is_reported_as_model_output(monkeypatch):
+    import asyncio
+
+    class FakeResp:
+        status_code = 400
+        text = '{"error":{"message":"Failed to generate JSON","code":"json_validate_failed"}}'
+
+    class FakeClient:
+        def __init__(self, *a, **k): ...
+        async def __aenter__(self): return self
+        async def __aexit__(self, *a): return False
+        async def post(self, *a, **k):
+            req = httpx.Request("POST", "https://api.groq.com/x")
+            resp = httpx.Response(400, text=FakeResp.text, request=req)
+            resp.raise_for_status()
+
+    monkeypatch.setattr(llm.httpx, "AsyncClient", FakeClient)
+    with pytest.raises(llm.LLMError) as info:
+        asyncio.run(llm.groq_call(system="s", user="u", output_model=Out, api_key="k", model="m"))
+    assert "did not match" in str(info.value) and "json_validate_failed" in info.value.detail

@@ -308,6 +308,15 @@ async def analyze(session: Session, dispute: Dispute, case: CaseFile, *, run_key
         try:
             rec = await llm(system=SYSTEM_PROMPT, user=user, output_model=Recommendation)
         except LLMError as exc:
+            if "did not match" in str(exc):  # the model's own output was invalid: ask again with a short hint
+                problems = ["your previous answer was not valid JSON for the required schema; answer again with "
+                            "valid JSON only, with short plain-text values"]
+                log_step(session, dispute.id, AGENT,
+                         f"Recommendation rejected (attempt {attempt} of {MAX_ATTEMPTS}): invalid JSON from the model",
+                         {"problems": [str(exc)]})
+                if attempt == MAX_ATTEMPTS:
+                    return _needs_human(session, dispute, checklist, baseline, [f"LLM call failed: {exc}"])
+                continue
             # A provider outage isn't something the model can fix: don't feed it back into the next prompt.
             problems, llm_failed = [], [f"LLM call failed: {exc}"]
             log_step(session, dispute.id, AGENT, f"AI provider unavailable (attempt {attempt} of {MAX_ATTEMPTS}): {exc}",

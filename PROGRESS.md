@@ -1480,3 +1480,12 @@ G175 [x] Found live on the $9 ebook (PP-R-XLM): an item-not-received dispute abo
         carrier delivery (impossible), and "What would win this?" said "add tracking". Now the order evidence is
         flagged digital_only and the digital rule asks only for delivery_confirmation (download / access log or the
         delivery email); the coach explains what to upload. Tests: test_digital_inr.py; backend 787 passed, e2e 40.
+G176 [x] CI failed: the invite-warning test was pushed without its CaseDetail.tsx change (the file on the laptop
+        was the older one) -> CaseDetail.tsx re-applied.
+G177 [~] Evals 2026-11-05 (user run): deterministic metrics improved (ActionCorrectness 51/51), but every judged
+        metric errored: gemini-3.8-flash's free daily quota ran out and the fallback list had only gemini-2.5-flash
+        (404 for new keys); 3 goldens hit Groq 400 json_validate_failed (the model's JSON broke the schema; reported
+        as a provider error). Fixed in code: Groq json_validate_failed is model output ("did not match"), the analyst
+        asks again with a short JSON hint, eval reports keep the provider's full text. RE-RUN NEEDED with
+        EVALS_JUDGE_MODEL=gemini-3.8-flash,gemini-3.5-flash-lite (+ EVALS_JUDGE_GEMINI_API_KEY) after the Gemini
+        quota resets; model outputs are cached, so only the judge and the 3 goldens cost quota.

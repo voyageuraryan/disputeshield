@@ -157,6 +157,13 @@ async def groq_call(*, system: str, user: str, output_model: type[T], api_key: s
         async with httpx.AsyncClient(timeout=TIMEOUT_S) as http:
             r = await http.post(GROQ_URL, json=body, headers={"Authorization": f"Bearer {api_key}"})
             r.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        # Groq answers 400 json_validate_failed when the MODEL's output broke the JSON schema: that's model output,
+        # not an outage (seen in the 2026-11-05 evals), so say so; the caller may ask again with a hint.
+        if exc.response.status_code == 400 and "json_validate_failed" in exc.response.text:
+            raise LLMError("groq: output did not match the JSON schema (json_validate_failed)",
+                           detail=f"groq: HTTP 400: {exc.response.text[:300]}") from exc
+        raise _http_error("groq", exc) from exc
     except httpx.HTTPError as exc:
         raise _http_error("groq", exc) from exc
     data = r.json()

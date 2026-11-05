@@ -120,7 +120,8 @@ class Recorder:
             result = await self.limiter.call(system=system, user=user, output_model=output_model)
         except LLMError as exc:
             if not any(k in str(exc) for k in MODEL_FAULTS):
-                self.provider_errors.append(str(exc)[:300])  # HTTP/timeouts; bad output *is* model behaviour
+                # HTTP/timeouts; bad output *is* model behaviour. Full provider text: this report is local, not the UI
+                self.provider_errors.append(str(getattr(exc, "detail", None) or exc)[:300])
             raise
         self.calls.append({"output": output_model.__name__, "provider": llm_module.last_provider.get(),
                            "seconds": round(time.monotonic() - started, 1), "tokens": llm_module.last_usage.get(),
