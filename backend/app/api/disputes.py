@@ -24,7 +24,7 @@ from app.paypal.payments import get_capture
 from app.paypal.tracking import trackers_from_order
 from app.rules.coach import as_dicts as coach_dicts
 from app.rules.coach import coach
-from app.rules.evidence_rules import RULES, defect_confirmed, economic_baseline, evaluate, red_flag_description
+from app.rules.evidence_rules import RULES, defect_confirmed, economic_baseline, evaluate, red_flag_description, rule_for
 from app.merchant import settle_threshold
 from app.schemas import CaseFile
 
@@ -166,7 +166,7 @@ def order_out(session: Session, o: Order) -> OrderOut:
 
 def _checklist(case: CaseFile, threshold, carrier: str | None = None) -> Checklist:
     result = evaluate(case)
-    rule = RULES.get(case.reason)
+    rule = rule_for(case)
     by_type: dict[str, list[int]] = {}
     for e in case.evidence:
         by_type.setdefault(e.type, []).append(e.id)

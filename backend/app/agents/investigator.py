@@ -430,7 +430,13 @@ class Investigator:
         items = ", ".join(f"{i.get('quantity', 1)}x {i.get('name')}" for i in order.items or []) or "no items"
         summary = (f"Store order #{order.id} on {_day(order.created_at)}: {items}, {order.amount} {order.currency}; "
                    f"buyer {order.buyer_email or 'unknown'}; ship to {_addr(order.shipping_address)}")
-        row = self.evidence(type="order", source="store", source_ref=f"store:order/{order.id}", summary=summary)
+        from app.catalog import digital_only
+
+        digital = digital_only(order.items)
+        if digital:
+            summary += "; digital item (no shipping: delivery is the download / delivery email)"
+        row = self.evidence(type="order", source="store", source_ref=f"store:order/{order.id}", summary=summary,
+                            flags=["digital_only"] if digital else [])
         self.step(f"Found order #{order.id} ({items}, {order.amount} {order.currency})", {"evidence_id": row.id})
 
     @observe(type="tool", name="store_shipments")

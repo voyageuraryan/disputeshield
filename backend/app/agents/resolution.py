@@ -225,13 +225,14 @@ def upload_files(session: Session, case: CaseFile) -> tuple[list[tuple[EvidenceI
                                                             list[tuple[EvidenceItem, MerchantUpload]]]:
     """(attached, left out) confirmed merchant files that are evidence in this case file, required types first,
     within PayPal's limits (each < 10 MB, all files + the PDF <= 50 MB per call)."""
-    from app.rules.evidence_rules import RULES
+    from app.rules.evidence_rules import rule_for
 
     by_id = {int(e.source_ref.split(":", 1)[1]): e for e in case.evidence
              if e.source == "merchant_upload" and e.source_ref.split(":", 1)[1].isdigit()}
     if not by_id:
         return [], []
-    required = set(RULES[case.reason].required) if case.reason in RULES else set()
+    rule = rule_for(case)
+    required = set(rule.required) if rule else set()
     ups = session.exec(select(MerchantUpload).where(MerchantUpload.id.in_(list(by_id)),
                                                     MerchantUpload.status == UploadStatus.CONFIRMED)).all()
     ups = sorted((u for u in ups if u.file_path and Path(u.file_path).is_file()),

@@ -124,6 +124,23 @@ RULES: dict[str, ReasonRule] = {
 
 SUPPORTED_REASONS = tuple(RULES)
 
+# 2026-11-05 (found live on a $9 ebook): an item-not-received dispute about a DIGITAL order can't have tracking or a
+# carrier's delivery scan. What proves delivery there is the download / access log or the delivery email (uploaded
+# by the merchant as delivery_confirmation). The investigator flags the order evidence "digital_only".
+DIGITAL_INR = ReasonRule(
+    reason=INR, label="Item not received (digital)",
+    required=("delivery_confirmation",),
+    supporting=("invoice", "order", "buyer_history", "buyer_message"),
+    protection_category=None,  # PayPal seller protection doesn't cover intangible items
+)
+
+
+def rule_for(case: CaseFile) -> ReasonRule | None:
+    """The evidence rule for this case: by PayPal reason, with the digital-goods variant for item-not-received."""
+    if case.reason == INR and "digital_only" in _flags(case, "order"):
+        return DIGITAL_INR
+    return RULES.get(case.reason)
+
 
 def _flags(case: CaseFile, evidence_type: str) -> set[str]:
     return {f for e in case.evidence if e.type == evidence_type for f in e.flags}
@@ -149,7 +166,7 @@ def detect_red_flags(rule: ReasonRule, case: CaseFile) -> list[RedFlag]:
 
 
 def evaluate(case: CaseFile) -> ChecklistResult:
-    rule = RULES.get(case.reason)
+    rule = rule_for(case)
     if rule is None:
         return ChecklistResult(required=[], present=sorted({e.type for e in case.evidence}), missing=[],
                                rule_score=0.0, red_flags=[], reason_supported=False)

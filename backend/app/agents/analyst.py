@@ -34,6 +34,7 @@ from app.models import Decision, DecisionStatus, Dispute
 from app.rules.evidence_rules import (
     defect_confirmed,
     RULES,
+    rule_for,
     FIGHT_AT,
     SETTLE_BELOW,
     Baseline,
@@ -169,7 +170,7 @@ def freshness(case: CaseFile, now: datetime | None = None) -> str:
 def stale_required(case: CaseFile) -> list[EvidenceItem]:
     """Required evidence (for this reason) we only have as a stale copy (its lookup failed this run). A required
     type that also has a fresh item (e.g. store tracking when PayPal's tracker copy is stale) is still covered."""
-    rule = RULES.get(case.reason)
+    rule = rule_for(case)
     required = set(rule.required) if rule else set()
     stale = lambda e: any(f.startswith("stale:") for f in e.flags)  # noqa: E731
     fresh_types = {e.type for e in case.evidence if not stale(e)}

@@ -7,7 +7,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from decimal import Decimal
 
-from app.rules.evidence_rules import defect_confirmed, RULES, economic_baseline, evaluate
+from app.rules.evidence_rules import DIGITAL_INR, defect_confirmed, economic_baseline, evaluate, rule_for
 from app.schemas import CaseFile, EvidenceItem
 
 ADDABLE = {"tracking", "delivery_confirmation", "invoice", "listing", "refund_policy", "buyer_message", "order"}
@@ -27,6 +27,11 @@ HOWTO: dict[str, list[str]] = {
                       "with the date visible."],
     "order": ["Upload the order confirmation (order number, items, amount, shipping address)."],
 }
+DIGITAL_HOWTO = [
+    "Digital item: there is no tracking. Upload the download or access log (date, time, the buyer's account or email, "
+    "the file) or the delivery email you sent, as a PDF or screenshot.",
+    "If the buyer downloaded it more than once, show every download; it proves they received it.",
+]
 CARRIER_HOWTO = {
     "USPS": "USPS: on usps.com, enter the tracking number, open the delivered event and save the page as PDF; for a "
             "signed letter, request USPS Proof of Delivery (Return Receipt Electronic / Signature Confirmation).",
@@ -66,7 +71,7 @@ def howto(evidence_type: str, carrier: str | None = None) -> list[str]:
 
 def coach(case: CaseFile, threshold: Decimal, *, carrier: str | None = None) -> list[CoachItem]:
     """Missing items (required first by gain, then supporting), plus 'all required together' when 2+ are missing."""
-    rule = RULES.get(case.reason)
+    rule = rule_for(case)
     now = evaluate(case)
     if rule is None or not now.reason_supported:
         return []
@@ -80,8 +85,11 @@ def coach(case: CaseFile, threshold: Decimal, *, carrier: str | None = None) -> 
         after = evaluate(_with(case, [t]))
         out.append(CoachItem(type=t, required=t in rule.required, score_now=now.rule_score,
                              score_after=after.rule_score, gain=round(after.rule_score - now.rule_score, 2),
-                             action_now=action_now, action_after=base(after), howto=howto(t, carrier),
-                             assumption="assuming it is clean (e.g. delivered to the order's shipping address)"))
+                             action_now=action_now, action_after=base(after),
+                             howto=DIGITAL_HOWTO if (rule is DIGITAL_INR and t == "delivery_confirmation")
+                             else howto(t, carrier),
+                             assumption=("assuming it shows this buyer received the download" if rule is DIGITAL_INR
+                                         else "assuming it is clean (e.g. delivered to the order's shipping address)")))
     req = [t for t in missing if t in rule.required]
     if len(req) > 1:
         after = evaluate(_with(case, req))

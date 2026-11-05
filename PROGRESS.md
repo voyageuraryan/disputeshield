@@ -200,7 +200,9 @@ G1  [x] Log in with PayPal VERIFIED LIVE 2026-11-01 (sandbox business account). 
         fail at userinfo, which is fine (buyers never use the dashboard).
 G2  [~] Deploy prepared (render.yaml with all settings, AUTH_SECRET generated, DEPLOY.md). WAITING ON USER:
         push to GitHub + Render account. Webhook still on a cloudflared quick tunnel locally.
-G3  [~] PROVEN LIVE 2026-11-01: accept-claim (PP-R-YXS-10195747, $45 mug, then RESOLVED via webhook) and
+G3  [x] (2026-11-05: provide-evidence PROVEN LIVE on PP-R-QBG-10196615, an INR inquiry that listed provide_evidence:
+        tracking + recorded delivery -> FIGHT/high -> approved -> PayPal accepted; no duplicate proposal after PayPal's update)
+        PROVEN LIVE 2026-11-01: accept-claim (PP-R-YXS-10195747, $45 mug, then RESOLVED via webhook) and
         provide-supporting-info (PP-R-ADP-10195745). Still unproven: provide-evidence (needs a case PayPal itself
         moves to WAITING_FOR_SELLER_RESPONSE with evidence requested; old refusals: f233018eb2716, ca534153a1eca,
         ca534153d2b67).
@@ -522,7 +524,8 @@ G128 [x] Strict JSON schemas now drop maxLength / minLength / maxItems / minItem
         strict modes); Pydantic still enforces them on the parsed answer (invalid -> retried once, rule 7).
 
 ### Found in Phase 13 (2026-11-04)
-G111 [ ] P2 make-offer not run live. Shapes come from the v1 OpenAPI (offer_type enum REFUND / REFUND_WITH_RETURN /
+G111 [x] (2026-11-05: make-offer PROVEN LIVE on PP-R-XLM-10196648, a $9 ebook INR inquiry: $8.00 refused by the
+        max-offer setting in the UI, $5.00 approved -> PayPal accepted and showed the buyer the offer) P2 make-offer not run live. Shapes come from the v1 OpenAPI (offer_type enum REFUND / REFUND_WITH_RETURN /
         REFUND_WITH_REPLACEMENT / REPLACEMENT_WITHOUT_REFUND; offer_amount money; note 1-2000; invoice_id). It needs
         a sandbox not-as-described inquiry whose dispute lists make_offer, and the user's approval (it moves money if
         the buyer accepts). Also check the buyer's accept/deny reaches us as CUSTOMER.DISPUTE.UPDATED / RESOLVED
@@ -1460,3 +1463,20 @@ for the Gemini + Groq quotas (G92).
   the older PROPOSED recommendation is now labelled as possibly out of date; rebuilt shipments get the carrier
   from the tracking number's shape. Observed (by design, not changed): with delivery proof whose address only
   partly matches, the model asked for FIGHT twice, the validator refused the unjustified move -> Needs review.
+- Buyer-side live run (2026-11-05 evening), with the user's new sandbox disputes:
+  - PP-R-WEZ (earbuds, not as described): queue + order matched; buyer page via the email link (token removed
+    from the address bar); a prompt-injection line in the buyer's message was ignored; research ran (Gemini), both
+    drafted plans were rejected (sentence length, no source) -> generic safe plan after ~2 min (G40 still slow);
+    5 steps answered + a photo on the "needs a video" step (photos are accepted there; label says video);
+    DEFECT_CONFIRMED -> troubleshooting_record evidence -> re-analysed SETTLE/high; approved through MCP with the
+    dashboard code (G140: live MCP approval now proven) -> accept-claim accepted.
+  - Found: the PayPal-message invite moved the inquiry to WAITING_FOR_BUYER_RESPONSE and PayPal dropped make_offer
+    (partial refund no longer possible). The case page now warns before sending the invite (G174).
+  - PP-R-QBG (phone case, not received): SETTLE (no tracking) -> add tracking (to PayPal) + record delivery ->
+    re-analyse -> FIGHT/high, score 1.0 -> evidence PDF preview (blob tab) -> provide-evidence accepted (G3).
+  - Still unproven live: make-offer (G111; the only inquiry listing it lost it after the invite message).
+G174 [x] Invite via PayPal message removes make_offer in the sandbox: warning on the case page (see above).
+G175 [x] Found live on the $9 ebook (PP-R-XLM): an item-not-received dispute about a DIGITAL order required tracking +
+        carrier delivery (impossible), and "What would win this?" said "add tracking". Now the order evidence is
+        flagged digital_only and the digital rule asks only for delivery_confirmation (download / access log or the
+        delivery email); the coach explains what to upload. Tests: test_digital_inr.py; backend 787 passed, e2e 40.
