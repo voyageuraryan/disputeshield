@@ -820,6 +820,12 @@ def test_session_token_never_in_urls_mcp_code_and_needs_review_card(auth_stack, 
                    did(auth_stack, "PP-DEMO-A"), "investigator", "Header stream step 42")
     pg.wait_for_selector("text=Header stream step 42", timeout=8000)
 
+    # a later run that couldn't finish: the older PROPOSED recommendation is labelled as possibly out of date
+    auth_stack.sql("update disputes set agent_status='NEEDS_HUMAN' where paypal_dispute_id='PP-DEMO-A'")
+    pg.reload()
+    pg.wait_for_selector("[data-testid='stale-recommendation']")
+    auth_stack.sql("update disputes set agent_status='PROPOSED' where paypal_dispute_id='PP-DEMO-A'")
+
     auth_stack.sql("update disputes set agent_status='NEEDS_HUMAN' where paypal_dispute_id='PP-DEMO-E'")
     pg.goto(f"{auth_stack.base}/cases/PP-DEMO-E")
     pg.wait_for_selector("text=couldn't finish a recommendation")

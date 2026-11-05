@@ -76,7 +76,7 @@ async def test_rebuilds_missing_order_and_tracking(session):
     assert order.items[0]["sku"] == "CASE-01" and str(order.amount) == "12.00"
     assert order.shipping_address["postal_code"] == "78701" and order.buyer_email.endswith("example.com")
     ships = session.exec(select(Shipment).where(Shipment.order_id == order.id)).all()
-    assert [s.tracking_number for s in ships] == ["9400111899223397846521"]
+    assert [(s.tracking_number, s.carrier) for s in ships] == [("9400111899223397846521", "USPS")]
     # idempotent: a second run reuses the row
     again = await inv._recover_order(CAPTURE)
     assert again.id == order.id

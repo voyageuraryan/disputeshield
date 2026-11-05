@@ -39,6 +39,18 @@ FRESH_S = 60  # reuse a dispute fetched this recently instead of fetching it aga
 
 # ---- formatting helpers -------------------------------------------------------
 
+def _carrier_guess(number: str | None) -> str | None:
+    """PayPal's order trackers don't carry the carrier; when an order is rebuilt, name it from the number's
+    well-known shape (UPS 1Z..., USPS 20-22 digits starting 9, FedEx 12 or 15 digits), else leave it unknown."""
+    n = (number or "").replace(" ", "").upper()
+    if n.startswith("1Z") and len(n) == 18:
+        return "UPS"
+    if n.isdigit() and n.startswith("9") and 20 <= len(n) <= 22:
+        return "USPS"
+    if n.isdigit() and len(n) in (12, 15):
+        return "FedEx"
+    return None
+
 def _day(value: datetime | str | None) -> str:
     """'3 Nov' style date for timeline text."""
     if value is None:
@@ -343,7 +355,8 @@ class Investigator:
             self.s.refresh(existing)
             for t in trackers_from_order(pp):  # so the merchant can record delivery on them again
                 if t["tracking_number"] and t["status"] != "CANCELLED":
-                    self.s.add(Shipment(order_id=existing.id, tracking_number=t["tracking_number"], status="SHIPPED"))
+                    self.s.add(Shipment(order_id=existing.id, tracking_number=t["tracking_number"], status="SHIPPED",
+                                        carrier=_carrier_guess(t["tracking_number"])))
             self.s.commit()
             self.step(f"Rebuilt store order #{existing.id} from PayPal order {pp_order_id} (invoice {invoice}); "
                       "the local copy was missing. Delivery you recorded earlier isn't stored at PayPal: record it "

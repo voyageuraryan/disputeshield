@@ -780,6 +780,12 @@ function Recommendation({ d, detail, onDone }: { d: Decision; detail: DisputeDet
         {!actionable && <Chip text={d.status.toLowerCase()} tone={d.status === "FAILED" ? "danger" : "muted"} />}
       </div>
       <Freshness d={d} />
+      {d.status === "PROPOSED" && detail.dispute.agent_status === "NEEDS_HUMAN" && (
+        <p className="mt-3 rounded-md bg-amber-50 p-2 text-xs text-amber-900" role="status" data-testid="stale-recommendation">
+          The latest analysis couldn&apos;t finish (the timeline shows why), so this recommendation is from an earlier run
+          and may not reflect evidence added since. Re-analyse, or choose the action yourself.
+        </p>
+      )}
       <p className="mt-3 text-sm leading-relaxed text-slate-800">{d.reasoning}</p>
       {d.economic_note && (
         <p className="mt-3 rounded-md bg-slate-50 p-3 text-sm text-slate-700">

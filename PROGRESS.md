@@ -1454,3 +1454,9 @@ for the Gemini + Groq quotas (G92).
 - Second batch (same day): G143, G168, G169, G77 closed; G166 / G167 mostly done (see the entries). Server-side
   Log out (MerchantSettings.sessions_valid_after; sessions now carry iat). Tests: backend 785 passed, frontend 160 +
   tsc + build, e2e 40 passed.
+- Live after the push (2026-11-05 afternoon): security headers on API + site, ?token= refused, server Log out live;
+  orders rebuilt from PayPal after the restart (PP-R-ADP: score 0.08 -> 0.58, tracking found); the new Gemini key
+  reads uploads (gemini-2.5-flash, USPS fields correct). Found and fixed: when a later run ends in Needs review,
+  the older PROPOSED recommendation is now labelled as possibly out of date; rebuilt shipments get the carrier
+  from the tracking number's shape. Observed (by design, not changed): with delivery proof whose address only
+  partly matches, the model asked for FIGHT twice, the validator refused the unjustified move -> Needs review.
