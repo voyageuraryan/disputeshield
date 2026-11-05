@@ -337,6 +337,14 @@ describe("case page troubleshooting card", () => {
     expect(el.querySelector("#seller-reply")).toBeNull();
   });
 
+  it("warns that a PayPal message can remove the partial-refund option", async () => {
+    replies["GET /api/disputes/PP-1/troubleshooting"] = [{ status: 200, body: { ...ELIGIBLE, steps: [], messages: [], proofs: [] } }];
+    const d = { ...detail(), case: { allowed_actions: ["make_offer", "send_message"] } } as unknown as DisputeDetail;
+    await act(async () => root.render(<TroubleshootingCard detail={d} />));
+    await flush();
+    expect(el.querySelector("[data-testid='ts-offer-warning']")?.textContent).toContain("partial refund");
+  });
+
   it("shows photo thumbnails with their checks and the advisory photo check", async () => {
     replies["GET /api/disputes/PP-1/troubleshooting"] = [
       {
