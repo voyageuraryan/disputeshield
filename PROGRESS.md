@@ -1489,3 +1489,31 @@ G177 [~] Evals 2026-11-05 (user run): deterministic metrics improved (ActionCorr
         asks again with a short JSON hint, eval reports keep the provider's full text. RE-RUN NEEDED with
         EVALS_JUDGE_MODEL=gemini-3.8-flash,gemini-3.5-flash-lite (+ EVALS_JUDGE_GEMINI_API_KEY) after the Gemini
         quota resets; model outputs are cached, so only the judge and the 3 goldens cost quota.
+- Eval re-run (user, 2026-11-05 evening): all 54 decision goldens ran (Groq fixed: GROQ_API_KEY was set twice in .env,
+  the second a quoted list). ActionCorrectness 54/54, every strict metric 100% except borderline ts-defect. Judge:
+  95 judged results still errored (gemini-3.8-flash and 3.5-flash-lite free daily quota). A no-`--only` run also added
+  the 13 conversations, which can't run without the research fixture (G92): `python -m evals.prune_report` removes
+  those rows and lists them as "Not run yet". New: `python -m app.scripts.check_llm_keys` tests every LLM key.
+G178 [x] Judge fallback when Gemini's free quota runs out: the developer judged locally with Claude through a local,
+        unpublished pytest plugin (not part of this repo; the report's judge name says so).
+G179 [x] First complete run with the Claude judge (2026-11-06): 54/54 ran, ActionCorrectness 100%, Faithfulness
+        100%, but Economic reasoning 0.27, PII 0.60, Task Completion 0.50. Causes were in the eval harness, not the
+        agents: (1) the economic metric's context lacked the money calculator numbers the model was given, so every
+        cited win chance / expected net counted as "invented" -> context now includes them (read from the prompt sent);
+        (2) the PII judge counted tracking numbers / capture / dispute ids as personal data -> the template says
+        business records are not PII; (3) store-lookup trace spans have no output by design -> the task text says so.
+        Re-judge only (model outputs cached).
+G180 [x] Second Claude-judged run: PII 1.0 (fixed), but Economic reasoning 0.48 and Task Completion 0.55. The judge's
+        remaining points were real: the economic note never stated the amount against the 25 USD settle threshold,
+        rarely compared the calculator's two main options, and used "rule score" jargon (G158) -> analyst prompt now
+        asks for exactly that (AI-output change: the pipeline must re-run, ~245K Groq tokens). Task Completion: the
+        judge compared the shadow investigation's case file with the golden's -> the task text explains the shadow run.
+G181 [x] A local, unpublished comparison run with Claude as the model under test (not the deployed model) is kept
+        out of this repo and out of the published report.
+G182 [x] 2026-11-06 comparison (local, unpublished): Claude Sonnet as the model under test passed every gate
+        (Economic reasoning 0.80, Seller note 0.87, Task Completion 0.76; judge Opus, same family). Groq with the
+        new economic-note prompt: Economic reasoning 0.47 -> 0.68 on the 24 re-run cases; remaining judge finding was
+        real: on strong cases with small amounts (FIGHT by rule, settling cheaper by the calculator) the note called
+        fighting "more advantageous" -> prompt now says plainly that settling is cheaper but strong cases are fought
+        at any amount. Task Completion: the judge couldn't tell which PayPal lookups each case needed -> the task now
+        lists them (expected_tools). Needs one more Groq run (2 parts).

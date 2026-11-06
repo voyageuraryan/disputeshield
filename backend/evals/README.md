@@ -91,3 +91,9 @@ scripts/run_evals.sh --no-judge           # deterministic metrics only
     Groq's seed is best-effort and Gemini 3.6+ ignores temperature, so some run-to-run variance remains.
 11. **Single machine memory.** Long background runs were stopped by the host for low memory (~1 GB free); run in
     chunks (`--only`) or with more free memory.
+
+
+Note on the published report: when Gemini's free judge quota ran out, the report's LLM-judged metrics were scored
+locally with Claude (Sonnet) through the developer's own Claude Code login, by a local, unpublished pytest plugin
+(the judge name in the report says so). Deterministic metrics, gates and the model under test (Groq) are unchanged;
+anyone re-running the suite from this repo uses the Gemini judge above.

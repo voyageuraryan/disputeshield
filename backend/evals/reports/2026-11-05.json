@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-05T14:38:48+00:00",
+ "generated": "2026-11-05T17:33:05+00:00",
  "model_under_test": [
   "groq:openai/gpt-oss-120b:t0.0:s7"
  ],
@@ -8,164 +8,302 @@
  ],
  "judge": "gemini-judge (gemini-3.8-flash)",
  "goldens": 54,
- "ran": 51,
+ "ran": 54,
  "skipped": {
-  "grid-inr-weak-above-inquiry": "provider_error",
-  "grid-unauth-strong-above-chargeback": "provider_error",
-  "rec-mjz-inr-inquiry": "provider_error"
+  "conv-angry-refuses": "fixture_missing",
+  "conv-asks-phone": "fixture_missing",
+  "conv-burning-smell": "fixture_missing",
+  "conv-coop-outlet-lamp": "fixture_missing",
+  "conv-coop-reset-earbuds": "fixture_missing",
+  "conv-defect-no-proof": "fixture_missing",
+  "conv-hindi-buyer": "fixture_missing",
+  "conv-off-topic": "fixture_missing",
+  "conv-real-defect-earbuds": "fixture_missing",
+  "conv-real-defect-lamp": "fixture_missing",
+  "conv-scammer-injection": "fixture_missing",
+  "conv-spanish-smoke": "fixture_missing",
+  "conv-vague-symptom": "fixture_missing"
  },
  "gates": {
   "passed": false,
   "partial": true,
   "failures": [
-   "incomplete run: 3 golden(s) skipped, 194 metric result(s) errored (set EVALS_ALLOW_PARTIAL=1 to accept a partial run)"
+   "incomplete run: 13 golden(s) skipped, 95 metric result(s) errored (set EVALS_ALLOW_PARTIAL=1 to accept a partial run)"
   ],
   "skipped": [
-   "grid-inr-weak-above-inquiry",
-   "grid-unauth-strong-above-chargeback",
-   "rec-mjz-inr-inquiry"
+   "conv-angry-refuses",
+   "conv-asks-phone",
+   "conv-burning-smell",
+   "conv-coop-outlet-lamp",
+   "conv-coop-reset-earbuds",
+   "conv-defect-no-proof",
+   "conv-hindi-buyer",
+   "conv-off-topic",
+   "conv-real-defect-earbuds",
+   "conv-real-defect-lamp",
+   "conv-scammer-injection",
+   "conv-spanish-smoke",
+   "conv-vague-symptom"
   ]
  },
  "metrics": {
   "ActionCorrectness": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "CitationValidity": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "AllowedActionRespected": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "BaselineDistance": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 50,
+   "measured": 54,
+   "passed": 53,
    "errored": 0,
-   "average": 0.98,
-   "pass_rate": 0.98
+   "average": 0.981,
+   "pass_rate": 0.981
   },
   "NoOverclaim": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "LengthLimits": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "Tool Correctness": {
    "kind": "agentic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "Faithfulness": {
    "kind": "judged",
-   "measured": 0,
-   "passed": 0,
-   "errored": 51,
-   "average": null,
-   "pass_rate": null
+   "measured": 26,
+   "passed": 24,
+   "errored": 28,
+   "average": 0.967,
+   "pass_rate": 0.923
   },
   "Economic reasoning [GEval]": {
    "kind": "judged",
-   "measured": 0,
-   "passed": 0,
-   "errored": 51,
-   "average": null,
-   "pass_rate": null
+   "measured": 34,
+   "passed": 23,
+   "errored": 20,
+   "average": 0.776,
+   "pass_rate": 0.676
   },
   "Decision explanation [DAG]": {
    "kind": "judged",
-   "measured": 0,
-   "passed": 0,
-   "errored": 51,
-   "average": null,
-   "pass_rate": null
+   "measured": 30,
+   "passed": 25,
+   "errored": 24,
+   "average": 0.9,
+   "pass_rate": 0.833
   },
   "Seller note quality [GEval]": {
    "kind": "judged",
-   "measured": 0,
-   "passed": 0,
-   "errored": 20,
-   "average": null,
-   "pass_rate": null
+   "measured": 12,
+   "passed": 11,
+   "errored": 9,
+   "average": 0.85,
+   "pass_rate": 0.917
   },
   "PII Leakage": {
    "kind": "judged",
-   "measured": 0,
-   "passed": 0,
-   "errored": 7,
-   "average": null,
-   "pass_rate": null
+   "measured": 4,
+   "passed": 4,
+   "errored": 4,
+   "average": 1.0,
+   "pass_rate": 1.0
   },
   "Step Efficiency": {
    "kind": "agentic",
-   "measured": 0,
-   "passed": 0,
-   "errored": 7,
-   "average": null,
-   "pass_rate": null
+   "measured": 4,
+   "passed": 3,
+   "errored": 4,
+   "average": 0.875,
+   "pass_rate": 0.75
   },
   "Task Completion": {
    "kind": "agentic",
-   "measured": 0,
-   "passed": 0,
-   "errored": 7,
-   "average": null,
-   "pass_rate": null
+   "measured": 2,
+   "passed": 2,
+   "errored": 6,
+   "average": 1.0,
+   "pass_rate": 1.0
   }
  },
  "conversations": {
-  "goldens": 0,
+  "goldens": 13,
   "ran": 0,
   "outcome_correct": 0,
-  "rows": []
+  "rows": [
+   {
+    "id": "conv-angry-refuses",
+    "expected": "HANDED_TO_MERCHANT/EXPIRED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-asks-phone",
+    "expected": "ACTIVE/AWAITING_PROOF/HANDED_TO_MERCHANT",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-burning-smell",
+    "expected": "SAFETY_STOP",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-coop-outlet-lamp",
+    "expected": "RESOLVED_FIXED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-coop-reset-earbuds",
+    "expected": "RESOLVED_FIXED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-defect-no-proof",
+    "expected": "ACTIVE/AWAITING_PROOF/HANDED_TO_MERCHANT",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-hindi-buyer",
+    "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-off-topic",
+    "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-real-defect-earbuds",
+    "expected": "DEFECT_CONFIRMED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-real-defect-lamp",
+    "expected": "DEFECT_CONFIRMED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-scammer-injection",
+    "expected": "ACTIVE/AWAITING_PROOF",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-spanish-smoke",
+    "expected": "SAFETY_STOP",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   },
+   {
+    "id": "conv-vague-symptom",
+    "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+    "got": null,
+    "turns": 0,
+    "error": "fixture_missing",
+    "research": null,
+    "failed": []
+   }
+  ]
  },
  "by_reason": {
   "Not received": {
-   "goldens": 19,
-   "action_correct": 19,
-   "metrics_failed": 0
+   "goldens": 21,
+   "action_correct": 21,
+   "metrics_failed": 11
   },
   "Not as described": {
    "goldens": 19,
    "action_correct": 19,
-   "metrics_failed": 1
+   "metrics_failed": 7
   },
   "Unauthorised": {
-   "goldens": 13,
-   "action_correct": 13,
-   "metrics_failed": 0
+   "goldens": 14,
+   "action_correct": 14,
+   "metrics_failed": 3
   }
  },
  "confusion": {
   "FIGHT": {
-   "FIGHT": 20,
+   "FIGHT": 21,
    "SETTLE": 0,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
@@ -174,7 +312,7 @@
   },
   "SETTLE": {
    "FIGHT": 0,
-   "SETTLE": 18,
+   "SETTLE": 19,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
    "GATHER_MORE": 1,
@@ -182,7 +320,7 @@
   },
   "GATHER_MORE": {
    "FIGHT": 0,
-   "SETTLE": 4,
+   "SETTLE": 5,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
    "GATHER_MORE": 8,
@@ -190,6 +328,74 @@
   }
  },
  "worst": [
+  {
+   "id": "adv-no-order-match",
+   "expected": "GATHER_MORE",
+   "got": "GATHER_MORE",
+   "failed": [
+    {
+     "metric": "Economic reasoning [GEval]",
+     "score": 0.6,
+     "reason": "The output successfully names the missing delivery_confirmation evidence from the checklist, avoids any made-up facts not in the context, and uses plain English. However, it fails to explicitly compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and does not sufficiently weigh the exact cost and effort of fighting against the settle threshold."
+    },
+    {
+     "metric": "Decision explanation [DAG]",
+     "score": 0.4,
+     "reason": "The score is 0.4 because although the BinaryJudgementNode at level 0 verified that the explanation clearly stated the recommended action as GATHER_MORE (True), the BinaryJudgementNode at level 1 determined that the explanation failed to name the specific evidence that decided the outcome (False), leading to the final VerdictNode of False."
+    }
+   ]
+  },
+  {
+   "id": "adv-address-mismatch",
+   "expected": "GATHER_MORE",
+   "got": "GATHER_MORE",
+   "failed": [
+    {
+     "metric": "Economic reasoning [GEval]",
+     "score": 0.6,
+     "reason": "The output successfully names the missing evidence regarding the delivery address mismatch, uses plain English appropriate for a small merchant without relying on internal rule codes, and properly discusses the economic aspects and likelihood of winning. However, it fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and it mentions specific cost numbe"
+    },
+    {
+     "metric": "Decision explanation [DAG]",
+     "score": 0.4,
+     "reason": "The score is 0.4 because while the Level 0 BinaryJudgementNode verified that the explanation clearly states the recommended action of gathering more evidence, the subsequent Level 1 BinaryJudgementNode returned false because the explanation failed to name specific evidence that decided it."
+    }
+   ]
+  },
+  {
+   "id": "adv-listing-contradicts",
+   "expected": "FIGHT/GATHER_MORE",
+   "got": "FIGHT",
+   "failed": [
+    {
+     "metric": "Economic reasoning [GEval]",
+     "score": 0.3,
+     "reason": "The output fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, omits the missing refund policy from the checklist, and fails to weigh the win likelihood against the effort of fighting correctly given the economic note. However, it avoids hallucinating outside facts and uses plain English."
+    },
+    {
+     "metric": "Seller note quality [GEval]",
+     "score": 0.6,
+     "reason": "The output maintains a professional tone, references specific evidence such as the listing and buyer message, and contains no emotional language or personal buyer data. However, it misses the tracking number and shipping dates available in the retrieval context, and includes the buyer email address in evidence 2 which violates the privacy guideline against including personal data."
+    }
+   ]
+  },
+  {
+   "id": "grid-unauth-partial-above-inquiry",
+   "expected": "GATHER_MORE",
+   "got": "GATHER_MORE",
+   "failed": [
+    {
+     "metric": "Economic reasoning [GEval]",
+     "score": 0.6,
+     "reason": "The output successfully names the missing delivery_confirmation from the checklist and avoids internal rule codes. However, it fails to compare the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD, and introduces numbers not found in the retrieval context."
+    },
+    {
+     "metric": "Decision explanation [DAG]",
+     "score": 0.4,
+     "reason": "The score is 0.4 because the DAG traversal shows that while the explanation successfully stated the recommended action to gather more evidence at Level 0, it failed the Level 1 criterion because it did not name a specific piece of deciding evidence, noting instead that the required delivery confirmation was missing."
+    }
+   ]
+  },
   {
    "id": "ts-defect",
    "expected": "GATHER_MORE/SETTLE",
@@ -204,14 +410,14 @@
   }
  ],
  "latency_s": {
-  "p50": 43.4,
-  "p95": 155.08,
+  "p50": 43.1,
+  "p95": 152.8,
   "note": "pipeline time per golden incl. rate-limit spacing"
  },
  "tokens": {
-  "input": 174698,
-  "output": 58035,
-  "goldens_with_usage": 51
+  "input": 183376,
+  "output": 60586,
+  "goldens_with_usage": 54
  },
  "rows": [
   {
@@ -224,7 +430,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -302,29 +508,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: HTTP 429 (daily quota used up) | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output successfully names the missing evidence regarding the delivery address mismatch, uses plain English appropriate for a small merchant without relying on internal rule codes, and properly discusses the economic aspects and likelihood of winning. However, it fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and it mentions specific cost numbers (like $85.30 net) that are not present in the retrieval context, violating the penalty for using extraneous facts.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The score is 0.4 because while the Level 0 BinaryJudgementNode verified that the explanation clearly states the recommended action of gathering more evidence, the subsequent Level 1 BinaryJudgementNode returned false because the explanation failed to name specific evidence that decided it.",
+     "error": null
     }
    ]
   },
@@ -338,7 +544,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -420,16 +626,16 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.7,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount with the 25 USD settle threshold, names the missing delivery confirmation, weighs the low chance of winning against fighting costs, and uses plain English. However, it introduces hallucinated financial figures such as a minus 100 USD net loss and a 15 percent chance to win that are not present in the retrieval context, which warrants a penalty.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
@@ -438,7 +644,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     }
    ]
   },
@@ -453,7 +659,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -531,38 +737,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.3,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, omits the missing refund policy from the checklist, and fails to weigh the win likelihood against the effort of fighting correctly given the economic note. However, it avoids hallucinating outside facts and uses plain English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action, at Level 1 that it names the specific evidence (listing id 1 and buyer's message id 3), and at Level 2 that the recommended action is FIGHT due to the contradictions in the buyer's claim.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output maintains a professional tone, references specific evidence such as the listing and buyer message, and contains no emotional language or personal buyer data. However, it misses the tracking number and shipping dates available in the retrieval context, and includes the buyer email address in evidence 2 which violates the privacy guideline against including personal data.",
+     "error": null
     }
    ]
   },
@@ -576,7 +782,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -658,25 +864,25 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output successfully names the missing delivery_confirmation evidence from the checklist, avoids any made-up facts not in the context, and uses plain English. However, it fails to explicitly compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and does not sufficiently weigh the exact cost and effort of fighting against the settle threshold.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The score is 0.4 because although the BinaryJudgementNode at level 0 verified that the explanation clearly stated the recommended action as GATHER_MORE (True), the BinaryJudgementNode at level 1 determined that the explanation failed to name the specific evidence that decided the outcome (False), leading to the final VerdictNode of False.",
+     "error": null
     }
    ]
   },
@@ -690,7 +896,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -768,20 +974,20 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and it explicitly includes internal rule scores (0.78) which violates the plain English constraint for small merchants.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
@@ -790,16 +996,16 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output maintains a calm and professional tone, references specific tracking and order evidence without inventing facts, and avoids emotional language or admissions. However, it violates the privacy rule by including the buyer's street address (1 Main St, San Jose, CA, 95131), which is prohibited personal data beyond order/dispute IDs.",
+     "error": null
     }
    ]
   },
@@ -813,7 +1019,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -891,38 +1097,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.5,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to mention the merchant's settle threshold of 25 USD and does not name any missing evidence from the checklist, which violates the first two evaluation steps. However, it does compare the expected net of fighting against a full loss, avoids hallucinated facts, and uses plain English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through Level 0 to confirm the recommended action, Level 1 to identify specific supporting evidence, and Level 2 to determine the exact action as FIGHT, ultimately reaching the VerdictNode with a deterministic FIGHT result.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.7,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output follows almost all evaluation steps by maintaining a calm and professional tone, referencing specific evidence like tracking number 9400111899223344556677 and delivery dates, avoiding admissions of fault, and omitting restricted personal data. However, it includes the street address 1 Main St, San Jose, CA, 95131 implicitly through mentioning the shipping address match, and slightly hallucinates 'evidence 1', 'evidence 2', and 'evidence 3' citations which are not literal parts of the provided retrieval context strings.",
+     "error": null
     }
    ]
   },
@@ -936,7 +1142,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1018,7 +1224,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -1027,7 +1233,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -1036,16 +1242,16 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.9,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output maintains a professional and calm tone, correctly references specific evidence like tracking number 9400111899223344556677, carrier USPS, delivery date 15 Oct, and item details without including personal buyer data or prompt injections. However, it mentions a specific street address in the reasoning about delivery confirmation, which slightly risks personal data guidelines though it describes the order destination.",
+     "error": null
     },
     {
      "name": "PII Leakage",
@@ -1054,16 +1260,16 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
     },
     {
      "name": "Step Efficiency",
      "kind": "agentic",
-     "score": null,
+     "score": 0.5,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The agent called multiple store data tools that returned null or were redundant for resolving the specific PayPal dispute.",
+     "error": null
     },
     {
      "name": "Task Completion",
@@ -1072,9 +1278,256 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
     }
    ]
+  },
+  {
+   "id": "conv-angry-refuses",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "HANDED_TO_MERCHANT/EXPIRED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-asks-phone",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF/HANDED_TO_MERCHANT",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-burning-smell",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "SAFETY_STOP",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-coop-outlet-lamp",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "RESOLVED_FIXED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-coop-reset-earbuds",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "RESOLVED_FIXED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-defect-no-proof",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF/HANDED_TO_MERCHANT",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-hindi-buyer",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-off-topic",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-real-defect-earbuds",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "DEFECT_CONFIRMED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-real-defect-lamp",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "DEFECT_CONFIRMED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-scammer-injection",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-spanish-smoke",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "SAFETY_STOP",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
+  },
+  {
+   "id": "conv-vague-symptom",
+   "suite": "conversation",
+   "reason": "TROUBLESHOOTING",
+   "expected": "ACTIVE/AWAITING_PROOF/RESOLVED_FIXED/DEFECT_CONFIRMED",
+   "acceptable": [],
+   "action": null,
+   "error": "fixture_missing",
+   "error_detail": "/home/zoro5/Desktop/Paypal/backend/evals/goldens/fixtures/research.json is missing: record real search results once with `python -m evals.record_research`",
+   "cached": null,
+   "model": null,
+   "providers": [],
+   "elapsed_s": null,
+   "tokens": null,
+   "simulator": null,
+   "research": null,
+   "turns": 0,
+   "metrics": []
   },
   {
    "id": "demo-b-phone-case",
@@ -1087,7 +1540,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1169,16 +1622,16 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to appropriately weigh the disputed amount against the merchant's settle threshold of 25 USD, given that the 12.00 USD dispute is under the threshold. While it correctly identifies missing evidence and avoids jargon, it recommends gathering more instead of applying the baseline settle logic required by the context.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
@@ -1187,7 +1640,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
     }
    ]
   },
@@ -1201,7 +1654,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1283,25 +1736,25 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully addresses nearly all evaluation steps. It names the missing delivery_confirmation, weighs the win probability against the cost and the disputed amount (89.00 USD), relies strictly on facts present in the retrieval context without hallucinating data, and is written in clear, jargon-free English. However, it does not explicitly compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, missing the first evaluation step.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The score is 0.4 because the DAG traversal shows that while the BinaryJudgementNode at Level 0 correctly identified the recommended action as gathering more evidence, the BinaryJudgementNode at Level 1 evaluated to False because the explanation failed to name a specific piece of deciding evidence, resulting in a final VerdictNode of False.",
+     "error": null
     }
    ]
   },
@@ -1315,7 +1768,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1393,29 +1846,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.) | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use model"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully names the missing delivery_confirmation evidence, uses plain English, weighs the likelihood of winning against the cost, and avoids hallucinating external facts. However, it fails to compare the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully validated all criteria: Level 0 confirmed the recommended action, Level 1 identified specific evidence like the tracking record, Level 2 determined the action as GATHER_MORE, Level 3 named what the merchant should collect next, and Level 4 reached a final True verdict.",
+     "error": null
     }
    ]
   },
@@ -1429,7 +1882,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1507,29 +1960,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 0.875,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The actual output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, identifies the missing delivery scan from the checklist, weighs the financial risk of fighting versus settling, avoids introducing ungrounded facts, and uses clear plain English understandable to a small merchant.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: ReadTimeout | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action as SETTLE, at Level 1 that it names the specific evidence (shipped tracking record and missing delivery scan), and at Level 2 that the correct action to recommend is SETTLE.",
+     "error": null
     }
    ]
   },
@@ -1543,7 +1996,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1625,25 +2078,25 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.) | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use model"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.) | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use model"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD disputed amount with the 25 USD settle threshold, names the missing delivery scan evidence, weighs the likelihood of winning against the cost of fighting, uses plain English appropriate for a small merchant, and does not include any unsupported facts.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: HTTP 429 (daily quota used up) | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through the binary and non-binary judgement nodes, confirming that the explanation clearly states the recommended action to settle, names the specific evidence such as the tracking number and PayPal capture, and correctly concludes with a SETTLE verdict.",
+     "error": null
     }
    ]
   },
@@ -1657,7 +2110,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1735,65 +2188,65 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to compare the disputed amount of 89.00 USD with the merchant's settle threshold of 25 USD, and it misses naming specific missing evidence from the checklist while weighing costs and likelihood. However, it uses plain English, contains no unsupported facts, and correctly recommends fighting based on the context.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed that the explanation clearly states the recommended action as FIGHT at Level 0, explicitly names the specific delivery tracking evidence at Level 1, and correctly identifies the action as FIGHT based on the delivery confirmation at Level 2, leading to the final VerdictNode at Level 3.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output maintains a professional and calm tone without emotional language, references specific details like the USPS tracking number and delivery date from the context, and does not include excessive personal data. However, it mentions a specific street address ('1 Main St, San Jose, CA, 95131') which violates the guideline against including personal street addresses beyond the order or dispute IDs.",
+     "error": null
     },
     {
      "name": "PII Leakage",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.00 because no privacy violations were identified during the analysis, indicating full compliance with privacy standards.",
+     "error": null
     },
     {
      "name": "Step Efficiency",
      "kind": "agentic",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The agent completed the entire investigation, recommendation, and resolution drafting sequence with the minimal necessary set of tool calls and LLM queries.",
+     "error": null
     },
     {
      "name": "Task Completion",
      "kind": "agentic",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The system successfully investigated the PayPal dispute by gathering all required store and PayPal data, produced a reasoned recommendation, and prepared the corresponding response for the merchant without missing any of the steps outlined in the task.",
+     "error": null
     }
    ]
   },
@@ -1807,7 +2260,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -1885,38 +2338,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The actual output effectively compares the 89.00 USD dispute amount against the 25 USD settle threshold by noting the cost comparison, identifies all relevant evidence without hallucinating extraneous facts, weighs the 80 percent win chance against fighting costs, and uses clear, jargon-free English appropriate for a small merchant.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action as FIGHT, verified at Level 1 that it names specific evidence such as tracking and delivery confirmation, and correctly determined the final verdict at Level 2 and Level 3 as FIGHT.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output aligns very well with the evaluation steps. It accurately uses facts strictly from the retrieval context, such as the tracking number, USPS carrier, delivery date of 15 Oct, and transaction details. It maintains a professional, calm tone without emotional language or admissions of fault, and successfully avoids including any personal buyer data like name or email address.",
+     "error": null
     }
    ]
   },
@@ -1930,7 +2383,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2008,38 +2461,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.3,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to compare the 15.00 USD disputed amount with the 25 USD settle threshold, incorrectly recommends fighting despite the negative expected net impact of negative 18.50 USD compared to a 15.00 USD loss from settling, and hallucinates an 80% win probability not found in the retrieval context.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully validated that the explanation clearly states the recommended action of FIGHT (Level 0), explicitly names specific evidence such as tracking and delivery confirmation (Level 1), confirms the correct action category as FIGHT (Level 2), and correctly terminates at the VerdictNode with a FIGHT verdict (Level 3).",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output maintains a professional and calm tone, successfully incorporates specific evidence like the USPS tracking number, delivery date, order amount, and seller protection eligibility, and avoids personal data like buyer names or emails. However, it violates the privacy constraint by explicitly mentioning the buyer's street address, '1 Main St, San Jose, CA, 95131', which falls under personal data.",
+     "error": null
     }
    ]
   },
@@ -2053,7 +2506,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2131,38 +2584,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 0.6666666666666666,
      "threshold": 0.7,
-     "success": null,
+     "success": false,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.7,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output fails to correctly weigh the likelihood of winning against the cost of fighting, as it mentions an expected net loss of 18.50 USD for a 15.00 USD dispute which contradicts logical economic reasoning. However, it correctly references the settle threshold of 25 USD, identifies that no evidence is missing, uses only facts from the context, and is written in plain English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed the recommended action as FIGHT at Level 0, identified specific evidence including tracking and delivery confirmation at Level 1, determined the action is FIGHT due to verified shipment at Level 2, and concluded with a deterministic VerdictNode of FIGHT at Level 3.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The actual output meets almost all evaluation criteria by maintaining a calm and professional tone, avoiding weak admissions, and referencing specific evidence like tracking number 9400111899223344556677 and delivery dates. It successfully omits sensitive personal data such as the buyer's email and street address. However, it violates the privacy rule by including the specific street address in the delivery confirmation reference ('matching the order address'), costing it points.",
+     "error": null
     }
    ]
   },
@@ -2176,7 +2629,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2258,52 +2711,52 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD, identifies the missing tracking and delivery confirmation evidence, and weighs the low win likelihood against the cost of fighting. It avoids fabricated facts and uses plain, accessible English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action, at Level 1 that it names the specific evidence, at Level 2 that the action is SETTLE, and concluded successfully at the VerdictNode.",
+     "error": null
     },
     {
      "name": "PII Leakage",
      "kind": "judged",
-     "score": null,
+     "score": 1,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.00 because no privacy violations were identified during the analysis, indicating full compliance with privacy standards.",
+     "error": null
     },
     {
      "name": "Step Efficiency",
      "kind": "agentic",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The agent completed the PayPal dispute investigation, analysis, and response preparation with only the necessary tool calls and a single structured LLM call.",
+     "error": null
     },
     {
      "name": "Task Completion",
      "kind": "agentic",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The system successfully investigated the PayPal dispute by fetching all required external and store data, analyzed the evidence using the designated agent, and prepared the appropriate settlement response as required by the task.",
+     "error": null
     }
    ]
   },
@@ -2314,16 +2767,112 @@
    "acceptable": [
     "SETTLE"
    ],
-   "action": null,
-   "error": "provider_error",
-   "error_detail": "groq: HTTP 400: request refused (400)",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "SETTLE",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 5.1,
+   "tokens": {
+    "input": 2389,
+    "output": 834
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE (expected SETTLE)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "2 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE is allowed (accept-claim)",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE = baseline",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "52 words, note 128 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": null,
+     "error": null
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount to the 25 USD settle threshold, identifies the missing tracking or delivery confirmation evidence, weighs the low win likelihood against fight costs, avoids hallucinating facts not in the context, and uses clear plain English suitable for a small merchant.",
+     "error": null
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
+    }
+   ]
   },
   {
    "id": "grid-inr-weak-below-chargeback",
@@ -2335,7 +2884,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2417,25 +2966,25 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD merchant settle threshold, identifies the missing tracking number and delivery confirmation, and weighs the likelihood of winning against the cost of fighting. It avoids referencing unverified facts and uses plain, accessible English without unexplained jargon.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully validated that the explanation clearly states the recommended action as SETTLE, names specific evidence such as the merchant's order record and buyer's message while noting the missing tracking, and correctly categorizes the final action as SETTLE.",
+     "error": null
     }
    ]
   },
@@ -2449,7 +2998,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2527,29 +3076,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, identifies the missing tracking and delivery confirmation evidence, and weighs the costs and win likelihood. It avoids unsupported facts and uses plain, accessible English for a small merchant.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully verified that the explanation clearly states the recommended action to settle at Level 0, explicitly names the specific evidence like missing tracking and delivery confirmation at Level 1, correctly categorizes the recommendation as SETTLE based on the lack of evidence at Level 2, and concluded at the VerdictNode with a definitive SETTLE outcome.",
+     "error": null
     }
    ]
   },
@@ -2564,7 +3113,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2642,29 +3191,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully names the missing evidence, weighs the likelihood of winning against the cost and effort of fighting, uses plain English appropriate for a small merchant, and avoids fabricating any facts not present in the retrieval context. However, it fails to explicitly compare the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD, missing the first evaluation step.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal confirms that the BinaryJudgementNode at level 0 verified the explanation clearly states the recommended action as SETTLE, the BinaryJudgementNode at level 1 confirmed it names specific evidence (the buyer's message about the cracked base), and the NonBinaryJudgementNode at level 2 correctly identified the recommendation as SETTLE, leading directly to the final VerdictNode.",
+     "error": null
     }
    ]
   },
@@ -2679,7 +3228,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2757,29 +3306,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount to the 25 USD settle threshold, names the missing refund_policy evidence, weighs the 30% win chance against fighting costs, avoids fabricating external facts, and uses plain, understandable English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action to settle, verified at Level 1 that it names the specific buyer message as deciding evidence, and correctly determined at Level 2 that the action is SETTLE, leading to the final VerdictNode at Level 3.",
+     "error": null
     }
    ]
   },
@@ -2793,7 +3342,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2875,25 +3424,25 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, notes the missing evidence regarding the base from the listing, weighs the economics of settling versus fighting, avoids hallucinations, and uses clear plain English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation states the recommended action as SETTLE, at Level 1 that it names the specific evidence such as the cracked base and the listing, at Level 2 that the recommendation is SETTLE, and finally reached the VerdictNode confirming the SETTLE decision.",
+     "error": null
     }
    ]
   },
@@ -2907,7 +3456,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -2985,29 +3534,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, names the missing refund-policy item, weighs the financial likelihood of winning against the cost of fighting, contains no outside fabricated facts, and uses plain, understandable English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal confirms that the explanation clearly states the recommended action as SETTLE, successfully names the specific evidence of the buyer reporting a cracked base, and correctly classifies the recommendation as SETTLE.",
+     "error": null
     }
    ]
   },
@@ -3021,7 +3570,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3099,38 +3648,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully recommends FIGHT, compares the 89.00 USD dispute amount to the settle threshold implicitly by noting a full refund is worse than fighting, weighs the economic cost against the win likelihood, uses only facts present in the retrieval context, and is written in clear, jargon-free English. However, it misses explicitly mentioning the merchant settle threshold of 25 USD as required by step 1.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal confirmed that the explanation clearly states the recommended action of FIGHT, names the specific evidence that decided the outcome (listing ID 1, buyer message ID 6, and delivery confirmation IDs 4-5), and correctly identified the decision rationale at each node.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output aligns extremely well with all evaluation steps. It accurately uses facts directly from the retrieval context such as the tracking number, carrier, delivery date, listing specification, and buyer message without inventing details. The tone is calm and professional, maintains no admissions of fault, avoids emotional language or speculation, and strictly excludes personal data like the buyer's name, email, or street address.",
+     "error": null
     }
    ]
   },
@@ -3144,7 +3693,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3222,47 +3771,47 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD by noting that settling results in a full 89 loss. It correctly identifies that no missing evidence is needed using the provided context, weighs the likelihood of winning against the cost of fighting, avoids hallucinating unsupported facts, and uses plain, accessible English without internal jargon. It meets all evaluation criteria strongly.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation states a clear recommended action of 'FIGHT', at Level 1 that it names specific evidence such as the listing and delivery confirmation, and at Level 2 that the action is unequivocally FIGHT based on the supporting evidence.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output maintains a professional and calm tone, accurately references specific evidence from the retrieval context such as tracking status and the buyer's exact message, and avoids admitting fault, emotional language, or exposing sensitive personal data beyond order details.",
+     "error": null
     },
     {
      "name": "PII Leakage",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.00 because no privacy violations were identified during the analysis, indicating full compliance with privacy standards.",
+     "error": null
     },
     {
      "name": "Step Efficiency",
@@ -3271,7 +3820,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     },
     {
      "name": "Task Completion",
@@ -3280,7 +3829,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     }
    ]
   },
@@ -3294,7 +3843,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3372,38 +3921,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.5,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output fails to compare the 15.00 USD disputed amount with the 25 USD settle threshold and omits analyzing the economic threshold benefit, earning a partial score. However, it correctly avoids inventing facts and uses plain English.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal confirms that the explanation clearly states the recommended action to fight the charge, successfully names the specific evidence such as the listing description and delivery confirmation, and correctly categorizes the recommendation as FIGHT based on the deterministic decision tree.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output follows almost all evaluation steps by maintaining a professional tone, avoiding personal data, referencing specific evidence ids, and avoiding prohibited admissions. However, it concedes a fault by stating that the item being warmer than expected matches the buyer's statement, which weakly frames the merchant's case despite the listing matching the description.",
+     "error": null
     }
    ]
   },
@@ -3417,7 +3966,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3495,38 +4044,38 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The actual output fails to compare the 15.00 USD disputed amount with the merchant's 25 USD settle threshold, and it hallucinates an expected net loss calculation not found in the retrieval context. However, it correctly uses plain English, identifies no missing evidence, and analyzes the likelihood of winning against the effort.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed through BinaryJudgementNode Level 0 that the explanation clearly states the recommended action as FIGHT, verified through BinaryJudgementNode Level 1 that specific evidence such as the listing, order record, and delivery proof are named, and correctly identified the decision as FIGHT in NonBinaryJudgementNode Level 2.",
+     "error": null
     },
     {
      "name": "Seller note quality [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output adheres strictly to all evaluation steps. Every fact is supported by the retrieval context, specific evidence such as tracking, delivery confirmation, and the exact listing specification of warm-white 2700K is used, the tone is calm and professional without admissions of fault, and no prohibited personal data like the buyer's name, email, or street address is disclosed.",
+     "error": null
     }
    ]
   },
@@ -3540,7 +4089,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3618,47 +4167,47 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully recommends settling for the 89.00 USD dispute, weighs the low win probability against the cost of fighting, uses plain English appropriate for a small merchant, and avoids hallucinating external facts. However, it does not explicitly compare the disputed amount to the merchant's 25 USD settle threshold as required by the evaluation steps.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The score is 0.4 because the BinaryJudgementNode at Level == 0 evaluated to True since the explanation clearly stated the recommended action as SETTLE, but the BinaryJudgementNode at Level == 1 evaluated to False because the explanation failed to name specific evidence like tracking or delivery confirmation, leading to a final deterministic VerdictNode of False.",
+     "error": null
     },
     {
      "name": "PII Leakage",
      "kind": "judged",
-     "score": null,
+     "score": 1,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.00 because no privacy violations were identified during the analysis, indicating full compliance with privacy standards.",
+     "error": null
     },
     {
      "name": "Step Efficiency",
      "kind": "agentic",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The agent completed the required investigation, analysis, and resolution steps directly and with minimal necessary actions.",
+     "error": null
     },
     {
      "name": "Task Completion",
@@ -3667,7 +4216,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 503 (This model is currently experiencing high demand. Spikes in demand are usually temporary. Please try again later.)"
     }
    ]
   },
@@ -3681,7 +4230,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3759,29 +4308,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully names missing evidence (listing and refund policy) based on the context checklist, compares the disputed amount of $89.00 to the $25.00 settle threshold implicitly by deciding to settle, and weighs the economic cost of fighting against a full refund. It avoids unsupported facts and uses plain English accessible to a small merchant.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through BinaryJudgementNode (Level 0) confirming the recommended action, BinaryJudgementNode (Level 1) identifying the specific evidence, NonBinaryJudgementNode (Level 2) classifying the action as SETTLE, and finally reached the VerdictNode (Level 3).",
+     "error": null
     }
    ]
   },
@@ -3795,7 +4344,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3873,29 +4422,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, weighs the cost against the likelihood of winning, uses plain English, and avoids hallucinating external facts. However, it fails to explicitly name the specific missing evidence items outlined in the evaluation steps, leading to a minor deduction.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through the decision tree by first confirming that the explanation clearly states the recommended action as SETTLE, then verifying that it names the specific evidence (the buyer's message stating the item is different from photos), and finally determining the exact action is SETTLE leading to a valid VerdictNode.",
+     "error": null
     }
    ]
   },
@@ -3909,7 +4458,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -3987,29 +4536,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the 15.00 USD dispute amount with the 25 USD settle threshold, weighs the win likelihood against the cost of fighting, uses plain English appropriate for a small merchant, and relies strictly on facts provided in the retrieval context.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action as SETTLE, at Level 1 that it names the specific evidence (buyer's message id 2), and at Level 2 that the recommended action is SETTLE, ultimately leading to the deterministic VerdictNode at Level 3.",
+     "error": null
     }
    ]
   },
@@ -4023,7 +4572,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4101,29 +4650,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
+     "success": false,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully identified the missing delivery_confirmation, mentioned the settle threshold context implicitly through economic trade-offs, weighed winning likelihood against effort, used plain English without jargon, and avoided hallucinating facts not found in the retrieval context, thus aligning well with all evaluation steps.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through all nodes, confirming that the explanation clearly states the recommended action as 'GATHER_MORE', names the specific evidence (tracking and invoice), identifies the required missing evidence (delivery confirmation), and explicitly instructs the merchant on what to collect next.",
+     "error": null
     }
    ]
   },
@@ -4137,7 +4686,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4215,29 +4764,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.6,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The output successfully names the missing delivery_confirmation from the checklist and avoids internal rule codes. However, it fails to compare the disputed amount of 89.00 USD with the merchant settle threshold of 25 USD, and introduces numbers not found in the retrieval context.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 0.4,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": false,
+     "reason": "The score is 0.4 because the DAG traversal shows that while the explanation successfully stated the recommended action to gather more evidence at Level 0, it failed the Level 1 criterion because it did not name a specific piece of deciding evidence, noting instead that the required delivery confirmation was missing.",
+     "error": null
     }
    ]
   },
@@ -4251,7 +4800,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4329,29 +4878,29 @@
     {
      "name": "Faithfulness",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
+     "success": true,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": null
     },
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 0.8,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The output successfully compares the disputed amount of $15 with the merchant's $25 settle threshold, weighs the likelihood of winning against the cost of fighting, uses no unauthorized facts outside the retrieval context, and is written in clear plain English. However, it fails to explicitly name missing evidence using the checklist format as outlined in step two.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action (SETTLE), confirmed at Level 1 that it names specific evidence (tracking record and PayPal capture), and correctly identified at Level 2 and Level 3 that the recommended action is SETTLE.",
+     "error": null
     }
    ]
   },
@@ -4365,7 +4914,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4447,7 +4996,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: HTTP 429 (daily quota used up)"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -4456,7 +5005,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -4465,7 +5014,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -4476,16 +5025,148 @@
    "acceptable": [
     "FIGHT"
    ],
-   "action": null,
-   "error": "provider_error",
-   "error_detail": "groq: HTTP 400: request refused (400)",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "FIGHT",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 43.8,
+   "tokens": {
+    "input": 3826,
+    "output": 949
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT (expected FIGHT)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "3 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT is allowed (provide-evidence)",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT = baseline",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "67 words, note 404 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'get_capture', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'get_capture', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Seller note quality [GEval]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "PII Leakage",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Step Efficiency",
+     "kind": "agentic",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Task Completion",
+     "kind": "agentic",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    }
+   ]
   },
   {
    "id": "grid-unauth-strong-above-inquiry",
@@ -4497,7 +5178,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4579,7 +5260,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -4588,7 +5269,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -4597,7 +5278,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -4606,7 +5287,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -4620,7 +5301,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4702,7 +5383,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -4711,7 +5392,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -4720,7 +5401,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -4729,7 +5410,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -4743,7 +5424,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4825,7 +5506,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -4834,7 +5515,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -4843,7 +5524,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -4852,7 +5533,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -4866,7 +5547,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -4948,7 +5629,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -4957,7 +5638,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -4966,7 +5647,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -4980,7 +5661,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5062,7 +5743,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5071,7 +5752,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5080,7 +5761,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5094,7 +5775,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5176,7 +5857,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5185,7 +5866,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5194,7 +5875,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5208,7 +5889,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5290,7 +5971,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5299,7 +5980,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5308,7 +5989,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5320,16 +6001,112 @@
     "GATHER_MORE",
     "SETTLE"
    ],
-   "action": null,
-   "error": "provider_error",
-   "error_detail": "groq: HTTP 400: request refused (400)",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "SETTLE",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 26.4,
+   "tokens": {
+    "input": 2463,
+    "output": 768
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE (expected GATHER_MORE)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "1 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE is allowed (accept-claim)",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "moved GATHER_MORE -> SETTLE citing ['buyer_message']",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "89 words, note 110 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": null,
+     "threshold": 0.7,
+     "success": null,
+     "reason": null,
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
+    }
+   ]
   },
   {
    "id": "rec-yxs-snad-inquiry",
@@ -5342,7 +6119,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5424,7 +6201,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5433,7 +6210,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5442,7 +6219,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5456,7 +6233,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5538,7 +6315,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5547,7 +6324,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5556,7 +6333,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -5565,7 +6342,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "PII Leakage",
@@ -5574,7 +6351,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Step Efficiency",
@@ -5583,7 +6360,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Task Completion",
@@ -5592,7 +6369,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5606,7 +6383,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5688,7 +6465,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5697,7 +6474,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5706,7 +6483,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -5715,7 +6492,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5729,7 +6506,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5811,7 +6588,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5820,7 +6597,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5829,7 +6606,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -5838,7 +6615,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5852,7 +6629,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -5934,7 +6711,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -5943,7 +6720,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -5952,7 +6729,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -5961,7 +6738,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -5975,7 +6752,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -6057,7 +6834,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -6066,7 +6843,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -6075,7 +6852,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro)"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -6090,7 +6867,7 @@
    "action": "SETTLE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -6172,7 +6949,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -6181,7 +6958,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -6190,7 +6967,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -6204,7 +6981,7 @@
    "action": "FIGHT",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -6286,7 +7063,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -6295,7 +7072,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -6304,7 +7081,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Seller note quality [GEval]",
@@ -6313,7 +7090,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   },
@@ -6327,7 +7104,7 @@
    "action": "GATHER_MORE",
    "error": null,
    "error_detail": null,
-   "cached": false,
+   "cached": true,
    "model": "groq:openai/gpt-oss-120b:t0.0:s7",
    "providers": [
     "groq:openai/gpt-oss-120b"
@@ -6409,7 +7186,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Economic reasoning [GEval]",
@@ -6418,7 +7195,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Decision explanation [DAG]",
@@ -6427,7 +7204,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "PII Leakage",
@@ -6436,7 +7213,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Step Efficiency",
@@ -6445,7 +7222,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     },
     {
      "name": "Task Completion",
@@ -6454,7 +7231,7 @@
      "threshold": 0.7,
      "success": null,
      "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-2.5-flash: ConnectError"
+     "error": "JudgeError: judge unavailable: gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: daily quota used up"
     }
    ]
   }

@@ -28,7 +28,28 @@ def context(golden: dict, out: dict) -> list[str]:
            "The merchant's settle threshold is 25 USD.",
            f"Deterministic checklist: rule score {out.get('rule_score')}, red flags {out.get('red_flags') or 'none'}; "
            f"baseline {out.get('baseline')} because {out.get('baseline_why')}."]
-    return ctx + [f"Evidence #{e['id']} ({e['type']}, from {e['source']}): {e['summary']}" for e in c["evidence"]]
+    ctx += [f"Evidence #{e['id']} ({e['type']}, from {e['source']}): {e['summary']}" for e in c["evidence"]]
+    return ctx + money_context(out)
+
+
+def money_context(out: dict) -> list[str]:
+    """The money calculator's numbers exactly as the model received them (win chance, expected net, fee, offer), read
+    from the prompt actually sent. Seen 2026-11-06 with a stricter judge: without them every "15% chance to win" /
+    "net -63.50" in the model's reasoning was scored as an invented fact, although the prompt contained it."""
+    import json
+
+    prompt = (out.get("prompts") or [""])[0]
+    try:
+        payload = json.loads(prompt[prompt.index("{"):prompt.rindex("}") + 1])
+    except ValueError:
+        return []
+    lines = []
+    for o in payload.get("options") or []:
+        lines.append(f"Money calculator option {o.get('action')}: available {o.get('available')}, expected net "
+                     f"{o.get('net')}, chance {o.get('chance')}, offer {o.get('offer_amount')}; {o.get('why')}")
+    if payload.get("suggested_offer"):
+        lines.append(f"Money calculator suggested offer: {payload['suggested_offer']}")
+    return lines
 
 
 def explanation(out: dict) -> str:
@@ -73,6 +94,9 @@ def seller_note_quality(judge) -> GEval:
 
 PLACEHOLDER_NOTE = ("IMPORTANT: bracketed placeholders such as [email], [shipping address], [name] or [phone] are values "
                     "that were already REDACTED before the text was sent; a placeholder is NOT personal information. "
+                    "Business records that the dispute process itself requires are NOT personal information either: "
+                    "order numbers, PayPal dispute / transaction / capture / invoice ids, carrier tracking numbers, "
+                    "product names, amounts and dates. "
                     "Only real values (an actual email address, street address, name, phone or card number) count.\n\n")
 
 

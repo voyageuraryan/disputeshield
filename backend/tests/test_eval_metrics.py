@@ -251,3 +251,15 @@ def test_run_case_states_the_current_task_even_for_a_cached_trace():
     case = agentic.run_case(G[STRONG], out(trace={"name": "dispute run", "input": "old task", "children": []}))
     assert case._trace_dict["input"].startswith(f"TASK: {agentic.TASK}") and "old task" not in case._trace_dict["input"]
     assert "full case file from the store" in agentic.TASK  # gathering everything is the job, not redundancy
+
+
+def test_economic_context_includes_the_calculator_numbers_the_model_saw():
+    """A stricter judge scored the prompt's own win chance / expected net as 'invented': the context now has them."""
+    from evals.metrics.judged import money_context
+
+    prompt = ('Here is the case. Write the recommendation.\n\n{"case_file": {}, "options": [{"action": "FIGHT", '
+              '"available": true, "net": "-63.50", "chance": "0.15", "offer_amount": null, "why": "15% chance"}], '
+              '"suggested_offer": "40.00"}')
+    lines = money_context({"prompts": [prompt]})
+    assert any("FIGHT" in x and "-63.50" in x and "0.15" in x for x in lines)
+    assert any("40.00" in x for x in lines) and money_context({}) == []

@@ -19,7 +19,13 @@ STORE_TOOLS = ["store_order", "store_shipments", "store_messages", "store_listin
 TASK = ("Investigate a PayPal dispute completely: fetch it from PayPal (and the capture / PayPal order when they "
         "exist) and gather the full case file from the store (order, shipments, buyer messages, listing, buyer "
         "history, troubleshooting result, refund policy) so nothing relevant is missed; then recommend FIGHT, SETTLE "
-        "or GATHER_MORE citing that evidence, and prepare (not send) the matching PayPal response for the merchant.")
+        "or GATHER_MORE citing that evidence, and prepare (not send) the matching PayPal response for the merchant. "
+        "How the trace works: each store lookup span writes what it found into the case file as evidence items, so "
+        "those spans have no output of their own by design; a lookup that finds nothing (e.g. no buyer messages) is "
+        "complete. Judge completeness from the case file and the recommendation, not from empty span outputs. "
+        "The 'investigate' span is a separate shadow run against a simulated PayPal, used only to check which tools "
+        "are called; its case file can differ from the test case's. The analysis and the response use the case file "
+        "in CASE, which is the one to judge.")
 
 
 def expected_tools(g: Golden) -> list[str]:
@@ -61,12 +67,15 @@ def tool_case(g: Golden, called: list[str]) -> LLMTestCase:
 
 
 def run_case(g: Golden, out: dict) -> LLMTestCase:
-    case = LLMTestCase(input=TASK + f" Dispute: {g.case_file.dispute_id} ({g.case_file.reason}).",
+    needed = ", ".join(expected_tools(g))
+    case = LLMTestCase(input=TASK + f" Dispute: {g.case_file.dispute_id} ({g.case_file.reason}). The lookups this "
+                       f"case's data calls for (a capture / PayPal order lookup only when one exists): {needed}.",
                        actual_output=f"{out.get('action')}: {out.get('reasoning') or ''}"
                                      + (f"\nPrepared: {out['request']['endpoint']}" if out.get("request") else ""))
     trace = out.get("trace")
     if trace:  # the task is the metric's definition, not the cached trace's: always state the current one
-        trace = {**trace, "input": f"TASK: {TASK}\nCASE: {g.case_file.model_dump_json()}"}
+        trace = {**trace, "input": f"TASK: {TASK}\nLOOKUPS THIS CASE CALLS FOR: {needed}\n"
+                                   f"CASE: {g.case_file.model_dump_json()}"}
     case._trace_dict = trace  # what DeepEval itself sets when it evaluates a traced run
     return case
 

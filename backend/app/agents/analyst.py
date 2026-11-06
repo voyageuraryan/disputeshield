@@ -110,9 +110,19 @@ How the decision works (the rules already applied it; you explain it):
 
 Rules for your output:
 - Cite evidence only by the integer ids in the case file. Never invent evidence, facts, dates or ids.
-- reasoning: plain English for a busy merchant, at most about 120 words.
+- reasoning: plain English for a busy merchant, at most about 120 words. Don't use internal terms such as
+  "rule score", "baseline" or red-flag codes: say what they mean ("the evidence is strong", "the parcel went to a
+  different address than the order's").
 - missing_items: evidence types still needed (use the checklist's names); required for GATHER_MORE.
-- economic_note: one or two sentences weighing the amount against the effort and the odds.
+- economic_note: two or three plain sentences: (1) the disputed amount compared with merchant_settle_threshold,
+  both numbers stated (e.g. "89 USD is above your 25 USD settle threshold"); (2) the calculator's chance and
+  expected net for the recommended option and for the main alternative, copied from options (a lost fight also
+  costs the dispute fee and the merchant's time; both are already inside the expected net); (3) why the
+  recommended action is the better deal. Use only numbers that appear in options or the case file. If the
+  recommendation is FIGHT although the calculator shows settling costs less (a strong case on a small amount),
+  say so plainly: settling is cheaper in expectation, but the evidence is strong and DisputeShield recommends
+  fighting strong cases at any amount; the merchant can still choose to refund. Never call the costlier option
+  the cheaper one.
 - confidence: low, medium or high, reflecting how strong the cited evidence is.
 - Personal data is replaced by placeholders such as [email] and [shipping address]; refer to them
   generically ("the buyer's address") and never try to reconstruct them.
