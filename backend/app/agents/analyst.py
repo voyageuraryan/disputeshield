@@ -122,7 +122,8 @@ Rules for your output:
   recommendation is FIGHT although the calculator shows settling costs less (a strong case on a small amount),
   say so plainly: settling is cheaper in expectation, but the evidence is strong and DisputeShield recommends
   fighting strong cases at any amount; the merchant can still choose to refund. Never call the costlier option
-  the cheaper one.
+  the cheaper one. An expected net is an average over winning and losing: call it "expected net" or "on average",
+  never the loss "if you lose".
 - confidence: low, medium or high, reflecting how strong the cited evidence is.
 - Personal data is replaced by placeholders such as [email] and [shipping address]; refer to them
   generically ("the buyer's address") and never try to reconstruct them.

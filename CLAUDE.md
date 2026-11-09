@@ -80,7 +80,7 @@ e2e/                  Playwright UI suite (starts its own throwaway stack); fron
 frontend/src/pages/   Queue.tsx, CaseDetail.tsx, Store.tsx, Orders.tsx, Settings.tsx, Help.tsx (buyer troubleshooting page),
                       Analytics.tsx (AG Grid + AG Charts Community; helpers in src/analytics/logic.ts),
                       Trust.tsx (eval report + guardrails + counters), Demo.tsx (public /demo; text = docs/DEVPOST.md),
-                      Deadlines.tsx (Phase 18: Bryntum Scheduler TRIAL; mapping in src/deadlines/mapping.ts)
+                      Deadlines.tsx (Phase 18: Bryntum Scheduler 8 Community, MIT; mapping in src/deadlines/mapping.ts)
 frontend/src/demo/    Tour.tsx + tour.ts (5-step guided tour), Scenarios.tsx (demo-mode drawer), content.ts
 frontend/src/offers/    logic.ts (Phase 13: offer math mirroring rules/money.py; Options card is in CaseDetail)
 frontend/src/evidence/  AddEvidence.tsx (add/confirm evidence, coach panel), logic.ts (pure)

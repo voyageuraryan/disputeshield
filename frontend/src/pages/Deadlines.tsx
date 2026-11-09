@@ -1,13 +1,13 @@
-// Phase 18: Deadlines view with Bryntum Scheduler (trial package: shows Bryntum's trial watermark; see PROGRESS).
+// Phase 18: Deadlines view with Bryntum Scheduler 8 Community (MIT, public npm, no watermark; see PROGRESS G145).
 // Rows = open disputes; bars = gathering evidence, buyer troubleshooting, the response deadline, PayPal review.
 import "@bryntum/scheduler/scheduler.css";
 import "@bryntum/scheduler/stockholm-light.css";
-import "@bryntum/scheduler/fontawesome/css/fontawesome.css";
-import "@bryntum/scheduler/fontawesome/css/solid.css";
+import "@bryntum/core-community/fontawesome/css/fontawesome.css";
+import "@bryntum/core-community/fontawesome/css/solid.css";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { BryntumScheduler } from "@bryntum/scheduler-react";
-import { StringHelper } from "@bryntum/scheduler";
+import { StringHelper } from "@bryntum/core-community";
 import { deadlinesApi, disputesApi, type DisputeRow, type TroubleshootingWindow } from "../api";
 import { COLORS, toSchedule } from "../deadlines/mapping";
 
@@ -61,7 +61,7 @@ export default function Deadlines() {
             </span>
           ))}
         </div>
-        <span className="ml-auto text-xs text-slate-500">Click a bar to open the case. Bryntum Scheduler (trial).</span>
+        <span className="ml-auto text-xs text-slate-500">Click a bar to open the case. Bryntum Scheduler.</span>
       </div>
       {err && <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{err}</p>}
       {!data && !err && <p className="text-sm text-slate-500">Loading…</p>}

@@ -454,7 +454,7 @@ G143 [x] (2026-11-05: get_case masks buyer emails, phones and card numbers) P3 M
         email). The README warns about this; consider redacting for MCP.
 G144 [ ] P3 Alerts go out from a 60 s loop (a deadline alert can be up to a minute late). SMTP is STARTTLS only (no
         port-465 SSL).
-G145 [ ] P1 USER DECISION (Bryntum): the Deadlines view uses the PUBLIC TRIAL package
+G145 [x] P1 (DONE 2026-11-09, see G183) USER DECISION (Bryntum): the Deadlines view used the PUBLIC TRIAL package
         (@bryntum/scheduler-trial 7.3.7 via npm alias). Its README says "evaluation use only" and the trial watermark
         shows. Devpost's rules page is behind login (403 for automated fetches), so the exact "Best Use of Bryntum"
         wording and licence terms are unconfirmed. Check the rules, or ask Bryntum for a hackathon licence (then
@@ -1517,3 +1517,9 @@ G182 [x] 2026-11-06 comparison (local, unpublished): Claude Sonnet as the model 
         fighting "more advantageous" -> prompt now says plainly that settling is cheaper but strong cases are fought
         at any amount. Task Completion: the judge couldn't tell which PayPal lookups each case needed -> the task now
         lists them (expected_tools). Needs one more Groq run (2 parts).
+G183 [x] 2026-11-09 Bryntum 8.0 (released 2026-11-03) ships a free MIT Community tier on public npm. The Deadlines view
+        moved from the 7.3.7 trial to @bryntum/scheduler-community + @bryntum/scheduler-react-community 8.0.0 (npm
+        aliases keep the import paths) and @bryntum/core-community 8.0.0 (StringHelper and the FontAwesome CSS moved
+        there). No licence key and no watermark. Build, 161 frontend tests and 40 e2e tests pass; screenshot checked.
+G184 [x] 2026-11-09 Live notes called the expected net "a net loss of -27.35 USD if you lose". The analyst prompt now
+        says an expected net is an average over winning and losing and must never be called the loss if you lose.

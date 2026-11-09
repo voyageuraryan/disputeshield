@@ -77,9 +77,8 @@ scenarios (set `DEMO_MODE=true` and `ADMIN_TOKEN`).
 Deploying: [DEPLOY.md](DEPLOY.md) (Render). Developer notes: [CLAUDE.md](CLAUDE.md). Progress and open items:
 [PROGRESS.md](PROGRESS.md).
 
-**Third-party licences:** the Deadlines view uses Bryntum Scheduler, a commercial component used here under its
-trial (it shows a watermark). Everything else in this repository is MIT-licensed, and the dependencies keep their
-own licences.
+**Third-party licences:** the Deadlines view uses Bryntum Scheduler 8 Community edition (MIT, from public npm).
+Everything else in this repository is MIT-licensed, and the dependencies keep their own licences.
 
 ## Use DisputeShield from Claude Desktop
 
