@@ -122,9 +122,9 @@ def main(argv: list[str] | None = None) -> int:
         if not key:
             print("  not set")
             continue
-        if not key.startswith("AIza"):
-            print("  NOTE: Gemini API keys from aistudio.google.com/apikey start with 'AIza'. This one doesn't: if it "
-                  "is rejected, create a new key there.")
+        if not key.startswith(("AIza", "AQ.")):
+            print("  NOTE: Gemini API keys from aistudio.google.com/apikey start with 'AIza' (older) or 'AQ.' (newer). "
+                  "This one doesn't: if it is rejected, create a new key there.")
         for model in models:
             res = check_gemini(key, model)
             bad += res != "OK"

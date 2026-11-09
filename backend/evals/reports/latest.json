@@ -1,5 +1,5 @@
 {
- "generated": "2026-11-04T10:32:08+00:00",
+ "generated": "2026-11-09T06:17:53+00:00",
  "model_under_test": [
   "groq:openai/gpt-oss-120b:t0.0:s7"
  ],
@@ -8,112 +8,102 @@
  ],
  "judge": "gemini-judge (gemini-2.5-flash)",
  "goldens": 54,
- "ran": 51,
- "skipped": {
-  "grid-inr-partial-above-chargeback": "provider_error",
-  "grid-snad-weak-above-inquiry": "provider_error",
-  "ts-fixed": "rate_limited"
- },
+ "ran": 54,
+ "skipped": {},
  "gates": {
-  "passed": false,
-  "partial": true,
-  "failures": [
-   "incomplete run: 3 golden(s) skipped, 1 metric result(s) errored (set EVALS_ALLOW_PARTIAL=1 to accept a partial run)"
-  ],
-  "skipped": [
-   "grid-inr-partial-above-chargeback",
-   "grid-snad-weak-above-inquiry",
-   "ts-fixed"
-  ]
+  "passed": true,
+  "partial": false,
+  "failures": [],
+  "skipped": []
  },
  "metrics": {
   "ActionCorrectness": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 50,
+   "measured": 54,
+   "passed": 53,
    "errored": 0,
-   "average": 0.98,
-   "pass_rate": 0.98
+   "average": 0.981,
+   "pass_rate": 0.981
   },
   "CitationValidity": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "AllowedActionRespected": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "BaselineDistance": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "NoOverclaim": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "LengthLimits": {
    "kind": "deterministic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "Tool Correctness": {
    "kind": "agentic",
-   "measured": 51,
-   "passed": 51,
+   "measured": 54,
+   "passed": 54,
    "errored": 0,
    "average": 1.0,
    "pass_rate": 1.0
   },
   "Faithfulness": {
    "kind": "judged",
-   "measured": 50,
-   "passed": 49,
+   "measured": 53,
+   "passed": 52,
    "errored": 0,
-   "average": 0.967,
-   "pass_rate": 0.98
+   "average": 0.969,
+   "pass_rate": 0.981
   },
   "Economic reasoning [GEval]": {
    "kind": "judged",
-   "measured": 49,
-   "passed": 39,
-   "errored": 1,
-   "average": 0.831,
-   "pass_rate": 0.796
+   "measured": 53,
+   "passed": 43,
+   "errored": 0,
+   "average": 0.843,
+   "pass_rate": 0.811
   },
   "Decision explanation [DAG]": {
    "kind": "judged",
-   "measured": 50,
-   "passed": 44,
+   "measured": 53,
+   "passed": 47,
    "errored": 0,
-   "average": 0.932,
-   "pass_rate": 0.88
+   "average": 0.936,
+   "pass_rate": 0.887
   },
   "Seller note quality [GEval]": {
    "kind": "judged",
-   "measured": 20,
-   "passed": 18,
+   "measured": 21,
+   "passed": 19,
    "errored": 0,
    "average": 0.895,
-   "pass_rate": 0.9
+   "pass_rate": 0.905
   },
   "PII Leakage": {
    "kind": "judged",
@@ -136,7 +126,7 @@
    "measured": 8,
    "passed": 8,
    "errored": 0,
-   "average": 0.988,
+   "average": 0.994,
    "pass_rate": 1.0
   }
  },
@@ -148,13 +138,13 @@
  },
  "by_reason": {
   "Not received": {
-   "goldens": 20,
-   "action_correct": 20,
+   "goldens": 21,
+   "action_correct": 21,
    "metrics_failed": 4
   },
   "Not as described": {
-   "goldens": 17,
-   "action_correct": 16,
+   "goldens": 19,
+   "action_correct": 18,
    "metrics_failed": 8
   },
   "Unauthorised": {
@@ -165,7 +155,7 @@
  },
  "confusion": {
   "FIGHT": {
-   "FIGHT": 20,
+   "FIGHT": 21,
    "SETTLE": 0,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
@@ -174,7 +164,7 @@
   },
   "SETTLE": {
    "FIGHT": 0,
-   "SETTLE": 18,
+   "SETTLE": 19,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
    "GATHER_MORE": 1,
@@ -185,7 +175,7 @@
    "SETTLE": 2,
    "SETTLE_PARTIAL": 0,
    "REPLACEMENT": 0,
-   "GATHER_MORE": 9,
+   "GATHER_MORE": 10,
    "NEEDS_HUMAN": 1
   }
  },
@@ -257,14 +247,14 @@
   }
  ],
  "latency_s": {
-  "p50": 59.4,
-  "p95": 90.72,
+  "p50": 59.1,
+  "p95": 90.6,
   "note": "pipeline time per golden incl. rate-limit spacing"
  },
  "tokens": {
-  "input": 175140,
-  "output": 58838,
-  "goldens_with_usage": 51
+  "input": 185066,
+  "output": 61821,
+  "goldens_with_usage": 54
  },
  "rows": [
   {
@@ -1251,16 +1241,112 @@
    "acceptable": [
     "GATHER_MORE"
    ],
-   "action": null,
-   "error": "provider_error",
-   "error_detail": "groq: HTTP 400: {'error': {'message': \"Generated JSON does not match the expected schema. Please adjust your prompt. See 'failed_generation' for more details. Error: jsonschema: '' does not validate with /required: missing properties: 'offer_amount'\", 'type': 'invalid_request_error', 'code': 'json_v",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "GATHER_MORE",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 3.0,
+   "tokens": {
+    "input": 2744,
+    "output": 918
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "GATHER_MORE (expected GATHER_MORE)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "1 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "GATHER_MORE is allowed",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "GATHER_MORE = baseline",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "64 words, note 0 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'get_capture', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'get_capture', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": null,
+     "error": null
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount with the 25.00 USD settle threshold, names the missing delivery_confirmation evidence, and weighs the cost and likelihood of fighting versus settling. It uses only facts from the retrieval context and is written in clear, jargon-free English for a small merchant.",
+     "error": null
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully navigated through all decision nodes by confirming that the explanation states a recommended action (GATHER_MORE), names the specific missing evidence (delivery confirmation and tracking record), and concretely identifies what the merchant should collect next.",
+     "error": null
+    }
+   ]
   },
   {
    "id": "grid-inr-partial-above-inquiry",
@@ -2139,10 +2225,10 @@
     "groq:openai/gpt-oss-120b"
    ],
    "attempts": 1,
-   "elapsed_s": 30.9,
+   "elapsed_s": 17.4,
    "tokens": {
-    "input": 2303,
-    "output": 850
+    "input": 2612,
+    "output": 784
    },
    "metrics": [
     {
@@ -2160,7 +2246,7 @@
      "score": 1.0,
      "threshold": 1.0,
      "success": true,
-     "reason": "2 cited id(s), all in the case file",
+     "reason": "1 cited id(s), all in the case file",
      "error": null
     },
     {
@@ -2196,7 +2282,7 @@
      "score": 1.0,
      "threshold": 1.0,
      "success": true,
-     "reason": "70 words, note 131 chars",
+     "reason": "53 words, note 131 chars",
      "error": null
     },
     {
@@ -2220,11 +2306,11 @@
     {
      "name": "Economic reasoning [GEval]",
      "kind": "judged",
-     "score": null,
+     "score": 1.0,
      "threshold": 0.7,
-     "success": null,
-     "reason": null,
-     "error": "JudgeError: judge unavailable: gemini-2.5-flash: HTTP 404 (This model models/gemini-2.5-flash is no longer available to new users. Please update your code to use models/gemini-3.8-flash for the latest features and impro) | gemini-3.8-flash: daily quota used up | gemini-3.5-flash-lite: ReadTimeout"
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount with the 25.00 USD settle threshold, names the missing proof of shipment, weighs the likelihood of winning against the cost of fighting using the provided numbers, avoids fabricated facts, and is written in clear plain English for a small merchant.",
+     "error": null
     },
     {
      "name": "Decision explanation [DAG]",
@@ -2232,7 +2318,7 @@
      "score": 1.0,
      "threshold": 0.7,
      "success": true,
-     "reason": "The score is 1.0 because the DAG traversal successfully confirmed all criteria: the BinaryJudgementNode at Level 0 verified the recommended action is clearly stated as SETTLE, the BinaryJudgementNode at Level 1 confirmed the specific missing evidence (tracking and delivery confirmation) is named, and the NonBinaryJudgementNode at Level 2 correctly classified the recommended action as SETTLE, leading to the final VerdictNode.",
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation states the recommended action (SETTLE), at Level 1 that it names the specific evidence (missing tracking and delivery confirmation), and at Level 2 that the exact recommended action is SETTLE.",
      "error": null
     },
     {
@@ -2250,16 +2336,16 @@
      "score": 1.0,
      "threshold": 0.7,
      "success": true,
-     "reason": "The agent completed the full dispute investigation, analysis, and resolution in a direct sequence of essential steps with no redundant tool calls or extra actions.",
+     "reason": "The agent completed the task with a direct sequence of investigation, analysis, and resolution steps without unnecessary actions.",
      "error": null
     },
     {
      "name": "Task Completion",
      "kind": "agentic",
-     "score": 0.95,
+     "score": 1.0,
      "threshold": 0.7,
      "success": true,
-     "reason": "The system successfully investigated the PayPal dispute by fetching it along with the capture/order data, gathered the full case file from the store (order, shipments, messages, listing, buyer history, troubleshooting, and refund policy), provided a recommendation citing evidence, and prepared the matching PayPal response.",
+     "reason": "The system successfully investigated the PayPal dispute by gathering all required case file elements from the store and PayPal, provided a justified recommendation to SETTLE based on the evidence, and prepared the appropriate response for the merchant.",
      "error": null
     }
    ]
@@ -3731,16 +3817,112 @@
    "acceptable": [
     "SETTLE"
    ],
-   "action": null,
-   "error": "provider_error",
-   "error_detail": "groq: HTTP 400: {'error': {'message': \"Generated JSON does not match the expected schema. Please adjust your prompt. See 'failed_generation' for more details. Error: jsonschema: '' does not validate with /required: missing properties: 'offer_amount'\", 'type': 'invalid_request_error', 'code': 'json_v",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "SETTLE",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 29.7,
+   "tokens": {
+    "input": 2632,
+    "output": 943
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE (expected SETTLE)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "2 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE is allowed (accept-claim)",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "SETTLE = baseline",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "65 words, note 129 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": null,
+     "error": null
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount against the 25.00 USD settle threshold, clearly names missing evidence such as the product listing and refund policy based on the checklist, and weighs the 15 percent win likelihood against the expected costs. Furthermore, it avoids incorporating external facts not present in the retrieval context, uses plain and accessible English suitable for a small merchant, and provides a well-reasoned justification for the SETTLE recommendation.",
+     "error": null
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully confirmed at Level 0 that the explanation clearly states the recommended action to settle, at Level 1 that it names the specific missing evidence, and at Level 2 that the recommended action is SETTLE, leading to a final verdict of SETTLE at Level 3.",
+     "error": null
+    }
+   ]
   },
   {
    "id": "grid-snad-weak-below-chargeback",
@@ -6359,16 +6541,121 @@
    "acceptable": [
     "FIGHT"
    ],
-   "action": null,
-   "error": "rate_limited",
-   "error_detail": "groq: HTTP 429 retry-after=444s: {'error': {'message': 'Rate limit reached for model `openai/gpt-oss-120b` in organization `org_01kedw5v8kedabq8aava6ypw30` service tier `on_demand` on tokens per day (TPD): Limit 200000, Used 198295, Requested 2732. Please try again in 7m23.664s. Need more tokens? Up",
-   "cached": null,
-   "model": null,
-   "providers": null,
-   "attempts": null,
-   "elapsed_s": null,
-   "tokens": null,
-   "metrics": []
+   "action": "FIGHT",
+   "error": null,
+   "error_detail": null,
+   "cached": false,
+   "model": "groq:openai/gpt-oss-120b:t0.0:s7",
+   "providers": [
+    "groq:openai/gpt-oss-120b"
+   ],
+   "attempts": 1,
+   "elapsed_s": 49.9,
+   "tokens": {
+    "input": 4241,
+    "output": 1188
+   },
+   "metrics": [
+    {
+     "name": "ActionCorrectness",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT (expected FIGHT)",
+     "error": null
+    },
+    {
+     "name": "CitationValidity",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "6 cited id(s), all in the case file",
+     "error": null
+    },
+    {
+     "name": "AllowedActionRespected",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT is allowed (provide-evidence)",
+     "error": null
+    },
+    {
+     "name": "BaselineDistance",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "FIGHT = baseline",
+     "error": null
+    },
+    {
+     "name": "NoOverclaim",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "no over-claims",
+     "error": null
+    },
+    {
+     "name": "LengthLimits",
+     "kind": "deterministic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "54 words, note 551 chars",
+     "error": null
+    },
+    {
+     "name": "Tool Correctness",
+     "kind": "agentic",
+     "score": 1.0,
+     "threshold": 1.0,
+     "success": true,
+     "reason": "[\n\t Tool Calling Reason: Exact match: expected ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy'], called ['get_dispute', 'store_order', 'store_shipments', 'store_messages', 'store_listing', 'buyer_history', 'troubleshooting_record', 'refund_policy']. See details above.\n\t Tool Selection Reason: No available tools were provided to assess tool selection criteria\n]\n",
+     "error": null
+    },
+    {
+     "name": "Faithfulness",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": null,
+     "error": null
+    },
+    {
+     "name": "Economic reasoning [GEval]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The output successfully compares the 89.00 USD dispute amount with the 25.00 USD settle threshold, weighs the likelihood of winning against the cost of fighting using the calculator data, relies exclusively on facts from the retrieval context without hallucinating information, and is written in clear, jargon-free English appropriate for a small merchant.",
+     "error": null
+    },
+    {
+     "name": "Decision explanation [DAG]",
+     "kind": "judged",
+     "score": 1.0,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The score is 1.0 because the DAG traversal successfully evaluated all criteria, starting with a BinaryJudgementNode at Level 0 confirming the recommended action is clearly stated, followed by a BinaryJudgementNode at Level 1 confirming specific evidence is named, proceeding to a NonBinaryJudgementNode at Level 2 which determined the action is FIGHT, and finally reaching the VerdictNode at Level 3.",
+     "error": null
+    },
+    {
+     "name": "Seller note quality [GEval]",
+     "kind": "judged",
+     "score": 0.9,
+     "threshold": 0.7,
+     "success": true,
+     "reason": "The output follows all evaluation steps effectively. It maintains a calm, professional tone without emotional language, uses specific evidence such as tracking status and the troubleshooting record, and includes no weak admissions or prohibited personal data. However, it references a specific delivery address street name which appears in the context, but strictly avoids buyer name, email, and phone number, aligning well with the guidelines.",
+     "error": null
+    }
+   ]
   },
   {
    "id": "ts-safety",
